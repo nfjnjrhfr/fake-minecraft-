@@ -6,5 +6,5 @@ services:
     runtime: python
     plan: free
     buildCommand: "echo 'no dependencies to install'"
-    startCommand: "python -m chatapp web --host 0.0.0.0 --port $PORT"
+    startCommand: "python -m chatapp web --host 0.0.0.0 --port $PORT --no-browser"
     healthCheckPath: /healthz

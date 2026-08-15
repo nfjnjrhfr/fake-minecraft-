@@ -23,13 +23,15 @@ API：
 from __future__ import annotations
 
 import argparse
+import importlib.resources
 import json
 import logging
 import secrets
+import socket
 import threading
 import time
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 from queue import Empty, Queue
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -45,7 +47,9 @@ SESSION_LINGER = 60.0
 #: SSE 每隔幾秒送一次 keep-alive 註解，避免中間的 proxy 把閒置連線砍掉。
 PING_INTERVAL = 15.0
 
-_WEBUI_PATH = Path(__file__).with_name("webui.html")
+def _load_webui() -> bytes:
+    """讀取聊天頁面。用 importlib.resources，包成單一 .pyz 檔也能運作。"""
+    return (importlib.resources.files("chatapp") / "webui.html").read_bytes()
 
 
 class WebClient:
@@ -250,8 +254,8 @@ class ChatRequestHandler(BaseHTTPRequestHandler):
 
     def _serve_page(self) -> None:
         try:
-            page = _WEBUI_PATH.read_bytes()
-        except OSError:
+            page = _load_webui()
+        except (OSError, FileNotFoundError):
             self._send_json(500, {"error": "找不到 webui.html"})
             return
         self.send_response(200)
@@ -308,6 +312,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="監聽埠號（預設 %(default)s）")
     parser.add_argument("--friends-file", default="chatapp_friends.json",
                         help="好友關係存檔（預設 %(default)s；傳空字串則不存檔）")
+    parser.add_argument("--no-browser", action="store_true",
+                        help="啟動後不要自動打開瀏覽器（伺服器部署時使用）")
     parser.add_argument("--verbose", "-v", action="store_true", help="顯示除錯訊息")
     args = parser.parse_args(argv)
 
@@ -316,9 +322,32 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s [%(levelname)s] %(message)s",
         datefmt="%H:%M:%S",
     )
-    httpd, _ = make_server(args.host, args.port,
-                           friends_file=args.friends_file or None)
-    log.info("網頁聊天室啟動：http://%s:%s/", *httpd.server_address[:2])
+
+    # 預設埠號被占用時自動往上找可用的埠（雙擊執行的人不用會改設定）
+    httpd = None
+    for attempt in range(11):
+        try:
+            httpd, _ = make_server(args.host, args.port + attempt,
+                                   friends_file=args.friends_file or None)
+            break
+        except OSError:
+            if attempt == 10:
+                raise
+            log.warning("埠號 %s 被占用，改試 %s",
+                        args.port + attempt, args.port + attempt + 1)
+    assert httpd is not None
+    port = httpd.server_address[1]
+
+    log.info("網頁聊天室啟動！")
+    log.info("  自己用這個網址：  http://localhost:%s/", port)
+    lan_ip = _lan_ip()
+    if lan_ip:
+        log.info("  同網路的朋友用：  http://%s:%s/", lan_ip, port)
+    log.info("（關閉這個視窗＝關閉聊天室）")
+
+    if not args.no_browser:
+        threading.Timer(0.8, webbrowser.open,
+                        args=(f"http://localhost:{port}/",)).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -326,6 +355,18 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         httpd.server_close()
     return 0
+
+
+def _lan_ip() -> str | None:
+    """猜這台機器在區網裡的 IP（不會真的送封包）。"""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        s.close()
 
 
 if __name__ == "__main__":
