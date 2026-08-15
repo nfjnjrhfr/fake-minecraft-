@@ -40,8 +40,15 @@ export function unpackAngle(b) {
 /**
  * 輸入封包：把移動方向壓成 16 個方位 + 強度，按鍵壓成 bitmask。
  * [type, seq, dir, buttons]  共 4 bytes
+ *
+ * buttons 的最高兩位是「動作流水號」。攻擊 / 翻滾 / 跳躍都是只存在一幀的
+ * 瞬間輸入，而封包是定頻送的，沒有這個流水號的話會出兩種問題：
+ *   1. 按鍵剛好落在兩次送出之間 -> 這一招整個消失
+ *   2. 連線不可靠（BLE、UDP 式的 DataChannel）掉包 -> 一樣消失
+ * 有了流水號，同一個動作就可以安全地重送好幾次：收端只認流水號有變的那次，
+ * 重複的直接忽略，所以「重送」不會變成「連按」。
  */
-export function encodeInput(seq, input) {
+export function encodeInput(seq, input, actionCounter = 0) {
   const buf = new Uint8Array(4);
   buf[0] = MSG.INPUT;
   buf[1] = seq & 255;
@@ -60,10 +67,15 @@ export function encodeInput(seq, input) {
   if (input.block) btn |= 0x08;
   if (input.dodge) btn |= 0x10;
   if (input.jump) btn |= 0x20;
+  btn |= (actionCounter & 0x03) << 6;
   buf[3] = btn;
   return buf;
 }
 
+/**
+ * @returns { seq, actionCounter } —— 呼叫端要自己比對 actionCounter，
+ *          相同就代表這是重送，瞬間動作不可以再套用一次。
+ */
 export function decodeInput(buf, out) {
   const seq = buf[1];
   const dirByte = buf[2];
@@ -82,7 +94,7 @@ export function decodeInput(buf, out) {
   out.block = !!(btn & 0x08);
   out.dodge = !!(btn & 0x10);
   out.jump = !!(btn & 0x20);
-  return seq;
+  return { seq, actionCounter: (btn >> 6) & 0x03 };
 }
 
 /**

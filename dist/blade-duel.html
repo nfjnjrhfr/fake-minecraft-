@@ -647,6 +647,25 @@ kbd {
   border-left: 2px solid rgba(255,107,107,0.5);
   padding-left: 10px;
 }
+
+/* WebRTC 連線碼：兩個步驟會依身分用 order 對調上下順序 */
+#webrtc-box { display: flex; flex-direction: column; }
+#webrtc-box.hidden { display: none !important; }
+
+.step > label { display: flex; align-items: center; gap: 8px; }
+.step-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px; height: 19px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #04121c;
+  font-size: 11px;
+  font-weight: 900;
+  flex: 0 0 auto;
+}
+.step-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 </style>
 
 <canvas id="view"></canvas>
@@ -796,17 +815,27 @@ kbd {
         <div class="chips" id="role-chips"></div>
       </div>
 
+      <!--
+        兩個步驟的先後順序會依身分對調（用 CSS order），
+        讓畫面由上往下就是實際操作順序：
+          房主   ：先產生邀請碼 -> 再貼上對方的回應碼
+          挑戰者 ：先貼上邀請碼 -> 再把產生的回應碼傳回去
+      -->
       <div id="webrtc-box" class="hidden">
-        <div class="field">
-          <label id="code-label">1. 產生邀請碼，傳給對方</label>
+        <div class="field step" id="step-local">
+          <label><span class="step-no" id="local-step-no">1</span><span id="code-label">產生邀請碼，傳給對方</span></label>
           <textarea id="local-code" readonly placeholder="按下方按鈕產生"></textarea>
-          <button class="btn small" id="copy-code">複製</button>
-          <button class="btn small" id="gen-code">產生邀請碼</button>
+          <div class="step-actions">
+            <button class="btn small primary" id="gen-code">產生邀請碼</button>
+            <button class="btn small" id="copy-code">複製</button>
+          </div>
         </div>
-        <div class="field">
-          <label id="remote-label">2. 貼上對方給你的代碼</label>
+        <div class="field step" id="step-remote">
+          <label><span class="step-no" id="remote-step-no">2</span><span id="remote-label">貼上對方回傳的回應碼</span></label>
           <textarea id="remote-code" placeholder="貼在這裡"></textarea>
-          <button class="btn small" id="apply-code">送出</button>
+          <div class="step-actions">
+            <button class="btn small" id="apply-code">完成連線</button>
+          </div>
         </div>
       </div>
 
@@ -3341,8 +3370,15 @@ function unpackAngle(b) {
 /**
  * 輸入封包：把移動方向壓成 16 個方位 + 強度，按鍵壓成 bitmask。
  * [type, seq, dir, buttons]  共 4 bytes
+ *
+ * buttons 的最高兩位是「動作流水號」。攻擊 / 翻滾 / 跳躍都是只存在一幀的
+ * 瞬間輸入，而封包是定頻送的，沒有這個流水號的話會出兩種問題：
+ *   1. 按鍵剛好落在兩次送出之間 -> 這一招整個消失
+ *   2. 連線不可靠（BLE、UDP 式的 DataChannel）掉包 -> 一樣消失
+ * 有了流水號，同一個動作就可以安全地重送好幾次：收端只認流水號有變的那次，
+ * 重複的直接忽略，所以「重送」不會變成「連按」。
  */
-function encodeInput(seq, input) {
+function encodeInput(seq, input, actionCounter = 0) {
   const buf = new Uint8Array(4);
   buf[0] = MSG.INPUT;
   buf[1] = seq & 255;
@@ -3361,10 +3397,15 @@ function encodeInput(seq, input) {
   if (input.block) btn |= 0x08;
   if (input.dodge) btn |= 0x10;
   if (input.jump) btn |= 0x20;
+  btn |= (actionCounter & 0x03) << 6;
   buf[3] = btn;
   return buf;
 }
 
+/**
+ * @returns { seq, actionCounter } —— 呼叫端要自己比對 actionCounter，
+ *          相同就代表這是重送，瞬間動作不可以再套用一次。
+ */
 function decodeInput(buf, out) {
   const seq = buf[1];
   const dirByte = buf[2];
@@ -3383,7 +3424,7 @@ function decodeInput(buf, out) {
   out.block = !!(btn & 0x08);
   out.dodge = !!(btn & 0x10);
   out.jump = !!(btn & 0x20);
-  return seq;
+  return { seq, actionCounter: (btn >> 6) & 0x03 };
 }
 
 /**
@@ -5124,6 +5165,8 @@ class LoopbackTransport extends BaseTransport {
 const STATE_RATE = 1 / 20;    // 房主每秒送 20 次狀態
 const INPUT_RATE = 1 / 30;    // 加入者每秒送 30 次輸入
 const HANDSHAKE_RATE = 0.5;
+/** 同一個瞬間動作要重送幾次，用來對抗 BLE / DataChannel 掉包。 */
+const ACTION_REPEATS = 3;
 
 /** performance.now()，Node 端測試也能用。 */
 const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -5145,6 +5188,12 @@ class NetSession {
     this.seed = opts.seed || ((Math.random() * 65535) | 0);
 
     this.inputSeq = 0;
+    // 瞬間動作的暫存：按鍵可能落在兩次送出之間，先鎖住再送
+    this.pendingAction = { attack: 0, dodge: false, jump: false };
+    this.hasPending = false;
+    this.actionCounter = 0;
+    this.actionRepeats = 0;
+    this.lastRemoteActionCounter = -1;
     this.stateAcc = 0;
     this.inputAcc = 0;
     this.handshakeAcc = 0;
@@ -5209,7 +5258,16 @@ class NetSession {
       }
       case MSG.INPUT: {
         if (!this.isHost || !this.match) break;
-        decodeInput(bytes, this.lastRemoteInput);
+        const { actionCounter } = decodeInput(bytes, this.lastRemoteInput);
+        // 流水號沒變 = 這是同一個動作的重送，移動與格擋照收，
+        // 但攻擊 / 翻滾 / 跳躍不能再觸發一次
+        if (actionCounter === this.lastRemoteActionCounter) {
+          this.lastRemoteInput.attack = 0;
+          this.lastRemoteInput.dodge = false;
+          this.lastRemoteInput.jump = false;
+        } else {
+          this.lastRemoteActionCounter = actionCounter;
+        }
         this.match.setInput(this.remoteIndex, this.lastRemoteInput);
         break;
       }
@@ -5301,10 +5359,11 @@ class NetSession {
       this.snapshotAge += dt;
       if (this.snapshot) this.reconcile(dt);
 
+      this.latchAction(localInput);
       this.inputAcc += dt;
       if (this.inputAcc >= INPUT_RATE) {
         this.inputAcc = 0;
-        this.transport.send(encodeInput(this.inputSeq++, localInput));
+        this.sendInput(localInput);
       }
     }
 
@@ -5314,6 +5373,46 @@ class NetSession {
       const t = (nowMs() | 0) & 0xffff;
       this.transport.send(new Uint8Array([MSG.PING, (t >> 8) & 255, t & 255]));
     }
+  }
+
+  /**
+   * 把這一幀的瞬間動作鎖起來，等下一次送出。
+   * 畫面在跑 60fps 但封包只有 30Hz，不鎖的話有一半的按鍵會直接掉。
+   */
+  latchAction(input) {
+    if (input.attack) { this.pendingAction.attack = input.attack; this.hasPending = true; }
+    if (input.dodge) { this.pendingAction.dodge = true; this.hasPending = true; }
+    if (input.jump) { this.pendingAction.jump = true; this.hasPending = true; }
+  }
+
+  /** 送出一份輸入：移動與格擋用當下的值，瞬間動作用鎖住的值。 */
+  sendInput(localInput) {
+    const payload = {
+      moveX: localInput.moveX,
+      moveZ: localInput.moveZ,
+      block: localInput.block,
+      attack: 0, dodge: false, jump: false,
+    };
+
+    if (this.hasPending && this.actionRepeats === 0) {
+      // 新動作：換一個流水號，並排定重送次數對抗掉包
+      this.actionCounter = (this.actionCounter + 1) & 0x03;
+      this.actionRepeats = ACTION_REPEATS;
+    }
+    if (this.actionRepeats > 0) {
+      payload.attack = this.pendingAction.attack;
+      payload.dodge = this.pendingAction.dodge;
+      payload.jump = this.pendingAction.jump;
+      this.actionRepeats--;
+      if (this.actionRepeats === 0) {
+        this.pendingAction.attack = 0;
+        this.pendingAction.dodge = false;
+        this.pendingAction.jump = false;
+        this.hasPending = false;
+      }
+    }
+
+    this.transport.send(encodeInput(this.inputSeq++, payload, this.actionCounter));
   }
 
   /** 用房主的快照修正本地狀態。 */
@@ -5902,13 +6001,41 @@ function updateTransportUI() {
   $('webrtc-box').classList.toggle('hidden', app.transportKind !== 'webrtc');
   $('channel-box').classList.toggle('hidden', app.transportKind !== 'channel');
   $('connect-btn').classList.toggle('hidden', app.transportKind === 'webrtc');
-  if (app.transportKind === 'webrtc') {
-    $('gen-code').classList.toggle('hidden', app.netRole !== 'host');
-    $('code-label').textContent = app.netRole === 'host'
-      ? '1. 產生邀請碼，傳給對方' : '2. 把這個回應碼傳回給房主';
-    $('remote-label').textContent = app.netRole === 'host'
-      ? '2. 貼上對方回傳的回應碼' : '1. 貼上房主給你的邀請碼';
-  }
+  if (app.transportKind === 'webrtc') updateWebRtcSteps();
+}
+
+/**
+ * 依身分排好連線碼的兩個步驟。
+ *
+ * 兩邊的動作是互補的，所以「哪個框先做」是相反的。畫面順序一定要跟
+ * 實際操作順序一致，而且兩種身分都必須有一顆看得到的按鈕可以按 ——
+ * 之前挑戰者身分會讓唯一的按鈕整顆消失，等於卡死在這一頁。
+ */
+function updateWebRtcSteps() {
+  const isHost = app.netRole === 'host';
+
+  // 房主：先產生邀請碼（本地框）再收回應碼（遠端框）；挑戰者反過來
+  $('step-local').style.order = isHost ? '1' : '2';
+  $('step-remote').style.order = isHost ? '2' : '1';
+  $('local-step-no').textContent = isHost ? '1' : '2';
+  $('remote-step-no').textContent = isHost ? '2' : '1';
+
+  $('code-label').textContent = isHost
+    ? '產生邀請碼，用任何方式傳給對方'
+    : '把這個回應碼傳回給房主，就完成了';
+  $('remote-label').textContent = isHost
+    ? '貼上對方回傳的回應碼'
+    : '貼上房主給你的邀請碼';
+
+  // 挑戰者不需要「產生邀請碼」——他的代碼是貼上邀請碼之後才生得出來，
+  // 所以那顆按鈕收起來，改由下面的主要動作鍵負責。
+  $('gen-code').classList.toggle('hidden', !isHost);
+  $('local-code').placeholder = isHost
+    ? '按下方的「產生邀請碼」' : '貼上邀請碼並送出後，這裡就會出現你的回應碼';
+
+  const apply = $('apply-code');
+  apply.textContent = isHost ? '完成連線' : '產生回應碼';
+  apply.classList.toggle('primary', !isHost);   // 挑戰者的主要動作在這一顆
 }
 updateTransportUI();
 
@@ -5938,21 +6065,35 @@ $('connect-btn').addEventListener('click', async () => {
 });
 
 $('gen-code').addEventListener('click', async () => {
+  if (!WebRTCTransport.available) {
+    return setConnStatus('這個瀏覽器沒有 WebRTC，無法用這個方式連線。', 'err');
+  }
+  const btn = $('gen-code');
+  btn.disabled = true;
   try {
     const t = new WebRTCTransport();
     t.onStatus = (s, msg) => setConnStatus(msg, s === STATUS.CONNECTED ? 'ok' : '');
     app.transport = t;
-    setConnStatus('正在收集網路候選…');
+    setConnStatus('正在收集網路候選…（最多幾秒）');
     $('local-code').value = await t.createOffer();
-    setConnStatus('邀請碼已產生，傳給對方後等他的回應碼。');
+    setConnStatus('邀請碼已產生。複製後傳給對方，然後把他的回應碼貼到下面。', 'ok');
   } catch (err) {
-    setConnStatus(`產生失敗：${err.message}`, 'err');
+    app.transport = null;
+    setConnStatus(`產生邀請碼失敗：${err.name || ''} ${err.message}`, 'err');
+  } finally {
+    btn.disabled = false;
   }
 });
 
 $('apply-code').addEventListener('click', async () => {
   const code = $('remote-code').value.trim();
-  if (!code) return setConnStatus('請先貼上代碼', 'err');
+  if (!code) {
+    return setConnStatus(app.netRole === 'host'
+      ? '請先貼上對方傳回來的回應碼。'
+      : '請先貼上房主給你的邀請碼。', 'err');
+  }
+  const btn = $('apply-code');
+  btn.disabled = true;
   try {
     if (app.netRole === 'host') {
       if (!app.transport) return setConnStatus('請先產生邀請碼', 'err');
@@ -5963,11 +6104,14 @@ $('apply-code').addEventListener('click', async () => {
       t.onStatus = (s, msg) => setConnStatus(msg, s === STATUS.CONNECTED ? 'ok' : '');
       app.transport = t;
       $('local-code').value = await t.acceptOffer(code);
-      setConnStatus('回應碼已產生，複製後傳回給房主。');
+      setConnStatus('回應碼已產生。複製後傳回給房主，等他送出就會自動開打。', 'ok');
     }
     prepareSession();
   } catch (err) {
-    setConnStatus(`代碼無效：${err.message}`, 'err');
+    setConnStatus(`代碼看起來不完整或不是這個遊戲的代碼（${err.name || 'Error'}）。`
+      + '請確認整段都複製到了，中間不要斷行遺漏。', 'err');
+  } finally {
+    btn.disabled = false;
   }
 });
 

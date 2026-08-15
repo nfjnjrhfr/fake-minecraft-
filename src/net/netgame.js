@@ -21,6 +21,8 @@ import { lerp, lerpAngle, clamp } from '../core/math.js';
 const STATE_RATE = 1 / 20;    // 房主每秒送 20 次狀態
 const INPUT_RATE = 1 / 30;    // 加入者每秒送 30 次輸入
 const HANDSHAKE_RATE = 0.5;
+/** 同一個瞬間動作要重送幾次，用來對抗 BLE / DataChannel 掉包。 */
+const ACTION_REPEATS = 3;
 
 /** performance.now()，Node 端測試也能用。 */
 const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -42,6 +44,12 @@ export class NetSession {
     this.seed = opts.seed || ((Math.random() * 65535) | 0);
 
     this.inputSeq = 0;
+    // 瞬間動作的暫存：按鍵可能落在兩次送出之間，先鎖住再送
+    this.pendingAction = { attack: 0, dodge: false, jump: false };
+    this.hasPending = false;
+    this.actionCounter = 0;
+    this.actionRepeats = 0;
+    this.lastRemoteActionCounter = -1;
     this.stateAcc = 0;
     this.inputAcc = 0;
     this.handshakeAcc = 0;
@@ -106,7 +114,16 @@ export class NetSession {
       }
       case MSG.INPUT: {
         if (!this.isHost || !this.match) break;
-        decodeInput(bytes, this.lastRemoteInput);
+        const { actionCounter } = decodeInput(bytes, this.lastRemoteInput);
+        // 流水號沒變 = 這是同一個動作的重送，移動與格擋照收，
+        // 但攻擊 / 翻滾 / 跳躍不能再觸發一次
+        if (actionCounter === this.lastRemoteActionCounter) {
+          this.lastRemoteInput.attack = 0;
+          this.lastRemoteInput.dodge = false;
+          this.lastRemoteInput.jump = false;
+        } else {
+          this.lastRemoteActionCounter = actionCounter;
+        }
         this.match.setInput(this.remoteIndex, this.lastRemoteInput);
         break;
       }
@@ -198,10 +215,11 @@ export class NetSession {
       this.snapshotAge += dt;
       if (this.snapshot) this.reconcile(dt);
 
+      this.latchAction(localInput);
       this.inputAcc += dt;
       if (this.inputAcc >= INPUT_RATE) {
         this.inputAcc = 0;
-        this.transport.send(encodeInput(this.inputSeq++, localInput));
+        this.sendInput(localInput);
       }
     }
 
@@ -211,6 +229,46 @@ export class NetSession {
       const t = (nowMs() | 0) & 0xffff;
       this.transport.send(new Uint8Array([MSG.PING, (t >> 8) & 255, t & 255]));
     }
+  }
+
+  /**
+   * 把這一幀的瞬間動作鎖起來，等下一次送出。
+   * 畫面在跑 60fps 但封包只有 30Hz，不鎖的話有一半的按鍵會直接掉。
+   */
+  latchAction(input) {
+    if (input.attack) { this.pendingAction.attack = input.attack; this.hasPending = true; }
+    if (input.dodge) { this.pendingAction.dodge = true; this.hasPending = true; }
+    if (input.jump) { this.pendingAction.jump = true; this.hasPending = true; }
+  }
+
+  /** 送出一份輸入：移動與格擋用當下的值，瞬間動作用鎖住的值。 */
+  sendInput(localInput) {
+    const payload = {
+      moveX: localInput.moveX,
+      moveZ: localInput.moveZ,
+      block: localInput.block,
+      attack: 0, dodge: false, jump: false,
+    };
+
+    if (this.hasPending && this.actionRepeats === 0) {
+      // 新動作：換一個流水號，並排定重送次數對抗掉包
+      this.actionCounter = (this.actionCounter + 1) & 0x03;
+      this.actionRepeats = ACTION_REPEATS;
+    }
+    if (this.actionRepeats > 0) {
+      payload.attack = this.pendingAction.attack;
+      payload.dodge = this.pendingAction.dodge;
+      payload.jump = this.pendingAction.jump;
+      this.actionRepeats--;
+      if (this.actionRepeats === 0) {
+        this.pendingAction.attack = 0;
+        this.pendingAction.dodge = false;
+        this.pendingAction.jump = false;
+        this.hasPending = false;
+      }
+    }
+
+    this.transport.send(encodeInput(this.inputSeq++, payload, this.actionCounter));
   }
 
   /** 用房主的快照修正本地狀態。 */

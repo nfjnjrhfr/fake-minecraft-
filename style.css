@@ -643,3 +643,22 @@ kbd {
   border-left: 2px solid rgba(255,107,107,0.5);
   padding-left: 10px;
 }
+
+/* WebRTC 連線碼：兩個步驟會依身分用 order 對調上下順序 */
+#webrtc-box { display: flex; flex-direction: column; }
+#webrtc-box.hidden { display: none !important; }
+
+.step > label { display: flex; align-items: center; gap: 8px; }
+.step-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px; height: 19px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #04121c;
+  font-size: 11px;
+  font-weight: 900;
+  flex: 0 0 auto;
+}
+.step-actions { display: flex; gap: 8px; flex-wrap: wrap; }

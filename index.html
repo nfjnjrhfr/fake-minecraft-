@@ -158,17 +158,27 @@
         <div class="chips" id="role-chips"></div>
       </div>
 
+      <!--
+        兩個步驟的先後順序會依身分對調（用 CSS order），
+        讓畫面由上往下就是實際操作順序：
+          房主   ：先產生邀請碼 -> 再貼上對方的回應碼
+          挑戰者 ：先貼上邀請碼 -> 再把產生的回應碼傳回去
+      -->
       <div id="webrtc-box" class="hidden">
-        <div class="field">
-          <label id="code-label">1. 產生邀請碼，傳給對方</label>
+        <div class="field step" id="step-local">
+          <label><span class="step-no" id="local-step-no">1</span><span id="code-label">產生邀請碼，傳給對方</span></label>
           <textarea id="local-code" readonly placeholder="按下方按鈕產生"></textarea>
-          <button class="btn small" id="copy-code">複製</button>
-          <button class="btn small" id="gen-code">產生邀請碼</button>
+          <div class="step-actions">
+            <button class="btn small primary" id="gen-code">產生邀請碼</button>
+            <button class="btn small" id="copy-code">複製</button>
+          </div>
         </div>
-        <div class="field">
-          <label id="remote-label">2. 貼上對方給你的代碼</label>
+        <div class="field step" id="step-remote">
+          <label><span class="step-no" id="remote-step-no">2</span><span id="remote-label">貼上對方回傳的回應碼</span></label>
           <textarea id="remote-code" placeholder="貼在這裡"></textarea>
-          <button class="btn small" id="apply-code">送出</button>
+          <div class="step-actions">
+            <button class="btn small" id="apply-code">完成連線</button>
+          </div>
         </div>
       </div>
 

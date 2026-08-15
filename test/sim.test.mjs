@@ -380,11 +380,53 @@ test('輸入封包來回一致', () => {
   const buf = encodeInput(42, input);
   assert(buf.length === 4, `輸入封包應該是 4 bytes，實得 ${buf.length}`);
   const out = emptyInput();
-  const seq = decodeInput(buf, out);
+  const { seq } = decodeInput(buf, out);
   assert(seq === 42, '序號不符');
   assert(out.attack === 3, '攻擊代碼不符');
   assert(out.block === true && out.jump === true && out.dodge === false, '按鍵不符');
   assertClose(Math.atan2(out.moveX, out.moveZ), Math.atan2(0.7, -0.7), 0.25, '移動方向誤差過大');
+});
+
+
+test('動作流水號讓瞬間輸入可以安全重送', () => {
+  // 同一個動作重送三次，收端只該認第一次
+  const press = { moveX: 0, moveZ: 0, attack: 3, block: false, dodge: true, jump: false };
+  const out = emptyInput();
+  let lastCounter = -1;
+  let applied = 0;
+  for (let i = 0; i < 3; i++) {
+    const { actionCounter } = decodeInput(encodeInput(i, press, 1), out);
+    if (actionCounter !== lastCounter) { lastCounter = actionCounter; applied++; }
+  }
+  assert(applied === 1, `重送三次只該生效一次，實得 ${applied}`);
+
+  // 換一個流水號才算新動作
+  const { actionCounter } = decodeInput(encodeInput(9, press, 2), out);
+  assert(actionCounter !== lastCounter, '流水號變了就該被視為新動作');
+  assert(out.attack === 3 && out.dodge === true, '動作內容不該在編碼中遺失');
+});
+
+test('流水號繞回 0 之後仍然能分辨新動作', () => {
+  const press = { moveX: 0, moveZ: 0, attack: 1, block: false, dodge: false, jump: false };
+  const out = emptyInput();
+  const seen = [];
+  for (let c = 0; c < 6; c++) {
+    const { actionCounter } = decodeInput(encodeInput(c, press, c), out);
+    seen.push(actionCounter);
+  }
+  // 2 bits 會在 0..3 之間繞，相鄰兩次必須不同才不會被誤判成重送
+  for (let i = 1; i < seen.length; i++) {
+    assert(seen[i] !== seen[i - 1], `第 ${i} 次的流水號跟前一次相同，新動作會被吃掉`);
+  }
+});
+
+test('輸入封包仍然只有 4 bytes', () => {
+  const buf = encodeInput(1, { moveX: 1, moveZ: 1, attack: 5, block: true, dodge: true, jump: true }, 3);
+  assert(buf.length === 4, `輸入封包應該是 4 bytes，實得 ${buf.length}`);
+  const out = emptyInput();
+  const { actionCounter } = decodeInput(buf, out);
+  assert(actionCounter === 3, '流水號解出來不對');
+  assert(out.attack === 5 && out.block && out.dodge && out.jump, '塞滿旗標時解碼錯誤');
 });
 
 test('狀態封包塞得進 BLE 的 20 bytes', () => {

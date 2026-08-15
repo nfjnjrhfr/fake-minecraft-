@@ -468,13 +468,41 @@ function updateTransportUI() {
   $('webrtc-box').classList.toggle('hidden', app.transportKind !== 'webrtc');
   $('channel-box').classList.toggle('hidden', app.transportKind !== 'channel');
   $('connect-btn').classList.toggle('hidden', app.transportKind === 'webrtc');
-  if (app.transportKind === 'webrtc') {
-    $('gen-code').classList.toggle('hidden', app.netRole !== 'host');
-    $('code-label').textContent = app.netRole === 'host'
-      ? '1. 產生邀請碼，傳給對方' : '2. 把這個回應碼傳回給房主';
-    $('remote-label').textContent = app.netRole === 'host'
-      ? '2. 貼上對方回傳的回應碼' : '1. 貼上房主給你的邀請碼';
-  }
+  if (app.transportKind === 'webrtc') updateWebRtcSteps();
+}
+
+/**
+ * 依身分排好連線碼的兩個步驟。
+ *
+ * 兩邊的動作是互補的，所以「哪個框先做」是相反的。畫面順序一定要跟
+ * 實際操作順序一致，而且兩種身分都必須有一顆看得到的按鈕可以按 ——
+ * 之前挑戰者身分會讓唯一的按鈕整顆消失，等於卡死在這一頁。
+ */
+function updateWebRtcSteps() {
+  const isHost = app.netRole === 'host';
+
+  // 房主：先產生邀請碼（本地框）再收回應碼（遠端框）；挑戰者反過來
+  $('step-local').style.order = isHost ? '1' : '2';
+  $('step-remote').style.order = isHost ? '2' : '1';
+  $('local-step-no').textContent = isHost ? '1' : '2';
+  $('remote-step-no').textContent = isHost ? '2' : '1';
+
+  $('code-label').textContent = isHost
+    ? '產生邀請碼，用任何方式傳給對方'
+    : '把這個回應碼傳回給房主，就完成了';
+  $('remote-label').textContent = isHost
+    ? '貼上對方回傳的回應碼'
+    : '貼上房主給你的邀請碼';
+
+  // 挑戰者不需要「產生邀請碼」——他的代碼是貼上邀請碼之後才生得出來，
+  // 所以那顆按鈕收起來，改由下面的主要動作鍵負責。
+  $('gen-code').classList.toggle('hidden', !isHost);
+  $('local-code').placeholder = isHost
+    ? '按下方的「產生邀請碼」' : '貼上邀請碼並送出後，這裡就會出現你的回應碼';
+
+  const apply = $('apply-code');
+  apply.textContent = isHost ? '完成連線' : '產生回應碼';
+  apply.classList.toggle('primary', !isHost);   // 挑戰者的主要動作在這一顆
 }
 updateTransportUI();
 
@@ -504,21 +532,35 @@ $('connect-btn').addEventListener('click', async () => {
 });
 
 $('gen-code').addEventListener('click', async () => {
+  if (!WebRTCTransport.available) {
+    return setConnStatus('這個瀏覽器沒有 WebRTC，無法用這個方式連線。', 'err');
+  }
+  const btn = $('gen-code');
+  btn.disabled = true;
   try {
     const t = new WebRTCTransport();
     t.onStatus = (s, msg) => setConnStatus(msg, s === STATUS.CONNECTED ? 'ok' : '');
     app.transport = t;
-    setConnStatus('正在收集網路候選…');
+    setConnStatus('正在收集網路候選…（最多幾秒）');
     $('local-code').value = await t.createOffer();
-    setConnStatus('邀請碼已產生，傳給對方後等他的回應碼。');
+    setConnStatus('邀請碼已產生。複製後傳給對方，然後把他的回應碼貼到下面。', 'ok');
   } catch (err) {
-    setConnStatus(`產生失敗：${err.message}`, 'err');
+    app.transport = null;
+    setConnStatus(`產生邀請碼失敗：${err.name || ''} ${err.message}`, 'err');
+  } finally {
+    btn.disabled = false;
   }
 });
 
 $('apply-code').addEventListener('click', async () => {
   const code = $('remote-code').value.trim();
-  if (!code) return setConnStatus('請先貼上代碼', 'err');
+  if (!code) {
+    return setConnStatus(app.netRole === 'host'
+      ? '請先貼上對方傳回來的回應碼。'
+      : '請先貼上房主給你的邀請碼。', 'err');
+  }
+  const btn = $('apply-code');
+  btn.disabled = true;
   try {
     if (app.netRole === 'host') {
       if (!app.transport) return setConnStatus('請先產生邀請碼', 'err');
@@ -529,11 +571,14 @@ $('apply-code').addEventListener('click', async () => {
       t.onStatus = (s, msg) => setConnStatus(msg, s === STATUS.CONNECTED ? 'ok' : '');
       app.transport = t;
       $('local-code').value = await t.acceptOffer(code);
-      setConnStatus('回應碼已產生，複製後傳回給房主。');
+      setConnStatus('回應碼已產生。複製後傳回給房主，等他送出就會自動開打。', 'ok');
     }
     prepareSession();
   } catch (err) {
-    setConnStatus(`代碼無效：${err.message}`, 'err');
+    setConnStatus(`代碼看起來不完整或不是這個遊戲的代碼（${err.name || 'Error'}）。`
+      + '請確認整段都複製到了，中間不要斷行遺漏。', 'err');
+  } finally {
+    btn.disabled = false;
   }
 });
 
