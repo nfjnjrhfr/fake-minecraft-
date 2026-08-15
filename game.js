@@ -70,6 +70,198 @@
   function down(code) { return !!keys[code]; }
   function hit(code) { return !!pressed[code]; }
 
+  // ---------------------------------------------------------------- touch
+  // On-screen pads are drawn into the canvas and hit-tested in canvas space,
+  // so phones and tablets need no keyboard at all.
+  var touchMode = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window;
+  var activePointers = Object.create(null); // pointerId -> what it is holding
+
+  function makePad(stick, buttons) {
+    return {
+      stick: stick,                 // { x, y, r }
+      buttons: buttons,             // [{ id, x, y, r, label }]
+      knobX: 0, knobY: 0,
+      held: Object.create(null),
+      pressed: Object.create(null)
+    };
+  }
+
+  function mirrorPad(pad) {
+    return makePad(
+      { x: W - pad.stick.x, y: pad.stick.y, r: pad.stick.r },
+      pad.buttons.map(function (b) {
+        return { id: b.id, x: W - b.x, y: b.y, r: b.r, label: b.label };
+      })
+    );
+  }
+
+  // one human on the device: big pad, stick left, actions right
+  function soloPad() {
+    return makePad({ x: 116, y: 430, r: 58 }, [
+      { id: 'jump', x: 872, y: 452, r: 40, label: '跳' },
+      { id: 'attack', x: 786, y: 396, r: 36, label: '劍' },
+      { id: 'shoot', x: 876, y: 342, r: 32, label: '雪' },
+      { id: 'place', x: 704, y: 466, r: 28, label: '磚' }
+    ]);
+  }
+
+  // two humans sharing one screen: each cluster hugs its own bottom corner
+  function duoPad() {
+    return makePad({ x: 86, y: 452, r: 46 }, [
+      { id: 'jump', x: 232, y: 470, r: 32 , label: '跳' },
+      { id: 'attack', x: 192, y: 402, r: 28, label: '劍' },
+      { id: 'shoot', x: 268, y: 396, r: 25, label: '雪' },
+      { id: 'place', x: 314, y: 466, r: 22, label: '磚' }
+    ]);
+  }
+
+  function toCanvas(e) {
+    var r = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - r.left) * (W / r.width),
+      y: (e.clientY - r.top) * (H / r.height)
+    };
+  }
+
+  function menuRects() {
+    return MENU_ITEMS.map(function (item, i) {
+      return { id: 'mode' + i, x: W / 2 - 210, y: 188 + i * 46, w: 420, h: 36 };
+    });
+  }
+
+  // tappable buttons that belong to whatever overlay is currently on screen
+  function overlayButtons() {
+    if (state === 'matchEnd') {
+      return [
+        { id: 'restart', label: '再玩一場', x: W / 2 - 172, y: H / 2 + 34, w: 164, h: 38 },
+        { id: 'menu', label: '主選單', x: W / 2 + 8, y: H / 2 + 34, w: 164, h: 38 }
+      ];
+    }
+    if (state === 'paused') {
+      return [
+        { id: 'resume', label: '繼續', x: W / 2 - 172, y: H / 2 + 34, w: 164, h: 38 },
+        { id: 'menu', label: '主選單', x: W / 2 + 8, y: H / 2 + 34, w: 164, h: 38 }
+      ];
+    }
+    if (state === 'playing' || state === 'roundEnd') {
+      return [{ id: 'pause', label: '❚❚', x: W / 2 - 20, y: 48, w: 40, h: 26 }];
+    }
+    return [];
+  }
+
+  function inRect(pt, r) {
+    return pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h;
+  }
+
+  function runUiAction(id) {
+    if (id.indexOf('mode') === 0) {
+      menuIndex = parseInt(id.slice(4), 10);
+      mode = MENU_ITEMS[menuIndex].key;
+      startMatch();
+    } else if (id === 'pause') { state = 'paused'; }
+    else if (id === 'resume') { state = 'playing'; }
+    else if (id === 'menu') { state = 'menu'; }
+    else if (id === 'restart') {
+      players.forEach(function (p) { p.rounds = 0; });
+      matchWinner = null;
+      startRound(true);
+    }
+  }
+
+  function updateStick(pad, pt) {
+    var dx = pt.x - pad.stick.x;
+    var dy = pt.y - pad.stick.y;
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var clamped = Math.min(len, pad.stick.r);
+    pad.knobX = dx / len * clamped;
+    pad.knobY = dy / len * clamped;
+    pad.held.left = dx < -pad.stick.r * 0.28;
+    pad.held.right = dx > pad.stick.r * 0.28;
+    pad.held.jump = dy < -pad.stick.r * 0.45 || !!pad.held.jumpBtn;
+    pad.held.down = dy > pad.stick.r * 0.5;
+  }
+
+  function onPointerDown(e) {
+    touchMode = touchMode || e.pointerType === 'touch';
+    var pt = toCanvas(e);
+
+    if (state === 'menu') {
+      var rects = menuRects();
+      for (var i = 0; i < rects.length; i++) {
+        if (inRect(pt, rects[i])) { runUiAction(rects[i].id); return; }
+      }
+      // tapping anywhere else on the menu still starts the highlighted mode
+      if (touchMode && pt.y > 260) runUiAction('mode' + menuIndex);
+      return;
+    }
+
+    var ui = overlayButtons();
+    for (var u = 0; u < ui.length; u++) {
+      if (inRect(pt, ui[u])) { runUiAction(ui[u].id); return; }
+    }
+
+    for (var pi = 0; pi < players.length; pi++) {
+      var pad = players[pi].pad;
+      if (!pad) continue;
+      for (var b = 0; b < pad.buttons.length; b++) {
+        var btn = pad.buttons[b];
+        if (Math.hypot(pt.x - btn.x, pt.y - btn.y) <= btn.r * 1.25) {
+          activePointers[e.pointerId] = { pad: pad, button: btn.id };
+          pad.pressed[btn.id] = true;
+          if (btn.id === 'jump') { pad.held.jumpBtn = true; pad.held.jump = true; }
+          else pad.held[btn.id] = true;
+          return;
+        }
+      }
+      var s = pad.stick;
+      if (Math.abs(pt.x - s.x) < s.r * 2.4 && Math.abs(pt.y - s.y) < s.r * 2.0) {
+        activePointers[e.pointerId] = { pad: pad, stick: true };
+        updateStick(pad, pt);
+        return;
+      }
+    }
+  }
+
+  function onPointerMove(e) {
+    var grab = activePointers[e.pointerId];
+    if (!grab) return;
+    var pt = toCanvas(e);
+    if (grab.stick) { updateStick(grab.pad, pt); return; }
+    // sliding a finger off an action button releases it
+    var btn = null;
+    for (var b = 0; b < grab.pad.buttons.length; b++) {
+      if (grab.pad.buttons[b].id === grab.button) btn = grab.pad.buttons[b];
+    }
+    if (btn && Math.hypot(pt.x - btn.x, pt.y - btn.y) > btn.r * 1.8) releasePointer(e.pointerId);
+  }
+
+  function releasePointer(id) {
+    var grab = activePointers[id];
+    if (!grab) return;
+    delete activePointers[id];
+    var pad = grab.pad;
+    if (grab.stick) {
+      pad.knobX = pad.knobY = 0;
+      pad.held.left = pad.held.right = pad.held.down = false;
+      pad.held.jump = !!pad.held.jumpBtn;
+    } else if (grab.button === 'jump') {
+      pad.held.jumpBtn = false;
+      pad.held.jump = false;
+    } else {
+      pad.held[grab.button] = false;
+    }
+  }
+
+  canvas.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    Sfx.unlock();
+    onPointerDown(e);
+  });
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', function (e) { releasePointer(e.pointerId); });
+  window.addEventListener('pointercancel', function (e) { releasePointer(e.pointerId); });
+  canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
   // ---------------------------------------------------------------- audio
   var Sfx = {
     ac: null,
@@ -376,6 +568,30 @@
     endRound(killer && killer !== p ? killer : otherOf(p));
   }
 
+  var RING_OUT_DAMAGE = 35;
+
+  function ringOut(p) {
+    p.hp -= RING_OUT_DAMAGE;
+    shake(9);
+    Sfx.hurt();
+    if (p.hp <= 0) {
+      p.hp = 0;
+      floatText(W / 2, H / 2 + 90, p.name + ' 掉出場外!', '#ffd84d');
+      killPlayer(p, otherOf(p));
+      return;
+    }
+    // back to the (always cleared) spawn pocket with a moment of mercy
+    var col = p.homeCol;
+    p.x = col * TILE + (TILE - p.w) / 2;
+    p.y = surfaceY(col) - p.h - 1;
+    p.vx = 0;
+    p.vy = 0;
+    p.invuln = 72;
+    p.hurtFlash = 12;
+    spawnParticles(p.cx(), p.cy(), 16, [p.shirt, '#ffffff'], 4);
+    floatText(p.cx(), p.y - 6, '掉出場外 -' + RING_OUT_DAMAGE, '#ffd84d');
+  }
+
   function breakTile(tx, ty, byPlayer) {
     var t = getTile(tx, ty);
     if (t === AIR || t === BEDROCK) return false;
@@ -501,6 +717,15 @@
         controls: { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', down: 'ArrowDown', attack: 'KeyK', shoot: 'KeyL', place: 'Semicolon' }
       })
     ];
+
+    // touch pads: one roomy pad when playing solo, two mirrored ones in duo
+    if (mode === 'ai') {
+      players[0].pad = soloPad();
+      players[1].pad = null;
+    } else {
+      players[0].pad = duoPad();
+      players[1].pad = mirrorPad(duoPad());
+    }
   }
 
   function startMatch() {
@@ -618,14 +843,18 @@
   function readInput(p) {
     if (p.isAI) return thinkAI(p);
     var c = p.controls;
+    var pad = p.pad;
+    var t = pad ? pad.held : {};
+    // attack/shoot repeat while held (their own cooldowns pace them) so touch
+    // players do not have to machine-gun the screen; placing stays one-per-tap
     return {
-      left: down(c.left),
-      right: down(c.right),
-      jump: down(c.jump),
-      down: down(c.down),
-      attack: hit(c.attack),
-      shoot: hit(c.shoot),
-      place: hit(c.place)
+      left: down(c.left) || !!t.left,
+      right: down(c.right) || !!t.right,
+      jump: down(c.jump) || !!t.jump,
+      down: down(c.down) || !!t.down,
+      attack: down(c.attack) || !!t.attack,
+      shoot: down(c.shoot) || !!t.shoot,
+      place: hit(c.place) || (pad ? !!pad.pressed.place : false)
     };
   }
 
@@ -691,12 +920,8 @@
       }
     }
 
-    // ring-out
-    if (p.y > H + 60) {
-      p.hp = 0;
-      floatText(Math.max(30, Math.min(W - 30, p.cx())), H - 40, '掉出場外!', '#ffd84d');
-      killPlayer(p, otherOf(p));
-    }
+    // ring-out: expensive, but it only ends the round if it finishes you off
+    if (p.y > H + 60) ringOut(p);
 
     // health bar catch-up
     p.ghostHp += (p.hp - p.ghostHp) * 0.08;
@@ -1012,6 +1237,63 @@
     }
   }
 
+  function drawPads() {
+    if (!touchMode) return;
+    players.forEach(function (p) {
+      var pad = p.pad;
+      if (!pad || p.isAI) return;
+      var tint = p === players[0] ? '74,163,255' : '255,107,92';
+
+      // stick
+      var s = pad.stick;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(10,16,26,.26)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.35)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(s.x + pad.knobX, s.y + pad.knobY, s.r * 0.42, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(' + tint + ',.55)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.6)';
+      ctx.stroke();
+
+      // action buttons
+      ctx.textAlign = 'center';
+      pad.buttons.forEach(function (b) {
+        var on = !!pad.held[b.id === 'jump' ? 'jumpBtn' : b.id] || !!pad.pressed[b.id];
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        ctx.fillStyle = on ? 'rgba(' + tint + ',.6)' : 'rgba(10,16,26,.28)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,.45)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold ' + Math.round(b.r * 0.85) + 'px "Courier New", monospace';
+        ctx.fillText(b.label, b.x, b.y + b.r * 0.3);
+      });
+    });
+  }
+
+  function drawUiButtons() {
+    if (!touchMode) return;
+    var ui = overlayButtons();
+    ctx.textAlign = 'center';
+    ui.forEach(function (b) {
+      ctx.fillStyle = 'rgba(10,16,26,.6)';
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.strokeStyle = 'rgba(255,255,255,.5)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(b.x, b.y, b.w, b.h);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold ' + (b.h > 30 ? 17 : 13) + 'px "Courier New", monospace';
+      ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h / 2 + 6);
+    });
+  }
+
   function drawHud() {
     ctx.textAlign = 'left';
     ctx.font = 'bold 14px "Courier New", monospace';
@@ -1069,7 +1351,8 @@
       ctx.fillStyle = '#ffd84d';
       ctx.fillText(sub, W / 2, H / 2 + 26);
     }
-    if (sub2) {
+    // on touch the tappable buttons live where the keyboard hint would be
+    if (sub2 && !(touchMode && overlayButtons().length > 1)) {
       ctx.font = 'bold 14px "Courier New", monospace';
       ctx.fillStyle = '#cbd3e1';
       ctx.fillText(sub2, W / 2, H / 2 + 52);
@@ -1114,22 +1397,26 @@
     ctx.fillStyle = '#e6eefc';
     ctx.fillText('B L O C K   B R A W L', W / 2, 160);
 
+    var rects = menuRects();
     MENU_ITEMS.forEach(function (item, i) {
-      var y = 214 + i * 46;
+      var r = rects[i];
       var sel = i === menuIndex;
       ctx.fillStyle = sel ? 'rgba(124,194,67,.9)' : 'rgba(0,0,0,.45)';
-      ctx.fillRect(W / 2 - 210, y - 26, 420, 36);
+      ctx.fillRect(r.x, r.y, r.w, r.h);
       ctx.font = 'bold 19px "Courier New", monospace';
       ctx.fillStyle = sel ? '#10131a' : '#cbd3e1';
-      ctx.fillText(item.label, W / 2, y);
+      ctx.fillText(item.label, W / 2, r.y + 26);
     });
 
     ctx.font = 'bold 13px "Courier New", monospace';
     ctx.fillStyle = '#ffd84d';
-    ctx.fillText('↑ ↓ 選擇   Enter / Space 開始', W / 2, 336);
+    ctx.fillText(touchMode ? '點一下模式即可開始' : '↑ ↓ 選擇   Enter / Space 開始', W / 2, 336);
 
     // control reference
-    var lines = [
+    var lines = touchMode ? [
+      ['搖桿', '左右推＝移動   往上推＝跳   往下推＝快速下落'],
+      ['按鈕', '跳＝跳躍   劍＝揮劍(可長按)   雪＝丟雪球(可長按)   磚＝放方塊']
+    ] : [
       ['玩家 1', 'A / D 移動   W 跳   S 快速下落   F 揮劍   G 丟雪球   R 放方塊'],
       ['玩家 2', '← / → 移動   ↑ 跳   ↓ 快速下落   K 揮劍   L 丟雪球   ; 放方塊']
     ];
@@ -1146,7 +1433,8 @@
 
     ctx.textAlign = 'center';
     ctx.fillStyle = '#8b96ab';
-    ctx.fillText('先贏 ' + ROUNDS_TO_WIN + ' 回合者勝 ・ 揮劍也能挖掉方塊 ・ 掉出場外即淘汰', W / 2, 470);
+    ctx.fillText('先贏 ' + ROUNDS_TO_WIN + ' 回合者勝 ・ 揮劍也能挖掉方塊 ・ 掉出場外扣 '
+      + RING_OUT_DAMAGE + ' 點血', W / 2, 470);
   }
 
   function render() {
@@ -1167,6 +1455,7 @@
 
     ctx.restore();
 
+    drawPads();
     drawHud();
     drawCountdown();
 
@@ -1177,8 +1466,10 @@
       drawCenterText(matchWinner.name + ' 獲勝!', matchWinner.rounds + ' : ' + otherOf(matchWinner).rounds,
         'Enter 再玩一場 ・ Esc 回主選單');
     } else if (state === 'paused') {
-      drawCenterText('暫停', 'P 繼續', 'Esc 回主選單');
+      drawCenterText('暫停', touchMode ? '' : 'P 繼續', 'Esc 回主選單');
     }
+
+    drawUiButtons();
   }
 
   // ---------------------------------------------------------------- meta keys
@@ -1230,6 +1521,9 @@
       handleMeta();
       if (state !== 'paused') update();
       pressed = Object.create(null);
+      players.forEach(function (p) {
+        if (p.pad) p.pad.pressed = Object.create(null);
+      });
     }
 
     render();

@@ -1,0 +1,30 @@
+{
+  "name": "BlockBrawl",
+  "tree": {
+    "$className": "DataModel",
+
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "GameConfig": {
+        "$path": "src/ReplicatedStorage/GameConfig.luau"
+      }
+    },
+
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "BattleServer": {
+        "$path": "src/ServerScriptService/BattleServer.server.luau"
+      }
+    },
+
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "BattleClient": {
+          "$path": "src/StarterPlayer/StarterPlayerScripts/BattleClient.client.luau"
+        }
+      }
+    }
+  }
+}

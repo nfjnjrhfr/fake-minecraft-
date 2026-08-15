@@ -11,6 +11,12 @@ html, body {
   justify-content: center;
   gap: 12px;
   overflow: hidden;
+  /* no scrolling, pinch-zoom or double-tap-zoom stealing touches from the game */
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #stage {
@@ -26,6 +32,7 @@ canvas {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   background: #6ec0ff;
+  touch-action: none;
 }
 
 #hint {
@@ -33,4 +40,33 @@ canvas {
   letter-spacing: 1px;
   color: #6b768c;
   user-select: none;
+}
+
+#rotate { display: none; }
+
+/* touch devices: fill the screen, drop the desktop chrome */
+@media (hover: none) and (pointer: coarse) {
+  body { gap: 0; }
+  #hint { display: none; }
+  /* the stage itself keeps 16:9, so the canvas element box is exactly the
+     drawn area and pointer coordinates map straight onto game pixels */
+  #stage {
+    width: min(100vw, calc(100vh * 16 / 9));
+    box-shadow: none;
+  }
+  /* portrait is unplayable at 16:9 — ask for landscape */
+  @media (orientation: portrait) {
+    #stage { display: none; }
+    #rotate {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      padding: 24px;
+      text-align: center;
+      font-size: 20px;
+      line-height: 1.7;
+      color: #cbd3e1;
+    }
+  }
 }
