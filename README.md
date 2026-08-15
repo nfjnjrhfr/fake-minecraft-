@@ -1,2 +1,54 @@
-# fake-minecraft-
-u8ujujujujujujujujujuujuujujujujuujujujujujjujjujujujuujjunjerivcfv dnds xdfbdehbhebhbdehbhbhrhbehebhderbhrvrdfgvfrfrevefvfegfhdevegdervgedryegehwrwehgerhwhrbhdbhdbdhbedbdiuheiuhur4ury4yeeyurheu4u44uyy56t4rueyrjdhjddbhdjebbhjejbhdwehjhejrhjedhjdjdndejndjnsdsjndsjndsjkkd.                                                                             67
+# 方塊對戰 Block Brawl
+
+一個像素方塊風格的 2D 對戰遊戲，純 HTML + Canvas + JavaScript，沒有任何相依套件與建置流程。
+
+## 開始玩
+
+直接用瀏覽器開啟 `index.html` 就能玩（雙擊檔案即可，不需要架伺服器）。
+
+或用任意靜態伺服器：
+
+```bash
+python3 -m http.server 8000
+# 打開 http://localhost:8000
+```
+
+## 遊戲模式
+
+- **單人對戰電腦**：跟有 AI 的方塊人對打。
+- **雙人同機對戰**：兩個人共用一個鍵盤。
+
+先贏 **3 回合** 者取得勝利，每回合限時 90 秒；時間到時血量高的一方勝出。
+
+## 操作方式
+
+| 動作 | 玩家 1 | 玩家 2 |
+| --- | --- | --- |
+| 左右移動 | `A` / `D` | `←` / `→` |
+| 跳躍（按著跳更高） | `W` | `↑` |
+| 快速下落 | `S` | `↓` |
+| 揮劍 | `F` | `K` |
+| 丟雪球 | `G` | `L` |
+| 放方塊 | `R` | `;` |
+
+其他：`↑` `↓` 選單移動、`Enter` 確定 / 再玩一場、`P` 暫停、`M` 靜音、`Esc` 回主選單。
+
+## 玩法重點
+
+- **揮劍** 近距離造成 13 點傷害並把對手擊退；**沒打到人時會挖掉前方的方塊**，可以拿來開路或拆掉對方的牆（挖到的方塊有機會回收）。
+- **雪球** 造成 10 點傷害，有拋物線，會被地形擋下；彈藥會隨時間慢慢回補。
+- **放方塊** 可以擋雪球、補地板、或架高逃跑，數量同樣會慢慢回補。
+- **掉出場外直接輸掉該回合**，地圖中間跟兩側都有坑，注意腳下。
+- 場上會定時掉落道具：❤️ 補血 30、雪球 +5、方塊 +5、金蘋果（8 秒內受到的傷害減半）。
+- 每回合都會重新生成地形，而且**左右完全對稱**，兩邊條件一樣公平。
+
+## 檔案結構
+
+```
+index.html   頁面外殼
+style.css    版面與縮放（畫面自動等比例填滿視窗）
+game.js      全部的遊戲邏輯：地形生成、物理碰撞、戰鬥、AI、繪圖、音效
+```
+
+`game.js` 內部大致分成：常數 → 輸入 → 音效 → 地形生成 → 實體與物理 → 戰鬥 → AI → 更新迴圈 → 繪圖，
+以固定 60 FPS 的邏輯步長運作，畫面用 `requestAnimationFrame` 更新。
