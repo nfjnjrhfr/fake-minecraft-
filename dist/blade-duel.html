@@ -1,0 +1,6216 @@
+<meta charset="utf-8">
+<title>方塊劍鬥</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<style>
+/* 方塊劍鬥 UI。深色、遊戲感、手機也能玩。 */
+
+:root {
+  --bg: #070a12;
+  --panel: rgba(14, 19, 32, 0.88);
+  --panel-solid: #0e1320;
+  --line: rgba(120, 150, 210, 0.18);
+  --line-strong: rgba(140, 175, 240, 0.38);
+  --text: #e6edf8;
+  --dim: #8b98b4;
+  --accent: #4fc3f7;
+  --accent-2: #ffd166;
+  --hp: #4ade80;
+  --hp-dark: #166534;
+  --sp: #fbbf24;
+  --danger: #ff6b6b;
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0; padding: 0;
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "PingFang TC",
+               "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  overscroll-behavior: none;
+  touch-action: none;
+  user-select: none;
+}
+
+#view {
+  position: fixed;
+  inset: 0;
+  width: 100%; height: 100%;
+  display: block;
+}
+
+.hidden { display: none !important; }
+
+/* ===================== HUD ===================== */
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.hud-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: max(10px, env(safe-area-inset-top)) 12px 0;
+}
+.fighter-bar.right {
+  padding-right: 46px; /* 讓開右上角的暫停鍵 */
+}
+
+.fighter-bar {
+  flex: 1 1 0;
+  max-width: 42%;
+  min-width: 0;
+}
+.fighter-bar.right { text-align: right; }
+
+.fb-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.fighter-bar.right .fb-head { justify-content: flex-end; }
+
+.fb-name {
+  font-weight: 800;
+  font-size: clamp(13px, 2.6vw, 17px);
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fb-gear {
+  font-size: clamp(9px, 2vw, 11px);
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.bar {
+  position: relative;
+  height: 15px;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 3px;
+}
+.bar.sp { height: 7px; }
+
+.bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  display: block;
+  border-radius: 3px;
+  transition: width 0.12s linear;
+  z-index: 2;
+}
+/* 掉血殘影，讓玩家看得出剛剛被扣了多少 */
+.bar b {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  display: block;
+  background: var(--danger);
+  opacity: 0.55;
+  transition: width 0.55s ease-out 0.15s;
+  z-index: 1;
+}
+.fighter-bar.right .bar i,
+.fighter-bar.right .bar b { inset: 0 0 0 auto; }
+
+.bar.hp i { background: linear-gradient(180deg, #6ee7a0, #22c55e 60%, #16a34a); }
+.bar.hp i.low { background: linear-gradient(180deg, #ff9a9a, #ef4444 60%, #b91c1c); }
+.bar.sp i { background: linear-gradient(180deg, #fde68a, #f59e0b); }
+.bar.sp i.empty { background: linear-gradient(180deg, #94a3b8, #64748b); }
+
+.fb-armor {
+  display: flex;
+  gap: 3px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.fighter-bar.right .fb-armor { justify-content: flex-end; }
+.fb-armor span {
+  width: 15px; height: 5px;
+  border-radius: 2px;
+  background: #334155;
+  position: relative;
+  overflow: hidden;
+}
+.fb-armor span i {
+  position: absolute; inset: 0 auto 0 0;
+  display: block; height: 100%;
+  background: currentColor;
+}
+
+.round-box {
+  flex: 0 0 auto;
+  text-align: center;
+  padding-top: 2px;
+}
+.round-timer {
+  font-size: clamp(24px, 6vw, 40px);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-shadow: 0 3px 10px rgba(0,0,0,0.9);
+}
+.round-timer.urgent { color: var(--danger); animation: pulse 0.6s infinite; }
+@keyframes pulse { 50% { opacity: 0.55; } }
+
+.round-pips {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  margin: 2px 0;
+}
+.round-pips i {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+}
+.round-pips i.on { background: var(--accent-2); border-color: var(--accent-2); }
+
+.round-label {
+  font-size: 10px;
+  color: var(--dim);
+  letter-spacing: 0.1em;
+  margin-top: 2px;
+}
+
+.center-msg {
+  position: absolute;
+  top: 34%;
+  left: 0; right: 0;
+  text-align: center;
+  font-size: clamp(30px, 9vw, 68px);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-shadow: 0 4px 24px rgba(0,0,0,0.9);
+  pointer-events: none;
+}
+
+.hud-left {
+  position: absolute;
+  left: 12px;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  max-width: 40vw;
+}
+.combat-log {
+  font-size: clamp(10px, 2.2vw, 12px);
+  line-height: 1.65;
+  color: #b6c4dc;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+}
+.combat-log div { opacity: 0.5; }
+.combat-log div:last-child { opacity: 1; color: #fff; }
+
+.hud-right {
+  position: absolute;
+  right: 12px;
+  top: 92px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(190px, 42vw);
+}
+
+.ai-panel, .net-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  backdrop-filter: blur(8px);
+}
+.ai-title {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  margin-bottom: 5px;
+  font-weight: 700;
+}
+.ai-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.ai-row span { color: var(--dim); }
+.ai-row b { font-weight: 700; text-align: right; }
+
+.icon-btn {
+  position: absolute;
+  pointer-events: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 10px;
+  width: 38px; height: 38px;
+  font-size: 15px;
+  cursor: pointer;
+}
+.pause-btn { right: 12px; top: max(10px, env(safe-area-inset-top)); }
+
+/* ===================== 觸控 ===================== */
+
+.touch-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+}
+body.touch .touch-layer { display: block; }
+
+.stick {
+  position: absolute;
+  left: max(18px, env(safe-area-inset-left));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: 132px; height: 132px;
+  border-radius: 50%;
+  border: 2px solid rgba(140,175,240,0.28);
+  background: rgba(10,14,24,0.42);
+  pointer-events: auto;
+  touch-action: none;
+}
+.stick i {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 54px; height: 54px;
+  margin: -27px 0 0 -27px;
+  border-radius: 50%;
+  background: rgba(160,190,240,0.42);
+  border: 2px solid rgba(200,225,255,0.55);
+}
+
+.touch-buttons {
+  position: absolute;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  width: 200px; height: 200px;
+  pointer-events: none;
+}
+.tb {
+  position: absolute;
+  pointer-events: auto;
+  border-radius: 50%;
+  border: 2px solid rgba(140,175,240,0.35);
+  background: rgba(18,24,40,0.72);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 800;
+  width: 62px; height: 62px;
+  cursor: pointer;
+}
+.tb:active, .tb.on { background: rgba(79,195,247,0.5); transform: scale(0.94); }
+.tb-slash  { right: 4px;   bottom: 60px; width: 72px; height: 72px; font-size: 20px; }
+.tb-heavy  { right: 66px;  bottom: 130px; }
+.tb-thrust { right: 132px; bottom: 96px; }
+.tb-alt    { right: 6px;   bottom: 138px; width: 52px; height: 52px; font-size: 14px; }
+.tb-block  { right: 138px; bottom: 22px; background: rgba(40,60,90,0.75); }
+.tb-dodge  { right: 74px;  bottom: 6px; }
+
+/* ===================== 選單 ===================== */
+
+#menu {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(50,90,160,0.28), transparent 60%),
+    rgba(4, 7, 14, 0.9);
+  backdrop-filter: blur(10px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#menu.hidden { display: none; }
+
+.menu-inner {
+  width: 100%;
+  max-width: 560px;
+  margin: auto;
+}
+.page { display: none; }
+.page.active { display: block; animation: fade 0.22s ease; }
+.page.wide { max-width: 100%; }
+.menu-inner:has(.page.wide.active) { max-width: 860px; }
+@keyframes fade { from { opacity: 0; transform: translateY(8px); } }
+
+.logo {
+  font-size: clamp(34px, 9vw, 56px);
+  font-weight: 900;
+  text-align: center;
+  margin: 0 0 6px;
+  letter-spacing: 0.06em;
+  background: linear-gradient(180deg, #fff, #7fb6ff 70%, #4b7fd6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 6px 18px rgba(60,120,220,0.35));
+}
+.tagline {
+  text-align: center;
+  color: var(--dim);
+  font-size: clamp(11px, 2.6vw, 13px);
+  margin: 0 0 22px;
+  letter-spacing: 0.05em;
+}
+
+h2 {
+  font-size: clamp(19px, 5vw, 25px);
+  margin: 0 0 16px;
+  font-weight: 800;
+}
+h3 { font-size: 14px; margin: 0 0 8px; color: var(--accent); }
+
+.menu-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+}
+@media (max-width: 480px) { .menu-grid { grid-template-columns: 1fr; } }
+
+.big-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, transform 0.1s, background 0.15s;
+}
+.big-btn:hover { border-color: var(--line-strong); background: rgba(24,34,56,0.9); }
+.big-btn:active { transform: scale(0.985); }
+.big-btn.primary {
+  border-color: rgba(79,195,247,0.5);
+  background: linear-gradient(160deg, rgba(30,70,120,0.75), rgba(16,24,42,0.9));
+}
+.bb-icon { font-size: 22px; }
+.bb-title { font-weight: 800; font-size: 16px; }
+.bb-sub { font-size: 11px; color: var(--dim); line-height: 1.5; }
+
+.field { margin-bottom: 16px; }
+.field > label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+  margin-bottom: 7px;
+  font-weight: 700;
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(16,22,38,0.8);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.13s;
+  font-weight: 600;
+}
+.chip:hover { border-color: var(--line-strong); }
+.chip.on {
+  background: linear-gradient(180deg, #4fc3f7, #2a8cc4);
+  border-color: #4fc3f7;
+  color: #04121c;
+  font-weight: 800;
+}
+.chip small { display: block; font-size: 9px; opacity: 0.75; font-weight: 500; }
+
+.hint {
+  font-size: 11px;
+  color: var(--dim);
+  line-height: 1.6;
+  margin: 8px 0 0;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--dim);
+  margin-bottom: 18px;
+  cursor: pointer;
+}
+
+input[type="text"], textarea {
+  width: 100%;
+  background: rgba(6,10,18,0.9);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 13px;
+  font-family: inherit;
+}
+textarea {
+  height: 68px;
+  resize: vertical;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  word-break: break-all;
+  margin-bottom: 6px;
+}
+input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+
+.row-btns { display: flex; gap: 10px; margin-top: 20px; }
+.row-btns.col { flex-direction: column; }
+.btn {
+  flex: 1;
+  padding: 13px 18px;
+  border-radius: 11px;
+  border: 1px solid var(--line-strong);
+  background: rgba(22,30,50,0.9);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.13s;
+  font-family: inherit;
+}
+.btn:hover { background: rgba(34,46,74,0.95); }
+.btn:active { transform: scale(0.98); }
+.btn.primary {
+  background: linear-gradient(180deg, #4fc3f7, #2a8cc4);
+  border-color: #4fc3f7;
+  color: #04121c;
+  font-weight: 800;
+}
+.btn.ghost { background: transparent; color: var(--dim); }
+.btn.small { flex: 0 0 auto; padding: 7px 14px; font-size: 12px; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.link-btn {
+  display: block;
+  margin: 18px auto 0;
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.conn-status {
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: rgba(10,16,28,0.8);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--dim);
+  line-height: 1.6;
+}
+.conn-status.ok { border-color: rgba(74,222,128,0.5); color: #86efac; }
+.conn-status.err { border-color: rgba(255,107,107,0.5); color: #fca5a5; }
+
+/* 裝備工坊 */
+.loadout-wrap {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+}
+@media (max-width: 700px) { .loadout-wrap { grid-template-columns: 1fr; gap: 8px; } }
+
+.armor-grid { display: flex; flex-direction: column; gap: 9px; }
+.armor-row { display: flex; align-items: center; gap: 8px; }
+.armor-row > label {
+  flex: 0 0 52px;
+  font-size: 11px;
+  color: var(--dim);
+  font-weight: 700;
+}
+.armor-row .chips { flex: 1; gap: 4px; }
+.armor-row .chip { padding: 4px 8px; font-size: 10px; }
+
+.color-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.color-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.color-item span { font-size: 10px; color: var(--dim); }
+.color-item input {
+  width: 44px; height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: none;
+  padding: 2px;
+  cursor: pointer;
+}
+
+.stat-box {
+  margin-top: 14px;
+  background: rgba(8,12,22,0.8);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 13px;
+}
+.stat-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 11px;
+  margin-bottom: 7px;
+}
+.stat-row > span:first-child { flex: 0 0 62px; color: var(--dim); }
+.stat-meter {
+  flex: 1;
+  height: 7px;
+  background: rgba(0,0,0,0.5);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.stat-meter i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.stat-meter.warn i { background: var(--accent-2); }
+.stat-row > b { flex: 0 0 46px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* 說明 */
+.help-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+}
+@media (max-width: 640px) { .help-grid { grid-template-columns: 1fr; } }
+
+.keylist { list-style: none; padding: 0; margin: 0; }
+.keylist li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.keylist span { color: var(--dim); margin-left: 4px; }
+kbd {
+  display: inline-block;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: rgba(30,40,64,0.95);
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  font-size: 10px;
+  font-family: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.tips { padding-left: 17px; margin: 0; }
+.tips li { font-size: 12px; line-height: 1.75; color: var(--dim); margin-bottom: 9px; }
+.tips b { color: var(--accent-2); }
+
+.result-box {
+  background: rgba(8,12,22,0.8);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+}
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(120,150,210,0.1);
+}
+.result-row:last-child { border: none; }
+.result-row span { color: var(--dim); }
+.result-row b { font-variant-numeric: tabular-nums; }
+#result-title.win { color: #7bd88f; }
+#result-title.lose { color: var(--danger); }
+</style>
+
+<canvas id="view"></canvas>
+
+<!-- ===================== 遊戲中 HUD ===================== -->
+<div id="hud" class="hidden">
+  <div class="hud-top">
+    <div class="fighter-bar left">
+      <div class="fb-head">
+        <span class="fb-name" id="p0-name">玩家</span>
+        <span class="fb-gear" id="p0-gear"></span>
+      </div>
+      <div class="bar hp"><i id="p0-hp"></i><b id="p0-hp-ghost"></b></div>
+      <div class="bar sp"><i id="p0-sp"></i></div>
+      <div class="fb-armor" id="p0-armor"></div>
+    </div>
+
+    <div class="round-box">
+      <div class="round-pips" id="pips-0"></div>
+      <div class="round-timer" id="timer">99</div>
+      <div class="round-pips" id="pips-1"></div>
+      <div class="round-label" id="round-label">第 1 回合</div>
+    </div>
+
+    <div class="fighter-bar right">
+      <div class="fb-head">
+        <span class="fb-gear" id="p1-gear"></span>
+        <span class="fb-name" id="p1-name">對手</span>
+      </div>
+      <div class="bar hp"><i id="p1-hp"></i><b id="p1-hp-ghost"></b></div>
+      <div class="bar sp"><i id="p1-sp"></i></div>
+      <div class="fb-armor" id="p1-armor"></div>
+    </div>
+  </div>
+
+  <div class="center-msg" id="center-msg"></div>
+
+  <div class="hud-left">
+    <div class="combat-log" id="combat-log"></div>
+  </div>
+
+  <div class="hud-right">
+    <div class="ai-panel hidden" id="ai-panel">
+      <div class="ai-title">NPC 思考</div>
+      <div class="ai-row"><span>意圖</span><b id="ai-intent">—</b></div>
+      <div class="ai-row"><span>威脅</span><b id="ai-threat">0</b></div>
+      <div class="ai-row"><span>預判你下一招</span><b id="ai-predict">—</b></div>
+      <div class="ai-row"><span>你的格擋率</span><b id="ai-blockrate">—</b></div>
+      <div class="ai-row"><span>反應時間</span><b id="ai-reaction">—</b></div>
+    </div>
+    <div class="net-panel hidden" id="net-panel">
+      <div class="ai-title">連線</div>
+      <div class="ai-row"><span>管道</span><b id="net-kind">—</b></div>
+      <div class="ai-row"><span>身分</span><b id="net-role">—</b></div>
+      <div class="ai-row"><span>延遲</span><b id="net-ping">—</b></div>
+      <div class="ai-row"><span>收/送</span><b id="net-io">—</b></div>
+    </div>
+  </div>
+
+  <!-- 觸控操作 -->
+  <div class="touch-layer" id="touch-layer">
+    <div class="stick" id="stick"><i id="stick-knob"></i></div>
+    <div class="touch-buttons">
+      <button class="tb tb-block" data-act="block">擋</button>
+      <button class="tb tb-dodge" data-act="dodge">滾</button>
+      <button class="tb tb-thrust" data-act="thrust">刺</button>
+      <button class="tb tb-slash" data-act="slashR">斬</button>
+      <button class="tb tb-heavy" data-act="overhead">劈</button>
+      <button class="tb tb-alt" data-act="slashL">反</button>
+    </div>
+  </div>
+
+  <button class="icon-btn pause-btn" id="pause-btn" title="暫停">⏸</button>
+</div>
+
+<!-- ===================== 選單 ===================== -->
+<div id="menu">
+  <div class="menu-inner">
+
+    <!-- 標題頁 -->
+    <section class="page active" data-page="home">
+      <h1 class="logo">⚔ 方塊劍鬥</h1>
+      <p class="tagline">完整肢體骨架 · 全套裝備 · 藍牙對戰 · 超智能 NPC</p>
+      <div class="menu-grid">
+        <button class="big-btn primary" data-go="solo">
+          <span class="bb-icon">🤖</span>
+          <span class="bb-title">單機訓練</span>
+          <span class="bb-sub">跟會學你打法的超智能 NPC 對戰</span>
+        </button>
+        <button class="big-btn" data-go="versus">
+          <span class="bb-icon">📶</span>
+          <span class="bb-title">藍牙 / 連線對戰</span>
+          <span class="bb-sub">與另一台裝置真人對決</span>
+        </button>
+        <button class="big-btn" data-go="loadout">
+          <span class="bb-icon">🛡</span>
+          <span class="bb-title">裝備工坊</span>
+          <span class="bb-sub">頭盔到靴子，逐件自訂</span>
+        </button>
+        <button class="big-btn" data-go="help">
+          <span class="bb-icon">🎮</span>
+          <span class="bb-title">操作說明</span>
+          <span class="bb-sub">鍵盤、滑鼠與觸控</span>
+        </button>
+      </div>
+      <button class="link-btn" data-go="demo">觀看 NPC 對打 ▸</button>
+    </section>
+
+    <!-- 單機 -->
+    <section class="page" data-page="solo">
+      <h2>單機訓練</h2>
+      <div class="field">
+        <label>NPC 強度</label>
+        <div class="chips" id="difficulty-chips"></div>
+        <p class="hint" id="difficulty-hint"></p>
+      </div>
+      <div class="field">
+        <label>NPC 打法性格</label>
+        <div class="chips" id="style-chips"></div>
+      </div>
+      <div class="field">
+        <label>NPC 配裝</label>
+        <div class="chips" id="enemy-preset-chips"></div>
+      </div>
+      <div class="field">
+        <label>賽制</label>
+        <div class="chips" id="bestof-chips"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="show-ai-panel" checked> 顯示 NPC 思考面板</label>
+      <div class="row-btns">
+        <button class="btn ghost" data-go="home">返回</button>
+        <button class="btn primary" id="start-solo">開始對戰</button>
+      </div>
+    </section>
+
+    <!-- 連線 -->
+    <section class="page" data-page="versus">
+      <h2>藍牙 / 連線對戰</h2>
+      <div class="field">
+        <label>連線方式</label>
+        <div class="chips" id="transport-chips"></div>
+        <p class="hint" id="transport-hint"></p>
+      </div>
+
+      <div class="field" id="role-field">
+        <label>身分</label>
+        <div class="chips" id="role-chips"></div>
+      </div>
+
+      <div id="webrtc-box" class="hidden">
+        <div class="field">
+          <label id="code-label">1. 產生邀請碼，傳給對方</label>
+          <textarea id="local-code" readonly placeholder="按下方按鈕產生"></textarea>
+          <button class="btn small" id="copy-code">複製</button>
+          <button class="btn small" id="gen-code">產生邀請碼</button>
+        </div>
+        <div class="field">
+          <label id="remote-label">2. 貼上對方給你的代碼</label>
+          <textarea id="remote-code" placeholder="貼在這裡"></textarea>
+          <button class="btn small" id="apply-code">送出</button>
+        </div>
+      </div>
+
+      <div id="channel-box" class="hidden">
+        <div class="field">
+          <label>房間名稱（兩邊要一樣）</label>
+          <input type="text" id="room-name" value="sword-duel">
+          <p class="hint">同一台裝置開兩個分頁／視窗，一邊當房主一邊當挑戰者。</p>
+        </div>
+      </div>
+
+      <div class="conn-status" id="conn-status">尚未連線</div>
+
+      <div class="row-btns">
+        <button class="btn ghost" data-go="home">返回</button>
+        <button class="btn" id="connect-btn">連線</button>
+        <button class="btn primary hidden" id="start-net">進入對戰</button>
+      </div>
+    </section>
+
+    <!-- 裝備 -->
+    <section class="page wide" data-page="loadout">
+      <h2>裝備工坊</h2>
+      <div class="loadout-wrap">
+        <div class="loadout-col">
+          <div class="field">
+            <label>快速套裝</label>
+            <div class="chips" id="preset-chips"></div>
+          </div>
+          <div class="field">
+            <label>你的名字</label>
+            <input type="text" id="player-name" maxlength="12" value="玩家">
+          </div>
+          <div class="field">
+            <label>武器</label>
+            <div class="chips" id="weapon-chips"></div>
+          </div>
+          <div class="field">
+            <label>副手</label>
+            <div class="chips" id="offhand-chips"></div>
+          </div>
+          <div class="field">
+            <label>顏色</label>
+            <div class="color-row" id="color-row"></div>
+          </div>
+        </div>
+        <div class="loadout-col">
+          <div class="field">
+            <label>護甲（逐件選材質）</label>
+            <div class="armor-grid" id="armor-grid"></div>
+          </div>
+          <div class="stat-box" id="stat-box"></div>
+        </div>
+      </div>
+      <div class="row-btns">
+        <button class="btn ghost" data-go="home">返回</button>
+        <button class="btn primary" data-go="home">完成</button>
+      </div>
+    </section>
+
+    <!-- 說明 -->
+    <section class="page" data-page="help">
+      <h2>操作說明</h2>
+      <div class="help-grid">
+        <div>
+          <h3>鍵盤 / 滑鼠</h3>
+          <ul class="keylist">
+            <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>移動（相對鏡頭）</span></li>
+            <li><kbd>滑鼠左鍵</kbd><kbd>J</kbd><span>右橫斬</span></li>
+            <li><kbd>Q</kbd><span>左橫斬（回掃，較快）</span></li>
+            <li><kbd>E</kbd><span>上段劈（重、慢、破防高）</span></li>
+            <li><kbd>F</kbd><span>突刺（最遠、最快）</span></li>
+            <li><kbd>滑鼠右鍵</kbd><kbd>K</kbd><span>格擋（按住）</span></li>
+            <li><kbd>R</kbd><span>盾擊（破對手格擋）</span></li>
+            <li><kbd>Shift</kbd><span>翻滾（有無敵時間）</span></li>
+            <li><kbd>空白</kbd><span>跳躍</span></li>
+            <li><kbd>Esc</kbd><span>暫停 / 返回選單</span></li>
+          </ul>
+        </div>
+        <div>
+          <h3>戰鬥要訣</h3>
+          <ul class="tips">
+            <li><b>完美招架</b>：在對手砍中你的前 0.2 秒才舉盾，可以完全免傷並把他彈開，接著就是免費的反擊機會。</li>
+            <li><b>體力</b>：攻擊、格擋、翻滾都吃體力。體力被打光會直接破防，那一下會非常痛。</li>
+            <li><b>部位</b>：打頭傷害兩倍，四肢只有六成多。護甲是分部位計算的，沒戴頭盔就別把頭湊過去。</li>
+            <li><b>裝備耐久</b>：護甲被打會慢慢碎，碎掉之後那個部位就沒有保護了。</li>
+            <li><b>重量</b>：全套獄髓很耐打，但移動與出招都會變慢。輕裝靠翻滾與突刺一樣能贏。</li>
+            <li><b>假動作</b>：攻擊在蓄力階段可以取消（放開再按別的招），用來騙對方的格擋。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="row-btns">
+        <button class="btn primary" data-go="home">返回</button>
+      </div>
+    </section>
+
+    <!-- 暫停 -->
+    <section class="page" data-page="pause">
+      <h2>暫停</h2>
+      <div class="row-btns col">
+        <button class="btn primary" id="resume-btn">繼續</button>
+        <button class="btn" id="restart-btn">重新開始</button>
+        <button class="btn ghost" id="quit-btn">回到主選單</button>
+      </div>
+    </section>
+
+    <!-- 結算 -->
+    <section class="page" data-page="result">
+      <h2 id="result-title">勝利</h2>
+      <div class="result-box" id="result-box"></div>
+      <div class="row-btns">
+        <button class="btn" id="again-btn">再來一場</button>
+        <button class="btn ghost" id="result-home">回到主選單</button>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script type="module">
+// ========================================================================
+// src/core/math.js
+// ========================================================================
+
+// 極簡 3D 數學庫：column-major 4x4 矩陣 + 向量工具。
+// 沒有任何外部相依，Node 與瀏覽器都可直接 import。
+
+const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+const smoothstep = (t) => t * t * (3 - 2 * t);
+const TAU = Math.PI * 2;
+
+/** 把角度包進 (-PI, PI]，用於角度插值與轉身。 */
+function wrapAngle(a) {
+  a = (a + Math.PI) % TAU;
+  if (a < 0) a += TAU;
+  return a - Math.PI;
+}
+
+/** 角度插值（走最短路徑）。 */
+function lerpAngle(a, b, t) {
+  return a + wrapAngle(b - a) * t;
+}
+
+/** 讓 a 以最大步長 step 轉向 b。 */
+function turnToward(a, b, step) {
+  const d = wrapAngle(b - a);
+  if (Math.abs(d) <= step) return wrapAngle(b);
+  return wrapAngle(a + Math.sign(d) * step);
+}
+
+const vec3 = (x = 0, y = 0, z = 0) => ({ x, y, z });
+
+function v3add(a, b) { return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }; }
+function v3sub(a, b) { return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z }; }
+function v3scale(a, s) { return { x: a.x * s, y: a.y * s, z: a.z * s }; }
+function v3dot(a, b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+function v3len(a) { return Math.hypot(a.x, a.y, a.z); }
+function v3lerp(a, b, t) {
+  return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), z: lerp(a.z, b.z, t) };
+}
+function v3norm(a) {
+  const l = v3len(a) || 1;
+  return { x: a.x / l, y: a.y / l, z: a.z / l };
+}
+function v3cross(a, b) {
+  return {
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x,
+  };
+}
+
+/** 水平面（XZ）距離，戰鬥判定幾乎都用這個。 */
+function distXZ(a, b) {
+  return Math.hypot(a.x - b.x, a.z - b.z);
+}
+
+// ---------------------------------------------------------------------------
+// 矩陣：Float32Array(16)，column-major（跟 OpenGL 一致）
+// m[col * 4 + row]
+// ---------------------------------------------------------------------------
+
+function mat4() {
+  const m = new Float32Array(16);
+  m[0] = m[5] = m[10] = m[15] = 1;
+  return m;
+}
+
+function mIdentity(out) {
+  out.fill(0);
+  out[0] = out[5] = out[10] = out[15] = 1;
+  return out;
+}
+
+function mCopy(out, a) {
+  out.set(a);
+  return out;
+}
+
+/** out = a * b（先套用 b 再套用 a，跟一般數學寫法一致）。 */
+function mMul(out, a, b) {
+  const a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
+  const a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+  const a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
+  const a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
+  for (let i = 0; i < 4; i++) {
+    const b0 = b[i * 4], b1 = b[i * 4 + 1], b2 = b[i * 4 + 2], b3 = b[i * 4 + 3];
+    out[i * 4] = b0 * a00 + b1 * a10 + b2 * a20 + b3 * a30;
+    out[i * 4 + 1] = b0 * a01 + b1 * a11 + b2 * a21 + b3 * a31;
+    out[i * 4 + 2] = b0 * a02 + b1 * a12 + b2 * a22 + b3 * a32;
+    out[i * 4 + 3] = b0 * a03 + b1 * a13 + b2 * a23 + b3 * a33;
+  }
+  return out;
+}
+
+function mTranslate(out, x, y, z) {
+  mIdentity(out);
+  out[12] = x; out[13] = y; out[14] = z;
+  return out;
+}
+
+function mScale(out, x, y, z) {
+  mIdentity(out);
+  out[0] = x; out[5] = y; out[10] = z;
+  return out;
+}
+
+function mRotX(out, r) {
+  const c = Math.cos(r), s = Math.sin(r);
+  mIdentity(out);
+  out[5] = c; out[6] = s; out[9] = -s; out[10] = c;
+  return out;
+}
+
+function mRotY(out, r) {
+  const c = Math.cos(r), s = Math.sin(r);
+  mIdentity(out);
+  out[0] = c; out[2] = -s; out[8] = s; out[10] = c;
+  return out;
+}
+
+function mRotZ(out, r) {
+  const c = Math.cos(r), s = Math.sin(r);
+  mIdentity(out);
+  out[0] = c; out[1] = s; out[4] = -s; out[5] = c;
+  return out;
+}
+
+const _tmpA = mat4();
+const _tmpB = mat4();
+
+/** 組出 T * Ry * Rx * Rz（骨架關節用的標準順序）。 */
+function mCompose(out, tx, ty, tz, rx, ry, rz) {
+  mTranslate(out, tx, ty, tz);
+  if (ry) { mRotY(_tmpA, ry); mMul(out, out, _tmpA); }
+  if (rx) { mRotX(_tmpA, rx); mMul(out, out, _tmpA); }
+  if (rz) { mRotZ(_tmpA, rz); mMul(out, out, _tmpA); }
+  return out;
+}
+
+/** 點（w=1）乘上矩陣。 */
+function mTransformPoint(m, p, out = { x: 0, y: 0, z: 0 }) {
+  const { x, y, z } = p;
+  out.x = m[0] * x + m[4] * y + m[8] * z + m[12];
+  out.y = m[1] * x + m[5] * y + m[9] * z + m[13];
+  out.z = m[2] * x + m[6] * y + m[10] * z + m[14];
+  return out;
+}
+
+/** 向量（w=0）乘上矩陣，忽略平移。 */
+function mTransformDir(m, p, out = { x: 0, y: 0, z: 0 }) {
+  const { x, y, z } = p;
+  out.x = m[0] * x + m[4] * y + m[8] * z;
+  out.y = m[1] * x + m[5] * y + m[9] * z;
+  out.z = m[2] * x + m[6] * y + m[10] * z;
+  return out;
+}
+
+function mPerspective(out, fovY, aspect, near, far) {
+  const f = 1 / Math.tan(fovY / 2);
+  out.fill(0);
+  out[0] = f / aspect;
+  out[5] = f;
+  out[10] = (far + near) / (near - far);
+  out[11] = -1;
+  out[14] = (2 * far * near) / (near - far);
+  return out;
+}
+
+function mLookAt(out, eye, target, up = { x: 0, y: 1, z: 0 }) {
+  const z = v3norm(v3sub(eye, target));
+  const x = v3norm(v3cross(up, z));
+  const y = v3cross(z, x);
+  out[0] = x.x; out[1] = y.x; out[2] = z.x; out[3] = 0;
+  out[4] = x.y; out[5] = y.y; out[6] = z.y; out[7] = 0;
+  out[8] = x.z; out[9] = y.z; out[10] = z.z; out[11] = 0;
+  out[12] = -v3dot(x, eye);
+  out[13] = -v3dot(y, eye);
+  out[14] = -v3dot(z, eye);
+  out[15] = 1;
+  return out;
+}
+
+/** 只做剛體變換的反矩陣（旋轉轉置 + 平移取負），骨架都是剛體所以夠用。 */
+function mInvertRigid(out, m) {
+  out[0] = m[0]; out[1] = m[4]; out[2] = m[8]; out[3] = 0;
+  out[4] = m[1]; out[5] = m[5]; out[6] = m[9]; out[7] = 0;
+  out[8] = m[2]; out[9] = m[6]; out[10] = m[10]; out[11] = 0;
+  const tx = m[12], ty = m[13], tz = m[14];
+  out[12] = -(out[0] * tx + out[4] * ty + out[8] * tz);
+  out[13] = -(out[1] * tx + out[5] * ty + out[9] * tz);
+  out[14] = -(out[2] * tx + out[6] * ty + out[10] * tz);
+  out[15] = 1;
+  return out;
+}
+
+/** 線段對線段最短距離（劍刃 vs 肢體中軸的判定核心）。 */
+function segSegDistance(p1, q1, p2, q2) {
+  const d1 = v3sub(q1, p1);
+  const d2 = v3sub(q2, p2);
+  const r = v3sub(p1, p2);
+  const a = v3dot(d1, d1);
+  const e = v3dot(d2, d2);
+  const f = v3dot(d2, r);
+  const EPS = 1e-8;
+  let s, t;
+  if (a <= EPS && e <= EPS) return v3len(r);
+  if (a <= EPS) {
+    s = 0;
+    t = clamp(f / e, 0, 1);
+  } else {
+    const c = v3dot(d1, r);
+    if (e <= EPS) {
+      t = 0;
+      s = clamp(-c / a, 0, 1);
+    } else {
+      const b = v3dot(d1, d2);
+      const denom = a * e - b * b;
+      s = denom > EPS ? clamp((b * f - c * e) / denom, 0, 1) : 0;
+      t = (b * s + f) / e;
+      if (t < 0) { t = 0; s = clamp(-c / a, 0, 1); }
+      else if (t > 1) { t = 1; s = clamp((b - c) / a, 0, 1); }
+    }
+  }
+  const c1 = v3add(p1, v3scale(d1, s));
+  const c2 = v3add(p2, v3scale(d2, t));
+  return v3len(v3sub(c1, c2));
+}
+
+/** 決定性亂數（netcode 需要兩端一致的隨機）。 */
+function makeRng(seed = 1) {
+  let s = seed >>> 0 || 1;
+  return function rng() {
+    // xorshift32
+    s ^= s << 13; s >>>= 0;
+    s ^= s >>> 17;
+    s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+}
+
+// ========================================================================
+// src/core/renderer.js
+// ========================================================================
+
+// 方塊渲染器：把一堆有旋轉的長方體投影到 2D canvas。
+// 用畫家演算法排序面 + 面法線打光，做出 Minecraft 風格的塊狀角色。
+// 完全不需要 WebGL，也就不需要任何外部函式庫。
+
+
+
+// 單位立方體的 8 個頂點（中心在原點，邊長 1）
+const CUBE_VERTS = [
+  { x: -0.5, y: -0.5, z: -0.5 }, { x: 0.5, y: -0.5, z: -0.5 },
+  { x: 0.5, y: 0.5, z: -0.5 }, { x: -0.5, y: 0.5, z: -0.5 },
+  { x: -0.5, y: -0.5, z: 0.5 }, { x: 0.5, y: -0.5, z: 0.5 },
+  { x: 0.5, y: 0.5, z: 0.5 }, { x: -0.5, y: 0.5, z: 0.5 },
+];
+
+// 6 個面（逆時針，法線朝外）
+const CUBE_FACES = [
+  { idx: [4, 5, 6, 7], n: { x: 0, y: 0, z: 1 } },   // 前
+  { idx: [1, 0, 3, 2], n: { x: 0, y: 0, z: -1 } },  // 後
+  { idx: [5, 1, 2, 6], n: { x: 1, y: 0, z: 0 } },   // 右
+  { idx: [0, 4, 7, 3], n: { x: -1, y: 0, z: 0 } },  // 左
+  { idx: [3, 7, 6, 2], n: { x: 0, y: 1, z: 0 } },   // 上
+  { idx: [0, 1, 5, 4], n: { x: 0, y: -1, z: 0 } },  // 下
+];
+
+const LIGHT = v3norm({ x: -0.45, y: 0.82, z: 0.36 });
+
+/** 近平面的 w 下限。低於這個值的頂點在相機後方，必須裁掉。 */
+const NEAR_W = 0.05;
+
+/**
+ * 把齊次座標的多邊形對近平面做 Sutherland–Hodgman 裁剪。
+ * 沒有這一步的話，橫跨相機的大面（例如整片競技場地板）會整面被丟掉。
+ */
+function clipNear(poly) {
+  const out = [];
+  for (let i = 0; i < poly.length; i++) {
+    const cur = poly[i];
+    const prev = poly[(i + poly.length - 1) % poly.length];
+    const curIn = cur.w > NEAR_W;
+    const prevIn = prev.w > NEAR_W;
+    if (curIn !== prevIn) {
+      // 邊跨越近平面：插出交點
+      const t = (NEAR_W - prev.w) / (cur.w - prev.w);
+      out.push({
+        x: prev.x + (cur.x - prev.x) * t,
+        y: prev.y + (cur.y - prev.y) * t,
+        z: prev.z + (cur.z - prev.z) * t,
+        w: NEAR_W,
+      });
+    }
+    if (curIn) out.push(cur);
+  }
+  return out;
+}
+
+/** #rrggbb -> {r,g,b} */
+function hexToRgb(hex) {
+  const v = parseInt(hex.slice(1), 16);
+  return { r: (v >> 16) & 255, g: (v >> 8) & 255, b: v & 255 };
+}
+
+const _shadeCache = new Map();
+/** 依照亮度把顏色調亮/調暗，結果快取起來避免每格重算字串。 */
+function shade(hex, amount) {
+  const key = hex + '|' + (amount | 0);
+  let c = _shadeCache.get(key);
+  if (c) return c;
+  const { r, g, b } = hexToRgb(hex);
+  const f = amount / 100;
+  const mix = (x) => clamp(Math.round(x * f), 0, 255);
+  c = `rgb(${mix(r)},${mix(g)},${mix(b)})`;
+  _shadeCache.set(key, c);
+  return c;
+}
+
+class Renderer {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d', { alpha: false });
+    this.width = canvas.width;
+    this.height = canvas.height;
+    this.view = mat4();
+    this.proj = mat4();
+    this.viewProj = mat4();
+    this.faces = [];        // 本幀待畫的方塊面
+    this.groundPolys = [];  // 貼地平面（地板、圖騰），永遠畫在方塊之下
+    this.sprites = [];      // 疊在 3D 之上的畫面元素（傷害數字、特效）
+    this.fovY = 0.9;
+    this.near = 0.1;
+    this.far = 200;
+    this.shadowY = 0.002; // 影子貼地時稍微抬高避免 z-fighting
+  }
+
+  resize(w, h, dpr = 1) {
+    this.canvas.width = Math.max(1, Math.round(w * dpr));
+    this.canvas.height = Math.max(1, Math.round(h * dpr));
+    this.canvas.style.width = w + 'px';
+    this.canvas.style.height = h + 'px';
+    this.width = this.canvas.width;
+    this.height = this.canvas.height;
+  }
+
+  setCamera(eye, target) {
+    mLookAt(this.view, eye, target);
+    mPerspective(this.proj, this.fovY, this.width / this.height, this.near, this.far);
+    mMul(this.viewProj, this.proj, this.view);
+    this.eye = eye;
+  }
+
+  begin() {
+    this.faces.length = 0;
+    this.groundPolys.length = 0;
+    this.sprites.length = 0;
+  }
+
+  /** 世界座標 -> 齊次裁剪座標。 */
+  toClip(p, out = { x: 0, y: 0, z: 0, w: 0 }) {
+    const m = this.viewProj;
+    out.x = m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12];
+    out.y = m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13];
+    out.z = m[2] * p.x + m[6] * p.y + m[10] * p.z + m[14];
+    out.w = m[3] * p.x + m[7] * p.y + m[11] * p.z + m[15];
+    return out;
+  }
+
+  /** 齊次座標 -> 螢幕像素。 */
+  clipToScreen(c) {
+    const inv = 1 / c.w;
+    return {
+      x: (c.x * inv * 0.5 + 0.5) * this.width,
+      y: (1 - (c.y * inv * 0.5 + 0.5)) * this.height,
+      z: c.z * inv,
+      w: c.w,
+    };
+  }
+
+  /** 世界座標 -> 螢幕座標。回傳 null 表示在相機後方。 */
+  project(p) {
+    const c = this.toClip(p);
+    if (c.w <= NEAR_W) return null;
+    return this.clipToScreen(c);
+  }
+
+  /**
+   * 送出一個長方體。
+   * @param world 4x4 世界矩陣（已含平移旋轉，尺寸另外給）
+   * @param size  {x,y,z} 邊長
+   * @param color '#rrggbb'
+   * @param opts  { alpha, outline, emissive }
+   */
+  pushBox(world, size, color, opts = {}) {
+    const verts = new Array(8);
+    for (let i = 0; i < 8; i++) {
+      const cv = CUBE_VERTS[i];
+      const local = { x: cv.x * size.x, y: cv.y * size.y, z: cv.z * size.z };
+      verts[i] = mTransformPoint(world, local);
+    }
+
+    for (let f = 0; f < 6; f++) {
+      const face = CUBE_FACES[f];
+      const a = verts[face.idx[0]], b = verts[face.idx[1]], c = verts[face.idx[2]];
+      // 世界空間法線（用實際頂點算，這樣旋轉自動生效）
+      const n = v3norm(v3cross(v3sub(b, a), v3sub(c, a)));
+      // 背面剔除：面朝離相機而去就跳過
+      const toCam = v3sub(this.eye, a);
+      if (v3dot(n, toCam) <= 0) continue;
+
+      // 先轉到齊次空間再對近平面裁剪，橫跨相機的大面才不會整片消失
+      const clipPoly = clipNear([
+        this.toClip(verts[face.idx[0]]),
+        this.toClip(verts[face.idx[1]]),
+        this.toClip(verts[face.idx[2]]),
+        this.toClip(verts[face.idx[3]]),
+      ]);
+      if (clipPoly.length < 3) continue;
+
+      const pts = new Array(clipPoly.length);
+      let depth = 0;
+      for (let i = 0; i < clipPoly.length; i++) {
+        pts[i] = this.clipToScreen(clipPoly[i]);
+        depth += clipPoly[i].w;
+      }
+      depth /= clipPoly.length;
+
+      const lambert = Math.max(0, v3dot(n, LIGHT));
+      const brightness = opts.emissive ? 118 : 52 + lambert * 62;
+      this.faces.push({
+        pts,
+        depth,
+        color: shade(color, brightness),
+        alpha: opts.alpha ?? 1,
+        outline: opts.outline,
+      });
+    }
+  }
+
+  /** 地面上的橢圓影子（用畫家演算法的極遠深度確保先畫）。 */
+  pushShadow(x, z, radius, strength = 0.32) {
+    const p = this.project({ x, y: this.shadowY, z });
+    if (!p) return;
+    const edge = this.project({ x: x + radius, y: this.shadowY, z });
+    if (!edge) return;
+    const rx = Math.abs(edge.x - p.x);
+    this.sprites.push({
+      kind: 'shadow', x: p.x, y: p.y, rx, ry: rx * 0.45, strength, depth: p.w,
+    });
+  }
+
+  /**
+   * 貼地的平面多邊形（競技場地板、法陣圖騰）。
+   *
+   * 大面積的地板如果當成方塊丟進畫家演算法，會因為「平均深度」排序不可靠而
+   * 蓋掉角色。地板反正永遠在所有東西下面，所以獨立成一層在方塊之前畫完。
+   *
+   * @param pts [{x, z}, ...] 世界座標，逆時針
+   */
+  pushGroundPoly(pts, color, opts = {}) {
+    const y = opts.y ?? 0;
+    const clip = clipNear(pts.map((p) => this.toClip({ x: p.x, y, z: p.z })));
+    if (clip.length < 3) return;
+    this.groundPolys.push({
+      pts: clip.map((c) => this.clipToScreen(c)),
+      color,
+      alpha: opts.alpha ?? 1,
+      stroke: opts.stroke,
+    });
+  }
+
+  /** 產生一個圓形的地面多邊形頂點。 */
+  static circlePoints(cx, cz, radius, segments = 40) {
+    const pts = [];
+    for (let i = 0; i < segments; i++) {
+      const a = (i / segments) * Math.PI * 2;
+      pts.push({ x: cx + Math.cos(a) * radius, z: cz + Math.sin(a) * radius });
+    }
+    return pts;
+  }
+
+  /** 世界空間的文字（傷害數字、狀態提示）。 */
+  pushLabel(pos, text, color, size = 22, alpha = 1) {
+    const p = this.project(pos);
+    if (!p) return;
+    this.sprites.push({ kind: 'label', x: p.x, y: p.y, text, color, size, alpha, depth: p.w });
+  }
+
+  /** 世界空間的圓點（火花、粒子）。 */
+  pushPoint(pos, radius, color, alpha = 1) {
+    const p = this.project(pos);
+    if (!p) return;
+    const scale = this.height / (p.w * 2 * Math.tan(this.fovY / 2));
+    this.sprites.push({
+      kind: 'point', x: p.x, y: p.y, r: Math.max(0.6, radius * scale), color, alpha, depth: p.w,
+    });
+  }
+
+  /** 畫地板格線（用投影後的線段，不進畫家排序，永遠在最底層）。 */
+  drawGround(ctx, size, step, colorA, colorB) {
+    const half = size / 2;
+    for (let i = -half; i <= half; i += step) {
+      for (const [p0, p1] of [
+        [{ x: i, y: 0, z: -half }, { x: i, y: 0, z: half }],
+        [{ x: -half, y: 0, z: i }, { x: half, y: 0, z: i }],
+      ]) {
+        // 線段也要對近平面裁剪，否則跨過相機的格線會整條消失
+        let ca = this.toClip(p0), cb = this.toClip(p1);
+        if (ca.w <= NEAR_W && cb.w <= NEAR_W) continue;
+        if (ca.w <= NEAR_W || cb.w <= NEAR_W) {
+          const inside = ca.w > NEAR_W ? ca : cb;
+          const outside = ca.w > NEAR_W ? cb : ca;
+          const t = (NEAR_W - outside.w) / (inside.w - outside.w);
+          const cut = {
+            x: outside.x + (inside.x - outside.x) * t,
+            y: outside.y + (inside.y - outside.y) * t,
+            z: outside.z + (inside.z - outside.z) * t,
+            w: NEAR_W,
+          };
+          if (ca.w > NEAR_W) cb = cut; else ca = cut;
+        }
+        const a = this.clipToScreen(ca), b = this.clipToScreen(cb);
+        ctx.strokeStyle = (Math.round(i) % (step * 4) === 0) ? colorB : colorA;
+        ctx.lineWidth = (Math.round(i) % (step * 4) === 0) ? 2 : 1;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  /** 把這一幀累積的東西畫出來。 */
+  end(env = {}) {
+    const ctx = this.ctx;
+    const W = this.width, H = this.height;
+
+    // 天空漸層
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, env.skyTop || '#0b1020');
+    sky.addColorStop(0.55, env.skyMid || '#1b2a4a');
+    sky.addColorStop(1, env.skyBottom || '#2a1f2e');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+
+    if (env.ground !== false) {
+      this.drawGround(ctx, env.groundSize || 60, env.groundStep || 2,
+        env.gridColor || 'rgba(120,160,220,0.10)',
+        env.gridColorMajor || 'rgba(150,200,255,0.22)');
+    }
+
+    // 地板平面（在網格之上、方塊之下）
+    for (const g of this.groundPolys) {
+      ctx.globalAlpha = g.alpha;
+      ctx.fillStyle = g.color;
+      ctx.beginPath();
+      ctx.moveTo(g.pts[0].x, g.pts[0].y);
+      for (let i = 1; i < g.pts.length; i++) ctx.lineTo(g.pts[i].x, g.pts[i].y);
+      ctx.closePath();
+      ctx.fill();
+      if (g.stroke) {
+        ctx.strokeStyle = g.stroke;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // 影子接著畫（在所有方塊之下）
+    for (const s of this.sprites) {
+      if (s.kind !== 'shadow') continue;
+      ctx.save();
+      ctx.globalAlpha = s.strength;
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(s.x, s.y, s.rx, s.ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 畫家演算法：遠的先畫
+    this.faces.sort((a, b) => b.depth - a.depth);
+    for (const f of this.faces) {
+      ctx.globalAlpha = f.alpha;
+      ctx.fillStyle = f.color;
+      ctx.beginPath();
+      ctx.moveTo(f.pts[0].x, f.pts[0].y);
+      for (let i = 1; i < f.pts.length; i++) ctx.lineTo(f.pts[i].x, f.pts[i].y);
+      ctx.closePath();
+      ctx.fill();
+      // 補一圈同色描邊，蓋掉相鄰面之間的抗鋸齒縫隙
+      ctx.strokeStyle = f.outline || f.color;
+      ctx.lineWidth = f.outline ? 1.5 : 1;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // 粒子與文字疊在最上層，彼此依深度排序
+    const overlay = this.sprites.filter((s) => s.kind !== 'shadow');
+    overlay.sort((a, b) => b.depth - a.depth);
+    for (const s of overlay) {
+      ctx.globalAlpha = s.alpha;
+      if (s.kind === 'point') {
+        ctx.fillStyle = s.color;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (s.kind === 'label') {
+        ctx.font = `900 ${s.size}px ui-sans-serif, system-ui, "Noto Sans TC", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+        ctx.strokeText(s.text, s.x, s.y);
+        ctx.fillStyle = s.color;
+        ctx.fillText(s.text, s.x, s.y);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ========================================================================
+// src/game/equipment.js
+// ========================================================================
+
+// 裝備資料表：材質分級、每個部位的護甲、武器種類。
+// 全部是純資料 + 純函式，Node 端測試可以直接引用。
+
+/** 護甲材質分級。defense = 傷害減免係數，weight 影響移動與體力。 */
+const MATERIALS = {
+  cloth:     { name: '布衣',   color: '#8d7f6a', trim: '#6b5f4d', defense: 0.04, weight: 0.4, durability: 60 },
+  leather:   { name: '皮革',   color: '#8a5a35', trim: '#5f3d22', defense: 0.09, weight: 1.0, durability: 120 },
+  chainmail: { name: '鎖子甲', color: '#9aa3ad', trim: '#6d747d', defense: 0.15, weight: 1.8, durability: 200 },
+  iron:      { name: '鐵',     color: '#c9ced6', trim: '#8a9098', defense: 0.22, weight: 2.6, durability: 300 },
+  gold:      { name: '黃金',   color: '#e6c14b', trim: '#a8862a', defense: 0.17, weight: 2.2, durability: 160 },
+  diamond:   { name: '鑽石',   color: '#4fe3d0', trim: '#2b9c92', defense: 0.30, weight: 3.0, durability: 520 },
+  netherite: { name: '獄髓',   color: '#4a4249', trim: '#2c262c', defense: 0.36, weight: 3.6, durability: 800 },
+};
+
+/**
+ * 護甲部位。bones = 這件裝備會包住哪些骨頭，inflate = 各軸向外膨脹多少（公尺）。
+ * covers = 這件裝備保護哪些受擊部位（受擊部位見 rig.js 的 hitParts）。
+ */
+const ARMOR_SLOTS = {
+  helmet: {
+    name: '頭盔', bones: ['head'], covers: ['head'],
+    inflate: { x: 0.06, y: 0.05, z: 0.06 }, share: 0.30, weightMul: 1.0,
+  },
+  chestplate: {
+    name: '胸甲', bones: ['torso'], covers: ['torso'],
+    inflate: { x: 0.07, y: 0.03, z: 0.07 }, share: 0.40, weightMul: 1.6,
+  },
+  pauldrons: {
+    name: '護肩', bones: ['armRUpper', 'armLUpper'], covers: ['armR', 'armL'],
+    inflate: { x: 0.07, y: 0.02, z: 0.07 }, share: 0.12, weightMul: 0.7,
+  },
+  vambraces: {
+    name: '護臂', bones: ['armRLower', 'armLLower'], covers: ['armR', 'armL'],
+    inflate: { x: 0.055, y: 0.02, z: 0.055 }, share: 0.08, weightMul: 0.4,
+  },
+  gauntlets: {
+    name: '手甲', bones: ['handR', 'handL'], covers: ['armR', 'armL'],
+    inflate: { x: 0.05, y: 0.04, z: 0.05 }, share: 0.05, weightMul: 0.3,
+  },
+  belt: {
+    name: '腰甲', bones: ['hips'], covers: ['torso'],
+    inflate: { x: 0.06, y: 0.03, z: 0.06 }, share: 0.10, weightMul: 0.5,
+  },
+  leggings: {
+    name: '護腿', bones: ['legRUpper', 'legLUpper', 'legRLower', 'legLLower'], covers: ['legR', 'legL'],
+    inflate: { x: 0.055, y: 0.02, z: 0.055 }, share: 0.18, weightMul: 1.1,
+  },
+  boots: {
+    name: '靴子', bones: ['footR', 'footL'], covers: ['legR', 'legL'],
+    inflate: { x: 0.05, y: 0.04, z: 0.04 }, share: 0.07, weightMul: 0.5,
+  },
+};
+
+/** 武器：reach 是刃長，各動作的時間單位是秒。 */
+const WEAPONS = {
+  dagger: {
+    name: '匕首', kind: 'dagger',
+    blade: { length: 0.42, width: 0.05, thick: 0.018 },
+    hilt: { length: 0.14, width: 0.055 },
+    damage: 11, weight: 0.5, guard: 0.35,
+    speed: 1.45,           // 動作播放倍率，越高越快
+    poise: 0.35,           // 命中時造成的硬直權重
+    color: '#c9ced6', gripColor: '#5a4433', pommel: '#d9b44a',
+    moves: ['slashR', 'slashL', 'thrust', 'thrust'],
+  },
+  sword: {
+    name: '鐵劍', kind: 'sword',
+    blade: { length: 0.82, width: 0.075, thick: 0.024 },
+    hilt: { length: 0.2, width: 0.07 },
+    damage: 18, weight: 1.2, guard: 0.6,
+    speed: 1.0, poise: 0.6,
+    color: '#d5dae2', gripColor: '#4d3a2a', pommel: '#c9a227',
+    moves: ['slashR', 'slashL', 'overhead', 'thrust'],
+  },
+  longsword: {
+    name: '長劍', kind: 'longsword',
+    blade: { length: 1.02, width: 0.08, thick: 0.026 },
+    hilt: { length: 0.26, width: 0.075 },
+    damage: 22, weight: 1.8, guard: 0.7,
+    speed: 0.88, poise: 0.8,
+    color: '#dfe6ef', gripColor: '#3b2f4a', pommel: '#b9c3d0',
+    moves: ['slashR', 'slashL', 'overhead', 'thrust'],
+  },
+  greatsword: {
+    name: '巨劍', kind: 'greatsword',
+    blade: { length: 1.25, width: 0.115, thick: 0.034 },
+    hilt: { length: 0.32, width: 0.085 },
+    damage: 31, weight: 3.2, guard: 0.85,
+    speed: 0.68, poise: 1.3,
+    color: '#b9c2cc', gripColor: '#2f2622', pommel: '#8b6a2f',
+    moves: ['slashR', 'slashL', 'overhead'],
+  },
+  rapier: {
+    name: '細劍', kind: 'rapier',
+    blade: { length: 0.95, width: 0.038, thick: 0.02 },
+    hilt: { length: 0.18, width: 0.09 },
+    damage: 15, weight: 0.8, guard: 0.5,
+    speed: 1.25, poise: 0.4,
+    color: '#e8edf5', gripColor: '#6a2233', pommel: '#d0d6de',
+    moves: ['thrust', 'thrust', 'slashR', 'slashL'],
+  },
+  netheriteBlade: {
+    name: '獄髓劍', kind: 'sword',
+    blade: { length: 0.9, width: 0.085, thick: 0.028 },
+    hilt: { length: 0.22, width: 0.075 },
+    damage: 26, weight: 1.6, guard: 0.75,
+    speed: 1.0, poise: 0.9,
+    color: '#5b5159', gripColor: '#2a2226', pommel: '#e0762f',
+    moves: ['slashR', 'slashL', 'overhead', 'thrust'],
+  },
+};
+
+/** 副手：盾牌與空手。 */
+const OFFHANDS = {
+  none:      { name: '空手', kind: 'none', block: 0, weight: 0, stability: 0 },
+  buckler:   { name: '小圓盾', kind: 'shield', block: 0.55, weight: 0.9, stability: 0.5,
+               size: { x: 0.42, y: 0.42, z: 0.07 }, color: '#8a5a35', boss: '#c9ced6' },
+  kite:      { name: '鳶盾',   kind: 'shield', block: 0.75, weight: 1.9, stability: 0.8,
+               size: { x: 0.5, y: 0.78, z: 0.08 }, color: '#3f5f8a', boss: '#d9b44a' },
+  tower:     { name: '塔盾',   kind: 'shield', block: 0.9, weight: 3.4, stability: 1.0,
+               size: { x: 0.58, y: 1.0, z: 0.09 }, color: '#4a4a52', boss: '#c9ced6' },
+};
+
+/** 預設載入的幾套配裝，選單直接用。 */
+const LOADOUT_PRESETS = {
+  knight: {
+    name: '重裝騎士',
+    armor: { helmet: 'iron', chestplate: 'iron', pauldrons: 'iron', vambraces: 'chainmail',
+             gauntlets: 'iron', belt: 'chainmail', leggings: 'iron', boots: 'iron' },
+    weapon: 'sword', offhand: 'kite',
+    skin: { skin: '#c99b70', shirt: '#3f5f8a', pants: '#37405a', cape: '#8a2b3f' },
+  },
+  duelist: {
+    name: '決鬥家',
+    armor: { helmet: 'leather', chestplate: 'chainmail', pauldrons: 'leather', vambraces: 'leather',
+             gauntlets: 'leather', belt: 'leather', leggings: 'leather', boots: 'leather' },
+    weapon: 'rapier', offhand: 'buckler',
+    skin: { skin: '#e0b98f', shirt: '#6a2233', pants: '#2b2b33', cape: '#d9b44a' },
+  },
+  berserker: {
+    name: '狂戰士',
+    armor: { helmet: 'none', chestplate: 'leather', pauldrons: 'iron', vambraces: 'iron',
+             gauntlets: 'leather', belt: 'leather', leggings: 'cloth', boots: 'leather' },
+    weapon: 'greatsword', offhand: 'none',
+    skin: { skin: '#b8825c', shirt: '#5a2f22', pants: '#4a3a28', cape: '#2f2622' },
+  },
+  shadow: {
+    name: '暗影刺客',
+    armor: { helmet: 'leather', chestplate: 'leather', pauldrons: 'cloth', vambraces: 'leather',
+             gauntlets: 'leather', belt: 'cloth', leggings: 'leather', boots: 'leather' },
+    weapon: 'dagger', offhand: 'buckler',
+    skin: { skin: '#a8845f', shirt: '#22242e', pants: '#1b1d24', cape: '#3a2f4a' },
+  },
+  netherlord: {
+    name: '獄髓領主',
+    armor: { helmet: 'netherite', chestplate: 'netherite', pauldrons: 'netherite', vambraces: 'netherite',
+             gauntlets: 'netherite', belt: 'netherite', leggings: 'netherite', boots: 'netherite' },
+    weapon: 'netheriteBlade', offhand: 'tower',
+    skin: { skin: '#8a6a4a', shirt: '#2c262c', pants: '#241f24', cape: '#e0762f' },
+  },
+  champion: {
+    name: '鑽石鬥士',
+    armor: { helmet: 'diamond', chestplate: 'diamond', pauldrons: 'diamond', vambraces: 'iron',
+             gauntlets: 'iron', belt: 'iron', leggings: 'diamond', boots: 'diamond' },
+    weapon: 'longsword', offhand: 'kite',
+    skin: { skin: '#d6a97e', shirt: '#2e6a63', pants: '#26424a', cape: '#4fe3d0' },
+  },
+};
+
+/**
+ * 把一組配裝算成戰鬥數值。
+ * 回傳每個受擊部位的減傷、總重量、移動與體力修正。
+ */
+function buildLoadout(config) {
+  const armor = config.armor || {};
+  const weapon = WEAPONS[config.weapon] || WEAPONS.sword;
+  const offhand = OFFHANDS[config.offhand] || OFFHANDS.none;
+
+  const partDefense = { head: 0, torso: 0, armR: 0, armL: 0, legR: 0, legL: 0 };
+  const pieces = {};
+  let armorWeight = 0;
+
+  for (const [slot, spec] of Object.entries(ARMOR_SLOTS)) {
+    const matKey = armor[slot];
+    if (!matKey || matKey === 'none') continue;
+    const mat = MATERIALS[matKey];
+    if (!mat) continue;
+    pieces[slot] = {
+      slot, material: matKey, color: mat.color, trim: mat.trim,
+      durability: mat.durability, maxDurability: mat.durability,
+    };
+    armorWeight += mat.weight * spec.weightMul;
+    for (const part of spec.covers) {
+      // 同部位多件裝備採遞減疊加，避免堆滿變成無敵
+      partDefense[part] = 1 - (1 - partDefense[part]) * (1 - mat.defense);
+    }
+  }
+
+  const totalWeight = armorWeight + weapon.weight + offhand.weight;
+  // 重量 -> 移動/體力修正（重甲慢但耐打）
+  const moveMul = Math.max(0.55, 1.12 - totalWeight * 0.030);
+  const staminaMul = Math.max(0.55, 1.10 - totalWeight * 0.026);
+  const attackSpeed = weapon.speed * Math.max(0.7, 1.06 - totalWeight * 0.014);
+
+  return {
+    config: { ...config },
+    weapon, offhand, pieces, partDefense,
+    weight: totalWeight,
+    moveMul, staminaMul, attackSpeed,
+    maxHealth: 100,
+    maxStamina: 100,
+    // 總體防禦力，只拿來顯示
+    ratingDefense: Math.round(
+      (partDefense.head * 0.30 + partDefense.torso * 0.40 +
+       (partDefense.armR + partDefense.armL) * 0.06 +
+       (partDefense.legR + partDefense.legL) * 0.09) * 100),
+    ratingOffense: Math.round(weapon.damage * weapon.speed),
+  };
+}
+
+/** 選單用：列出所有可選材質（含「無」）。 */
+const MATERIAL_KEYS = ['none', ...Object.keys(MATERIALS)];
+const WEAPON_KEYS = Object.keys(WEAPONS);
+const OFFHAND_KEYS = Object.keys(OFFHANDS);
+
+// ========================================================================
+// src/game/rig.js
+// ========================================================================
+
+// 人形骨架：完整肢體（頭、軀幹、上下臂、手、上下腿、腳）+ 穿在骨頭上的裝備。
+// 同一份骨架資料同時餵給渲染器（方塊）與戰鬥系統（受擊膠囊、劍刃線段）。
+
+
+
+
+/**
+ * 骨骼定義。
+ * offset: 相對父骨頭原點的關節位置
+ * size:   方塊尺寸
+ * center: 方塊中心相對本骨頭關節的位置（肢體都是從關節往下長，所以 y 是負的）
+ * 座標系：+Y 上、+Z 為角色正前方、角色的右手邊是 -X。
+ */
+const BONES = [
+  { name: 'hips',      parent: null,        offset: { x: 0, y: 0, z: 0 },         size: { x: 0.46, y: 0.20, z: 0.28 }, center: { x: 0, y: 0, z: 0 },        tint: 'pants' },
+  { name: 'torso',     parent: 'hips',      offset: { x: 0, y: 0.10, z: 0 },      size: { x: 0.50, y: 0.62, z: 0.29 }, center: { x: 0, y: 0.31, z: 0 },     tint: 'shirt' },
+  { name: 'head',      parent: 'torso',     offset: { x: 0, y: 0.70, z: 0 },      size: { x: 0.44, y: 0.44, z: 0.44 }, center: { x: 0, y: 0.22, z: 0 },     tint: 'skin' },
+
+  { name: 'armRUpper', parent: 'torso',     offset: { x: -0.335, y: 0.55, z: 0 }, size: { x: 0.19, y: 0.36, z: 0.19 }, center: { x: 0, y: -0.18, z: 0 },    tint: 'shirt' },
+  { name: 'armRLower', parent: 'armRUpper', offset: { x: 0, y: -0.36, z: 0 },     size: { x: 0.17, y: 0.34, z: 0.17 }, center: { x: 0, y: -0.17, z: 0 },    tint: 'skin' },
+  { name: 'handR',     parent: 'armRLower', offset: { x: 0, y: -0.34, z: 0 },     size: { x: 0.17, y: 0.17, z: 0.17 }, center: { x: 0, y: -0.085, z: 0 },   tint: 'skin' },
+
+  { name: 'armLUpper', parent: 'torso',     offset: { x: 0.335, y: 0.55, z: 0 },  size: { x: 0.19, y: 0.36, z: 0.19 }, center: { x: 0, y: -0.18, z: 0 },    tint: 'shirt' },
+  { name: 'armLLower', parent: 'armLUpper', offset: { x: 0, y: -0.36, z: 0 },     size: { x: 0.17, y: 0.34, z: 0.17 }, center: { x: 0, y: -0.17, z: 0 },    tint: 'skin' },
+  { name: 'handL',     parent: 'armLLower', offset: { x: 0, y: -0.34, z: 0 },     size: { x: 0.17, y: 0.17, z: 0.17 }, center: { x: 0, y: -0.085, z: 0 },   tint: 'skin' },
+
+  { name: 'legRUpper', parent: 'hips',      offset: { x: -0.13, y: -0.10, z: 0 }, size: { x: 0.21, y: 0.44, z: 0.21 }, center: { x: 0, y: -0.22, z: 0 },    tint: 'pants' },
+  { name: 'legRLower', parent: 'legRUpper', offset: { x: 0, y: -0.44, z: 0 },     size: { x: 0.19, y: 0.42, z: 0.19 }, center: { x: 0, y: -0.21, z: 0 },    tint: 'pants' },
+  { name: 'footR',     parent: 'legRLower', offset: { x: 0, y: -0.42, z: 0 },     size: { x: 0.20, y: 0.11, z: 0.30 }, center: { x: 0, y: -0.055, z: 0.05 }, tint: 'boots' },
+
+  { name: 'legLUpper', parent: 'hips',      offset: { x: 0.13, y: -0.10, z: 0 },  size: { x: 0.21, y: 0.44, z: 0.21 }, center: { x: 0, y: -0.22, z: 0 },    tint: 'pants' },
+  { name: 'legLLower', parent: 'legLUpper', offset: { x: 0, y: -0.44, z: 0 },     size: { x: 0.19, y: 0.42, z: 0.19 }, center: { x: 0, y: -0.21, z: 0 },    tint: 'pants' },
+  { name: 'footL',     parent: 'legLLower', offset: { x: 0, y: -0.42, z: 0 },     size: { x: 0.20, y: 0.11, z: 0.30 }, center: { x: 0, y: -0.055, z: 0.05 }, tint: 'boots' },
+];
+
+/** 站立時 hips 關節離地高度（腳底剛好貼地）。 */
+const HIP_HEIGHT = 1.005;
+/** 角色全高，攝影機與命中判定會用到。 */
+const BODY_HEIGHT = 2.21;
+
+const BONE_INDEX = new Map(BONES.map((b, i) => [b.name, i]));
+
+/**
+ * 受擊部位 -> 用哪兩個骨頭關節連成膠囊，以及半徑與傷害倍率。
+ */
+const HIT_PARTS = [
+  { part: 'head',  from: 'head',      fromLocal: { x: 0, y: 0.04, z: 0 },  to: 'head',      toLocal: { x: 0, y: 0.40, z: 0 },  radius: 0.24, mult: 2.0, label: '頭部' },
+  { part: 'torso', from: 'hips',      fromLocal: { x: 0, y: 0, z: 0 },     to: 'torso',     toLocal: { x: 0, y: 0.60, z: 0 },  radius: 0.27, mult: 1.0, label: '軀幹' },
+  { part: 'armR',  from: 'armRUpper', fromLocal: { x: 0, y: 0, z: 0 },     to: 'handR',     toLocal: { x: 0, y: -0.12, z: 0 }, radius: 0.13, mult: 0.65, label: '右臂' },
+  { part: 'armL',  from: 'armLUpper', fromLocal: { x: 0, y: 0, z: 0 },     to: 'handL',     toLocal: { x: 0, y: -0.12, z: 0 }, radius: 0.13, mult: 0.65, label: '左臂' },
+  { part: 'legR',  from: 'legRUpper', fromLocal: { x: 0, y: 0, z: 0 },     to: 'footR',     toLocal: { x: 0, y: -0.05, z: 0 }, radius: 0.15, mult: 0.75, label: '右腿' },
+  { part: 'legL',  from: 'legLUpper', fromLocal: { x: 0, y: 0, z: 0 },     to: 'footL',     toLocal: { x: 0, y: -0.05, z: 0 }, radius: 0.15, mult: 0.75, label: '左腿' },
+];
+
+/** 建立一個骨架實例（含每根骨頭的世界矩陣暫存）。 */
+function createRig(loadout, skin) {
+  const world = BONES.map(() => mat4());
+  return {
+    loadout,
+    skin: Object.assign({
+      skin: '#c99b70', shirt: '#3f5f8a', pants: '#37405a',
+      cape: '#8a2b3f', boots: '#4a3a2a', hair: '#2b1f18',
+    }, skin || {}),
+    world,
+    // 給渲染器用的暫存矩陣，避免每幀配置
+    _tmp: mat4(),
+    _tmp2: mat4(),
+    root: mat4(),
+  };
+}
+
+const _local = mat4();
+
+/**
+ * 依 pose 計算所有骨頭的世界矩陣。
+ * @param rig    createRig 的結果
+ * @param state  { x, y, z, yaw }  角色在世界的位置與朝向
+ * @param pose   { boneName: {rx, ry, rz} }，缺的骨頭視為 0
+ * @param extra  { lean: 前後傾斜, crouch: 下蹲高度偏移 }
+ */
+function poseRig(rig, state, pose, extra = {}) {
+  const rootY = (state.y ?? 0) + HIP_HEIGHT - (extra.crouch || 0);
+  mCompose(rig.root, state.x, rootY, state.z, extra.lean || 0, state.yaw, extra.roll || 0);
+
+  for (let i = 0; i < BONES.length; i++) {
+    const b = BONES[i];
+    const p = pose[b.name];
+    mCompose(_local, b.offset.x, b.offset.y, b.offset.z,
+      p ? (p.rx || 0) : 0, p ? (p.ry || 0) : 0, p ? (p.rz || 0) : 0);
+    const parentM = b.parent === null ? rig.root : rig.world[BONE_INDEX.get(b.parent)];
+    mMul(rig.world[i], parentM, _local);
+  }
+  return rig;
+}
+
+function boneWorld(rig, name) {
+  return rig.world[BONE_INDEX.get(name)];
+}
+
+/** 骨頭區域座標 -> 世界座標。 */
+function bonePoint(rig, name, local) {
+  return mTransformPoint(boneWorld(rig, name), local);
+}
+
+/** 目前 pose 下每個受擊部位的世界膠囊。 */
+function getHitCapsules(rig, out = []) {
+  out.length = 0;
+  for (const hp of HIT_PARTS) {
+    out.push({
+      part: hp.part,
+      label: hp.label,
+      mult: hp.mult,
+      radius: hp.radius,
+      a: bonePoint(rig, hp.from, hp.fromLocal),
+      b: bonePoint(rig, hp.to, hp.toLocal),
+    });
+  }
+  return out;
+}
+
+// --------------------------------------------------------------------------
+// 武器的握持變換
+// --------------------------------------------------------------------------
+
+const _grip = mat4();
+const _gripRot = mat4();
+
+/** 主手武器的世界矩陣：手 -> 握把 -> 劍身沿 +Y 往外。 */
+function getWeaponMatrix(rig) {
+  const hand = boneWorld(rig, 'handR');
+  // 握在手心，劍尖朝手指方向（-Y），所以先轉 180 度讓劍身沿 +Y 指出去
+  mCompose(_gripRot, 0, -0.10, 0.02, Math.PI, 0, 0);
+  mMul(_grip, hand, _gripRot);
+  return _grip;
+}
+
+/** 劍刃線段（世界座標），命中判定用。 */
+function getBladeSegment(rig) {
+  const w = getWeaponMatrix(rig);
+  const wp = rig.loadout.weapon;
+  const base = wp.hilt.length * 0.5;
+  return {
+    a: mTransformPoint(w, { x: 0, y: base, z: 0 }),
+    b: mTransformPoint(w, { x: 0, y: base + wp.blade.length, z: 0 }),
+  };
+}
+
+const _shieldM = mat4();
+const _shieldRot = mat4();
+/** 副手盾牌的世界矩陣。 */
+function getShieldMatrix(rig) {
+  const hand = boneWorld(rig, 'handL');
+  mCompose(_shieldRot, 0, -0.10, 0.06, 0, 0, 0);
+  mMul(_shieldM, hand, _shieldRot);
+  return _shieldM;
+}
+
+// --------------------------------------------------------------------------
+// 產生渲染方塊
+// --------------------------------------------------------------------------
+
+const _boxM = mat4();
+const _offset = mat4();
+
+/**
+ * 把骨架 + 裝備轉成渲染器要的方塊列表。
+ * @param out   要 push 進去的 renderer
+ * @param opts  { flash: 0~1 受擊白光, alpha }
+ */
+function drawRig(rig, renderer, opts = {}) {
+  const skin = rig.skin;
+  const pieces = rig.loadout.pieces;
+  const flash = opts.flash || 0;
+  const alpha = opts.alpha ?? 1;
+
+  const tintColor = (tint) => {
+    switch (tint) {
+      case 'skin': return skin.skin;
+      case 'shirt': return skin.shirt;
+      case 'pants': return skin.pants;
+      case 'boots': return skin.boots;
+      default: return skin.skin;
+    }
+  };
+
+  // 1) 身體本體
+  for (let i = 0; i < BONES.length; i++) {
+    const b = BONES[i];
+    mTranslate(_offset, b.center.x, b.center.y, b.center.z);
+    mMul(_boxM, rig.world[i], _offset);
+    let color = tintColor(b.tint);
+    if (flash > 0.01) color = mixHex(color, '#ffffff', flash);
+    renderer.pushBox(_boxM, b.size, color, { alpha });
+  }
+
+  // 2) 裝備層：套在對應骨頭上，尺寸外擴一點點
+  for (const [slot, spec] of Object.entries(ARMOR_SLOTS)) {
+    const piece = pieces[slot];
+    if (!piece) continue;
+    if (piece.durability <= 0) continue; // 打爛的裝備會脫落
+    let color = piece.color;
+    if (flash > 0.01) color = mixHex(color, '#ffffff', flash * 0.8);
+    for (const boneName of spec.bones) {
+      const idx = BONE_INDEX.get(boneName);
+      if (idx === undefined) continue;
+      const b = BONES[idx];
+      mTranslate(_offset, b.center.x, b.center.y, b.center.z);
+      mMul(_boxM, rig.world[idx], _offset);
+      const size = {
+        x: b.size.x + spec.inflate.x,
+        y: b.size.y + spec.inflate.y,
+        z: b.size.z + spec.inflate.z,
+      };
+      renderer.pushBox(_boxM, size, color, { alpha: alpha * 0.99, outline: piece.trim });
+    }
+  }
+
+  // 3) 頭盔面甲（讓頭部有辨識度）
+  if (pieces.helmet && pieces.helmet.durability > 0) {
+    const headM = boneWorld(rig, 'head');
+    mCompose(_offset, 0, 0.18, 0.245, 0, 0, 0);
+    mMul(_boxM, headM, _offset);
+    renderer.pushBox(_boxM, { x: 0.30, y: 0.10, z: 0.06 }, '#15171c', { alpha });
+  }
+
+  // 4) 披風（掛在軀幹背面，會隨動作擺動）
+  if (skin.cape) {
+    const torsoM = boneWorld(rig, 'torso');
+    const sway = opts.capeSway || 0;
+    mCompose(_offset, 0, 0.34, -0.19, sway, 0, 0);
+    mMul(_boxM, torsoM, _offset);
+    // 用兩段模擬布料
+    const capeM = mat4();
+    mCompose(capeM, 0, -0.22, -0.02, 0, 0, 0);
+    mMul(capeM, _boxM, capeM);
+    renderer.pushBox(capeM, { x: 0.46, y: 0.5, z: 0.05 }, skin.cape, { alpha });
+    const capeM2 = mat4();
+    mCompose(capeM2, 0, -0.46, -0.06, sway * 1.6, 0, 0);
+    mMul(capeM2, _boxM, capeM2);
+    const capeM2b = mat4();
+    mCompose(capeM2b, 0, -0.2, 0, 0, 0, 0);
+    mMul(capeM2b, capeM2, capeM2b);
+    renderer.pushBox(capeM2b, { x: 0.42, y: 0.42, z: 0.05 }, mixHex(skin.cape, '#000000', 0.18), { alpha });
+  }
+
+  // 5) 主手武器
+  drawWeapon(rig, renderer, alpha);
+
+  // 6) 副手盾牌
+  drawOffhand(rig, renderer, alpha, flash);
+}
+
+function drawWeapon(rig, renderer, alpha) {
+  const wp = rig.loadout.weapon;
+  const w = getWeaponMatrix(rig);
+  const m = mat4();
+
+  // 握把
+  mTranslate(m, 0, -wp.hilt.length * 0.25, 0);
+  mMul(m, w, m);
+  renderer.pushBox(m, { x: wp.hilt.width * 0.6, y: wp.hilt.length, z: wp.hilt.width * 0.6 }, wp.gripColor, { alpha });
+
+  // 劍柄頭
+  mTranslate(m, 0, -wp.hilt.length * 0.78, 0);
+  mMul(m, w, m);
+  renderer.pushBox(m, { x: wp.hilt.width * 0.85, y: wp.hilt.width * 0.7, z: wp.hilt.width * 0.85 }, wp.pommel, { alpha });
+
+  // 護手（十字）
+  mTranslate(m, 0, wp.hilt.length * 0.5, 0);
+  mMul(m, w, m);
+  renderer.pushBox(m, { x: wp.hilt.width * 3.4, y: wp.hilt.width * 0.55, z: wp.hilt.width * 0.8 }, wp.pommel, { alpha });
+
+  // 劍身：分三段做出漸尖的視覺
+  const base = wp.hilt.length * 0.5;
+  const seg = wp.blade.length / 3;
+  for (let i = 0; i < 3; i++) {
+    const taper = 1 - i * 0.16;
+    mTranslate(m, 0, base + seg * (i + 0.5), 0);
+    mMul(m, w, m);
+    renderer.pushBox(m, {
+      x: wp.blade.width * taper,
+      y: seg * 1.02,
+      z: wp.blade.thick * taper,
+    }, wp.color, { alpha, emissive: i === 2 });
+  }
+  // 劍尖
+  mTranslate(m, 0, base + wp.blade.length + 0.03, 0);
+  mMul(m, w, m);
+  renderer.pushBox(m, { x: wp.blade.width * 0.45, y: 0.08, z: wp.blade.thick * 0.5 }, wp.color, { alpha });
+}
+
+function drawOffhand(rig, renderer, alpha, flash) {
+  const off = rig.loadout.offhand;
+  if (off.kind !== 'shield') return;
+  const s = getShieldMatrix(rig);
+  const m = mat4();
+  let color = off.color;
+  if (flash > 0.01) color = mixHex(color, '#ffffff', flash * 0.8);
+
+  mTranslate(m, 0, -off.size.y * 0.25, 0.05);
+  mMul(m, s, m);
+  renderer.pushBox(m, off.size, color, { alpha, outline: '#1c1c22' });
+
+  // 盾心
+  mTranslate(m, 0, -off.size.y * 0.25, 0.05 + off.size.z * 0.6);
+  mMul(m, s, m);
+  renderer.pushBox(m, { x: off.size.x * 0.3, y: off.size.y * 0.22, z: 0.05 }, off.boss, { alpha });
+}
+
+/** 兩個 hex 顏色線性混合。 */
+function mixHex(a, b, t) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const r = Math.round((((pa >> 16) & 255) * (1 - t)) + (((pb >> 16) & 255) * t));
+  const g = Math.round((((pa >> 8) & 255) * (1 - t)) + (((pb >> 8) & 255) * t));
+  const bl = Math.round(((pa & 255) * (1 - t)) + ((pb & 255) * t));
+  return '#' + ((r << 16) | (g << 8) | bl).toString(16).padStart(6, '0');
+}
+
+// ========================================================================
+// src/game/animation.js
+// ========================================================================
+
+// 動作系統：關鍵影格 pose 疊加程序化的走路 / 待機。
+// pose 是 { 骨頭名: {rx, ry, rz} }，缺的欄位一律當 0。
+//
+// 座標慣例（見 rig.js）：+Z 前方、-X 角色右手邊。
+//   rx < 0 -> 肢體往前擺   rz > 0 -> 右手往身體內側掃
+//   ry > 0 -> 身體往左轉
+
+
+
+function blendPose(a, b, t, out = {}) {
+  if (t <= 0) return Object.assign(out, a);
+  if (t >= 1) return Object.assign(out, b);
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) {
+    const pa = a[k] || EMPTY, pb = b[k] || EMPTY;
+    out[k] = {
+      rx: lerp(pa.rx || 0, pb.rx || 0, t),
+      ry: lerp(pa.ry || 0, pb.ry || 0, t),
+      rz: lerp(pa.rz || 0, pb.rz || 0, t),
+    };
+  }
+  return out;
+}
+
+const EMPTY = { rx: 0, ry: 0, rz: 0 };
+
+/** 把 b 以權重 w 疊加到 a 上（相加而非取代，用於呼吸、後座力等微調）。 */
+function addPose(a, b, w = 1, out = {}) {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) {
+    const pa = a[k] || EMPTY, pb = b[k] || EMPTY;
+    out[k] = {
+      rx: (pa.rx || 0) + (pb.rx || 0) * w,
+      ry: (pa.ry || 0) + (pb.ry || 0) * w,
+      rz: (pa.rz || 0) + (pb.rz || 0) * w,
+    };
+  }
+  return out;
+}
+
+/** 依時間比例 t (0~1) 取樣關鍵影格。 */
+function sampleClip(clip, t) {
+  const frames = clip.frames;
+  if (t <= frames[0].t) return frames[0].pose;
+  const last = frames[frames.length - 1];
+  if (t >= last.t) return last.pose;
+  for (let i = 0; i < frames.length - 1; i++) {
+    const f0 = frames[i], f1 = frames[i + 1];
+    if (t >= f0.t && t <= f1.t) {
+      const local = (t - f0.t) / (f1.t - f0.t || 1);
+      const eased = f1.linear ? local : smoothstep(local);
+      return blendPose(f0.pose, f1.pose, eased);
+    }
+  }
+  return last.pose;
+}
+
+// ---------------------------------------------------------------------------
+// 基礎姿勢
+// ---------------------------------------------------------------------------
+
+/** 持劍預備架式：劍在右側斜舉、盾在身前。 */
+const POSE_GUARD = {
+  torso:     { ry: -0.30, rx: 0.05 },
+  head:      { ry: 0.30 },
+  armRUpper: { rx: -0.35, rz: -0.55 },
+  armRLower: { rx: -0.85, rz: -0.25 },
+  handR:     { rx: -0.15 },
+  armLUpper: { rx: -0.70, rz: 0.45 },
+  armLLower: { rx: -1.15, rz: 0.30 },
+  handL:     { rz: -0.25 },
+  legRUpper: { rx: 0.14, rz: -0.10 },
+  legRLower: { rx: -0.20 },
+  legLUpper: { rx: -0.18, rz: 0.10 },
+  legLLower: { rx: 0.24 },
+  hips:      { ry: 0.18 },
+};
+
+/** 舉盾格擋：盾牌整片擋在正前方，劍收在後方待機。 */
+const POSE_BLOCK = {
+  torso:     { ry: -0.12, rx: 0.16 },
+  head:      { ry: 0.12, rx: -0.10 },
+  armRUpper: { rx: -0.15, rz: -0.75 },
+  armRLower: { rx: -1.5, rz: -0.35 },
+  armLUpper: { rx: -1.45, rz: 0.30 },
+  armLLower: { rx: -1.35, rz: 0.05 },
+  handL:     { rx: 0.25 },
+  legRUpper: { rx: 0.30, rz: -0.12 },
+  legRLower: { rx: -0.45 },
+  legLUpper: { rx: -0.30, rz: 0.12 },
+  legLLower: { rx: 0.40 },
+  hips:      { ry: 0.10 },
+};
+
+/** 被打中的踉蹌。 */
+const POSE_HURT = {
+  torso:     { rx: -0.35, ry: 0.25 },
+  head:      { rx: -0.30, ry: 0.2 },
+  armRUpper: { rx: 0.45, rz: -0.7 },
+  armRLower: { rx: -0.5 },
+  armLUpper: { rx: 0.35, rz: 0.6 },
+  legRUpper: { rx: -0.25 },
+  legLUpper: { rx: 0.35 },
+  legLLower: { rx: -0.35 },
+};
+
+/** 倒地。 */
+const POSE_DOWN = {
+  torso:     { rx: 0.5 },
+  head:      { rx: -0.6 },
+  armRUpper: { rx: 0.9, rz: -1.1 },
+  armLUpper: { rx: 0.8, rz: 1.1 },
+  legRUpper: { rx: -0.8 },
+  legRLower: { rx: 1.3 },
+  legLUpper: { rx: -0.6 },
+  legLLower: { rx: 1.1 },
+};
+
+// ---------------------------------------------------------------------------
+// 攻擊動作
+// ---------------------------------------------------------------------------
+
+/**
+ * 右橫斬：軀幹先往右擰，接著手臂往正前方伸直、軀幹回擰帶著劍身橫掃過去。
+ * 揮擊的動力主要來自 torso.ry（轉腰），手臂負責把劍送到身體前方的高度。
+ */
+const CLIP_SLASH_R = {
+  name: 'slashR',
+  frames: [
+    { t: 0.00, pose: POSE_GUARD },
+    { t: 0.32, pose: { // 蓄力：轉腰向右、劍舉到右側
+      torso:     { ry: -0.85, rx: -0.08 },
+      head:      { ry: 0.65 },
+      armRUpper: { rx: -0.55, rz: -1.35 },
+      armRLower: { rx: -0.90, rz: -0.35 },
+      handR:     { rz: -0.30 },
+      armLUpper: { rx: -0.60, rz: 0.70 },
+      armLLower: { rx: -1.30, rz: 0.35 },
+      legRUpper: { rx: 0.22, rz: -0.10 },
+      legLUpper: { rx: -0.26, rz: 0.10 },
+      legLLower: { rx: 0.30 },
+      hips:      { ry: 0.38 },
+    } },
+    { t: 0.52, linear: true, pose: { // 揮擊：手臂伸向正前方，劍身掃過身體正面
+      torso:     { ry: 0.42, rx: 0.14 },
+      head:      { ry: -0.20 },
+      armRUpper: { rx: -1.46, rz: -0.06 },
+      armRLower: { rx: -0.14 },
+      handR:     { rz: 0.12 },
+      armLUpper: { rx: -0.35, rz: 0.95 },
+      armLLower: { rx: -0.90 },
+      legRUpper: { rx: -0.22 },
+      legLUpper: { rx: 0.24 },
+      hips:      { ry: -0.30 },
+    } },
+    { t: 0.72, pose: { // 收勢：劍隨慣性掃到左側
+      torso:     { ry: 0.80, rx: 0.22 },
+      head:      { ry: -0.45 },
+      armRUpper: { rx: -1.12, rz: 0.85 },
+      armRLower: { rx: -0.40, rz: 0.35 },
+      armLUpper: { rx: -0.30, rz: 0.85 },
+      armLLower: { rx: -1.00 },
+      legRUpper: { rx: -0.30 },
+      legLUpper: { rx: 0.28 },
+      hips:      { ry: -0.42 },
+    } },
+    { t: 1.00, pose: POSE_GUARD },
+  ],
+};
+
+/** 左反斬：從左側回掃到右側，是右橫斬的鏡像。 */
+const CLIP_SLASH_L = {
+  name: 'slashL',
+  frames: [
+    { t: 0.00, pose: POSE_GUARD },
+    { t: 0.28, pose: {
+      torso:     { ry: 0.72, rx: -0.05 },
+      head:      { ry: -0.45 },
+      armRUpper: { rx: -0.85, rz: 1.15 },
+      armRLower: { rx: -1.05, rz: 0.45 },
+      handR:     { rz: 0.35 },
+      armLUpper: { rx: -0.55, rz: 0.35 },
+      armLLower: { rx: -1.25 },
+      legRUpper: { rx: -0.20 },
+      legLUpper: { rx: 0.24 },
+      hips:      { ry: -0.34 },
+    } },
+    { t: 0.48, linear: true, pose: {
+      torso:     { ry: -0.48, rx: 0.12 },
+      head:      { ry: 0.35 },
+      armRUpper: { rx: -1.42, rz: -0.04 },
+      armRLower: { rx: -0.16 },
+      handR:     { rz: -0.10 },
+      armLUpper: { rx: -0.75, rz: 0.55 },
+      armLLower: { rx: -1.05 },
+      legRUpper: { rx: 0.24 },
+      legLUpper: { rx: -0.22 },
+      hips:      { ry: 0.34 },
+    } },
+    { t: 0.68, pose: {
+      torso:     { ry: -0.82, rx: 0.16 },
+      head:      { ry: 0.55 },
+      armRUpper: { rx: -1.00, rz: -0.95 },
+      armRLower: { rx: -0.50, rz: -0.40 },
+      armLUpper: { rx: -0.70, rz: 0.50 },
+      legRUpper: { rx: 0.28 },
+      legLUpper: { rx: -0.26 },
+      hips:      { ry: 0.42 },
+    } },
+    { t: 1.00, pose: POSE_GUARD },
+  ],
+};
+
+/**
+ * 上段直劈：把劍舉到頭頂前上方，再沿身體正前方劈下。
+ * armRUpper.rx 全程走 -0.35 -> -2.5 -> -0.8 這條單調路徑，
+ * 不會繞到背後去（負值代表往前擺）。
+ */
+const CLIP_OVERHEAD = {
+  name: 'overhead',
+  frames: [
+    { t: 0.00, pose: POSE_GUARD },
+    { t: 0.38, pose: { // 高舉過頭
+      torso:     { rx: -0.30, ry: -0.18 },
+      head:      { rx: -0.20, ry: 0.15 },
+      armRUpper: { rx: -2.50, rz: -0.18 },
+      armRLower: { rx: -0.50 },
+      handR:     { rx: 0.15 },
+      armLUpper: { rx: -1.95, rz: 0.40 },
+      armLLower: { rx: -0.70 },
+      legRUpper: { rx: 0.30 },
+      legRLower: { rx: -0.35 },
+      legLUpper: { rx: -0.32 },
+      legLLower: { rx: 0.35 },
+      hips:      { ry: 0.10 },
+    } },
+    { t: 0.58, linear: true, pose: { // 劈下：手臂通過水平位置，劍鋒掃過對手上半身
+      torso:     { rx: 0.42, ry: -0.02 },
+      head:      { rx: 0.20 },
+      armRUpper: { rx: -1.28, rz: -0.10 },
+      armRLower: { rx: -0.12 },
+      handR:     { rx: -0.05 },
+      armLUpper: { rx: -0.30, rz: 0.75 },
+      armLLower: { rx: -0.85 },
+      legRUpper: { rx: -0.34 },
+      legLUpper: { rx: 0.32 },
+      legLLower: { rx: -0.25 },
+      hips:      { ry: 0 },
+    } },
+    { t: 0.76, pose: { // 劍砍到腳邊的收勢
+      torso:     { rx: 0.66 },
+      head:      { rx: 0.35 },
+      armRUpper: { rx: -0.70, rz: -0.06 },
+      armRLower: { rx: -0.30 },
+      armLUpper: { rx: -0.20, rz: 0.65 },
+      legRUpper: { rx: -0.42 },
+      legLUpper: { rx: 0.34 },
+    } },
+    { t: 1.00, pose: POSE_GUARD },
+  ],
+};
+
+/** 突刺：手肘先收到腰際、劍尖已經指向前方，再整條手臂打直送出去。 */
+const CLIP_THRUST = {
+  name: 'thrust',
+  frames: [
+    { t: 0.00, pose: POSE_GUARD },
+    { t: 0.28, pose: { // 收劍蓄力，劍尖朝前
+      torso:     { ry: -0.52 },
+      head:      { ry: 0.42 },
+      armRUpper: { rx: -0.22, rz: -0.50 },
+      armRLower: { rx: -1.90, rz: -0.10 },
+      handR:     { rx: 0.05 },
+      armLUpper: { rx: -0.85, rz: 0.55 },
+      armLLower: { rx: -1.25, rz: 0.25 },
+      legRUpper: { rx: 0.34, rz: -0.10 },
+      legRLower: { rx: -0.40 },
+      legLUpper: { rx: -0.30, rz: 0.10 },
+      hips:      { ry: 0.30 },
+    } },
+    { t: 0.44, linear: true, pose: { // 送出：手臂完全打直朝正前方
+      torso:     { ry: 0.14, rx: 0.14 },
+      head:      { ry: -0.08 },
+      armRUpper: { rx: -1.52, rz: -0.12 },
+      armRLower: { rx: -0.04 },
+      handR:     { rx: 0 },
+      armLUpper: { rx: -0.30, rz: 0.95 },
+      armLLower: { rx: -0.95 },
+      legRUpper: { rx: -0.32 },
+      legLUpper: { rx: 0.36 },
+      legLLower: { rx: -0.30 },
+      hips:      { ry: -0.08 },
+    } },
+    { t: 0.62, pose: {
+      torso:     { ry: 0.08, rx: 0.08 },
+      armRUpper: { rx: -1.30, rz: -0.22 },
+      armRLower: { rx: -0.45 },
+      armLUpper: { rx: -0.40, rz: 0.85 },
+      legRUpper: { rx: -0.18 },
+      legLUpper: { rx: 0.22 },
+    } },
+    { t: 1.00, pose: POSE_GUARD },
+  ],
+};
+
+/** 盾擊：用盾牌整面往前撞，專破對手的格擋。 */
+const CLIP_SHIELD_BASH = {
+  name: 'bash',
+  frames: [
+    { t: 0.00, pose: POSE_BLOCK },
+    { t: 0.30, pose: {
+      torso:     { ry: 0.45, rx: -0.12 },
+      armLUpper: { rx: -0.55, rz: 0.85 },
+      armLLower: { rx: -1.55, rz: 0.35 },
+      armRUpper: { rx: -0.10, rz: -0.85 },
+      armRLower: { rx: -1.50 },
+      legLUpper: { rx: 0.25 },
+      legRUpper: { rx: -0.15 },
+      hips:      { ry: -0.25 },
+    } },
+    { t: 0.46, linear: true, pose: {
+      torso:     { ry: -0.30, rx: 0.22 },
+      armLUpper: { rx: -1.55, rz: 0.16 },
+      armLLower: { rx: -0.30 },
+      armRUpper: { rx: -0.05, rz: -0.90 },
+      armRLower: { rx: -1.55 },
+      legLUpper: { rx: -0.35 },
+      legRUpper: { rx: 0.30 },
+      hips:      { ry: 0.22 },
+    } },
+    { t: 1.00, pose: POSE_GUARD },
+  ],
+};
+
+/** 翻滾閃避。 */
+const CLIP_DODGE = {
+  name: 'dodge',
+  frames: [
+    { t: 0.00, pose: POSE_GUARD },
+    { t: 0.35, pose: {
+      torso:     { rx: 0.75 },
+      head:      { rx: 0.30 },
+      armRUpper: { rx: -0.90, rz: -0.55 },
+      armRLower: { rx: -1.10 },
+      armLUpper: { rx: -1.10, rz: 0.60 },
+      armLLower: { rx: -1.40 },
+      legRUpper: { rx: -1.25 },
+      legRLower: { rx: 1.75 },
+      legLUpper: { rx: -1.05 },
+      legLLower: { rx: 1.55 },
+    } },
+    { t: 0.72, pose: {
+      torso:     { rx: 0.30 },
+      armRUpper: { rx: -0.50, rz: -0.60 },
+      legRUpper: { rx: -0.40 },
+      legRLower: { rx: 0.60 },
+      legLUpper: { rx: 0.25 },
+    } },
+    { t: 1.00, pose: POSE_GUARD },
+  ],
+};
+
+/** 格檔成功後把對手彈開的反饋。 */
+const CLIP_PARRY = {
+  name: 'parry',
+  frames: [
+    { t: 0.00, pose: POSE_GUARD },
+    { t: 0.22, linear: true, pose: {
+      torso:     { ry: -0.55, rx: -0.15 },
+      head:      { ry: 0.40 },
+      armRUpper: { rx: -0.45, rz: -1.15 },
+      armRLower: { rx: -0.75, rz: -0.45 },
+      armLUpper: { rx: -0.95, rz: 0.65 },
+      armLLower: { rx: -1.20 },
+      hips:      { ry: 0.28 },
+    } },
+    { t: 1.00, pose: POSE_GUARD },
+  ],
+};
+
+const CLIPS = {
+  slashR: CLIP_SLASH_R,
+  slashL: CLIP_SLASH_L,
+  overhead: CLIP_OVERHEAD,
+  thrust: CLIP_THRUST,
+  bash: CLIP_SHIELD_BASH,
+  dodge: CLIP_DODGE,
+  parry: CLIP_PARRY,
+};
+
+// ---------------------------------------------------------------------------
+// 程序化的移動 / 待機
+// ---------------------------------------------------------------------------
+
+/**
+ * 走路循環：腿交替擺動、手臂反向擺、身體上下起伏。
+ * @param phase 0~1 循環相位
+ * @param speed 0~1 速度權重
+ */
+function walkPose(phase, speed, out = {}) {
+  const a = phase * Math.PI * 2;
+  const s = Math.sin(a), c = Math.cos(a);
+  const amp = 0.85 * speed;
+  out.legRUpper = { rx: -s * amp * 0.75, rz: -0.05 };
+  out.legLUpper = { rx: s * amp * 0.75, rz: 0.05 };
+  out.legRLower = { rx: Math.max(0, s) * amp * 0.85 };
+  out.legLLower = { rx: Math.max(0, -s) * amp * 0.85 };
+  out.footR = { rx: -Math.max(0, s) * amp * 0.35 };
+  out.footL = { rx: -Math.max(0, -s) * amp * 0.35 };
+  out.hips = { ry: -s * 0.12 * speed, rz: c * 0.04 * speed };
+  out.torso = { ry: s * 0.16 * speed, rx: 0.05 * speed };
+  return out;
+}
+
+/** 走路造成的身體上下起伏（公尺）。 */
+function walkBob(phase, speed) {
+  return Math.abs(Math.sin(phase * Math.PI * 2)) * 0.055 * speed;
+}
+
+/** 待機呼吸。 */
+function idlePose(t, out = {}) {
+  const b = Math.sin(t * 1.7);
+  const b2 = Math.sin(t * 1.1 + 1.2);
+  out.torso = { rx: b * 0.022, ry: b2 * 0.03 };
+  out.head = { rx: -b * 0.03, ry: b2 * 0.07 };
+  out.armRUpper = { rx: b * 0.045, rz: -b * 0.03 };
+  out.armLUpper = { rx: b2 * 0.04, rz: b * 0.03 };
+  return out;
+}
+
+/** 依速度算走路相位的推進量。 */
+function advanceWalkPhase(phase, speed, dt) {
+  return (phase + dt * (1.1 + speed * 1.9)) % 1;
+}
+
+// ========================================================================
+// src/game/combat.js
+// ========================================================================
+
+// 戰鬥核心：招式時序表、劍刃掃掠命中判定、傷害/格擋/招架結算。
+// 全部是純函式或只改傳入的物件，方便在 Node 端跑無畫面模擬測試。
+
+
+
+/**
+ * 招式表。時間全部是 0~1 的相位，實際秒數 = baseDuration / 攻速。
+ * windup:   蓄力（可被打斷、可取消成假動作）
+ * active:   刃口有判定的區間
+ * 其餘為收招硬直。
+ */
+const MOVES = {
+  slashR: {
+    name: '右橫斬', clip: 'slashR', baseDuration: 0.78,
+    active: [0.36, 0.60], feintUntil: 0.32,
+    damageMul: 1.0, staminaCost: 15, poiseMul: 1.0,
+    advance: 1.6, arc: 'horizontal',
+    // 對手在這個水平角度範圍內才可能被掃到（相對攻擊者正面）
+    coneDeg: 150,
+  },
+  slashL: {
+    name: '左橫斬', clip: 'slashL', baseDuration: 0.74,
+    active: [0.32, 0.56], feintUntil: 0.28,
+    damageMul: 0.92, staminaCost: 13, poiseMul: 0.85,
+    advance: 1.4, arc: 'horizontal', coneDeg: 150,
+  },
+  overhead: {
+    name: '上段劈', clip: 'overhead', baseDuration: 1.02,
+    active: [0.42, 0.64], feintUntil: 0.38,
+    damageMul: 1.45, staminaCost: 24, poiseMul: 1.6,
+    advance: 2.0, arc: 'vertical', coneDeg: 90,
+  },
+  thrust: {
+    name: '突刺', clip: 'thrust', baseDuration: 0.66,
+    active: [0.32, 0.50], feintUntil: 0.28,
+    damageMul: 1.15, staminaCost: 14, poiseMul: 0.7,
+    advance: 3.0, arc: 'thrust', coneDeg: 55,
+  },
+  bash: {
+    name: '盾擊', clip: 'bash', baseDuration: 0.62,
+    active: [0.34, 0.50], feintUntil: 0.30,
+    damageMul: 0.25, staminaCost: 18, poiseMul: 2.2,
+    advance: 2.2, arc: 'shield', coneDeg: 70,
+    weapon: 'shield', guardBreak: true,
+  },
+};
+
+const MOVE_KEYS = Object.keys(MOVES);
+
+/** 招架窗口：舉盾後這段時間內擋下攻擊算完美招架。 */
+const PARRY_WINDOW = 0.20;
+/** 受擊後的無敵時間，避免同一招連續判定。 */
+const HIT_COOLDOWN = 0.12;
+/** 翻滾的無敵區間（相對 0~1 相位）。 */
+const DODGE_IFRAMES = [0.12, 0.52];
+
+const DODGE_DURATION = 0.62;
+const DODGE_STAMINA = 22;
+const DODGE_SPEED = 7.4;
+
+/** 體力耗盡時的破防硬直。 */
+const EXHAUST_STAGGER = 1.1;
+
+/**
+ * 判斷某招在目前相位是不是處於出刃階段。
+ */
+function isActivePhase(move, phase) {
+  return phase >= move.active[0] && phase <= move.active[1];
+}
+
+/**
+ * 劍刃掃掠 vs 對手肢體膠囊。
+ * 用上一幀與這一幀的刃線做插值取樣，避免高速揮劍穿過去沒判定。
+ *
+ * @param prevBlade {a,b} 上一幀刃線（世界座標）
+ * @param currBlade {a,b} 這一幀刃線
+ * @param capsules  getHitCapsules() 的結果
+ * @param bladeRadius 刃的半徑（含一點寬容值）
+ * @param samples   掃掠取樣段數
+ * @returns { part, mult, label, point, depth } 或 null
+ */
+function sweepBladeHit(prevBlade, currBlade, capsules, bladeRadius, samples = 4) {
+  let best = null;
+  for (let s = 0; s <= samples; s++) {
+    const t = s / samples;
+    const a = v3lerp(prevBlade.a, currBlade.a, t);
+    const b = v3lerp(prevBlade.b, currBlade.b, t);
+    for (const cap of capsules) {
+      const d = segSegDistance(a, b, cap.a, cap.b);
+      const reach = cap.radius + bladeRadius;
+      if (d < reach) {
+        const depth = reach - d;
+        // 同一幀打到多個部位時，取傷害倍率最高的（頭 > 軀幹 > 四肢）
+        if (!best || cap.mult > best.mult || (cap.mult === best.mult && depth > best.depth)) {
+          best = {
+            part: cap.part,
+            label: cap.label,
+            mult: cap.mult,
+            depth,
+            point: { x: (a.x + b.x) * 0.5, y: (a.y + b.y) * 0.5, z: (a.z + b.z) * 0.5 },
+            // 命中點取刃線上比較靠近肢體的一端
+            tip: b,
+          };
+        }
+      }
+    }
+    if (best) break; // 掃到就停，取最早接觸的時間點
+  }
+  return best;
+}
+
+/**
+ * 攻擊是否從防守者的正面來（決定盾牌擋不擋得住）。
+ * @param defenderYaw 防守者朝向
+ * @param attackDirWorld 從防守者指向攻擊者的方向
+ * @param coneDeg 防禦有效角度（總角度）
+ */
+function isFrontal(defenderYaw, defenderPos, attackerPos, coneDeg = 140) {
+  const toAttacker = Math.atan2(attackerPos.x - defenderPos.x, attackerPos.z - defenderPos.z);
+  const diff = Math.abs(wrapAngle(toAttacker - defenderYaw));
+  return diff <= (coneDeg * Math.PI / 180) / 2;
+}
+
+/** 有效防禦係數：有盾用盾，沒盾用武器本身的 guard（用劍身格擋）。 */
+function guardValue(loadout) {
+  if (loadout.offhand.kind === 'shield') return loadout.offhand.block;
+  return loadout.weapon.guard * 0.6;
+}
+
+function guardStability(loadout) {
+  if (loadout.offhand.kind === 'shield') return loadout.offhand.stability;
+  return 0.3;
+}
+
+/**
+ * 結算一次命中。會直接修改 defender 的血量/體力/裝備耐久。
+ * @returns 事件物件，交給表現層播特效
+ */
+function resolveHit(attacker, defender, hit, move, opts = {}) {
+  const aLoad = attacker.loadout;
+  const dLoad = defender.loadout;
+  const weapon = move.weapon === 'shield' ? null : aLoad.weapon;
+
+  const baseDamage = weapon ? weapon.damage : 6;
+  const charge = opts.charge ?? 1;
+
+  let damage = baseDamage * move.damageMul * hit.mult * charge;
+
+  const event = {
+    type: 'hit',
+    part: hit.part,
+    label: hit.label,
+    point: hit.point,
+    attacker: attacker.id,
+    defender: defender.id,
+    blocked: false,
+    parried: false,
+    critical: hit.part === 'head',
+    guardBreak: false,
+    damage: 0,
+    staggerTime: 0,
+  };
+
+  // --- 招架 / 格擋 ---
+  const frontal = isFrontal(defender.yaw, defender, attacker, 150);
+  if (defender.blocking && frontal) {
+    if (defender.blockTimer <= PARRY_WINDOW) {
+      // 完美招架：完全免傷，攻擊者被彈開
+      event.parried = true;
+      event.damage = 0;
+      defender.stamina = Math.min(dLoad.maxStamina, defender.stamina + 12);
+      attacker.stagger = Math.max(attacker.stagger, 0.75 + move.poiseMul * 0.18);
+      attacker.staggerFrom = 'parry';
+      attacker.action = null;
+      return event;
+    }
+    // 一般格擋：吃傷害減免，體力照扣
+    const g = guardValue(dLoad);
+    const stability = guardStability(dLoad);
+    const staminaHit = damage * (1.05 - stability * 0.45) * (move.guardBreak ? 2.2 : 1);
+    defender.stamina -= staminaHit;
+    damage *= (1 - g);
+    event.blocked = true;
+
+    if (defender.stamina <= 0) {
+      // 體力被打空 -> 破防
+      defender.stamina = 0;
+      defender.blocking = false;
+      defender.stagger = Math.max(defender.stagger, EXHAUST_STAGGER);
+      defender.staggerFrom = 'guardBreak';
+      event.guardBreak = true;
+      damage *= 1.35;
+    } else {
+      // 擋住了就不再吃硬直
+      damage *= 0.55;
+    }
+  }
+
+  // --- 護甲減免 ---
+  const partDef = dLoad.partDefense[hit.part] || 0;
+  const piecesHit = armorPiecesCovering(dLoad, hit.part);
+  let effectiveDef = partDef;
+  if (piecesHit.length) {
+    // 裝備破損後保護力下降
+    let worst = 0;
+    for (const p of piecesHit) worst += p.durability / p.maxDurability;
+    worst /= piecesHit.length;
+    effectiveDef *= clamp(0.35 + worst * 0.65, 0, 1);
+  }
+  damage *= (1 - effectiveDef);
+
+  // 頭部暴擊額外加成（護甲擋掉一部分）
+  if (event.critical && !event.blocked) damage *= 1.15;
+
+  damage = Math.max(1, damage);
+  defender.health -= damage;
+  event.damage = damage;
+
+  // --- 裝備耐久 ---
+  for (const p of piecesHit) {
+    p.durability = Math.max(0, p.durability - damage * 0.55);
+    if (p.durability === 0) event.armorBroken = p.slot;
+  }
+
+  // --- 硬直 ---
+  if (!event.blocked || event.guardBreak) {
+    const poise = move.poiseMul * (weapon ? weapon.poise : 1.2);
+    const resist = 1 / (1 + dLoad.weight * 0.075);
+    const stagger = clamp(poise * 0.42 * resist * (event.critical ? 1.3 : 1), 0.14, 1.4);
+    defender.stagger = Math.max(defender.stagger, stagger);
+    defender.staggerFrom = 'hit';
+    defender.action = null;
+    defender.blocking = false;
+    event.staggerTime = stagger;
+
+    // 擊退
+    const dx = defender.x - attacker.x, dz = defender.z - attacker.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const kb = (0.9 + move.poiseMul * 0.5) * resist;
+    defender.vx += (dx / len) * kb;
+    defender.vz += (dz / len) * kb;
+  }
+
+  if (defender.health <= 0) {
+    defender.health = 0;
+    event.lethal = true;
+  }
+  return event;
+}
+
+/** 找出保護指定部位、而且還沒壞掉的裝備。 */
+function armorPiecesCovering(loadout, part) {
+  const out = [];
+  for (const piece of Object.values(loadout.pieces)) {
+    const spec = ARMOR_COVER[piece.slot];
+    if (spec && spec.includes(part) && piece.durability > 0) out.push(piece);
+  }
+  return out;
+}
+
+// 從 equipment.js 的 ARMOR_SLOTS 攤平出來的快取（避免每次命中都跑物件遍歷）
+const ARMOR_COVER = {
+  helmet: ['head'],
+  chestplate: ['torso'],
+  pauldrons: ['armR', 'armL'],
+  vambraces: ['armR', 'armL'],
+  gauntlets: ['armR', 'armL'],
+  belt: ['torso'],
+  leggings: ['legR', 'legL'],
+  boots: ['legR', 'legL'],
+};
+
+/** 這一招的實際秒數。 */
+function moveDuration(move, loadout) {
+  return move.baseDuration / Math.max(0.35, loadout.attackSpeed);
+}
+
+/** 這一招大概能打到多遠（AI 用來抓距離）。 */
+function moveReach(move, loadout) {
+  const w = loadout.weapon;
+  const armReach = 0.75;
+  const base = armReach + w.blade.length + w.hilt.length * 0.5;
+  if (move.arc === 'thrust') return base * 1.12 + 0.35;
+  if (move.arc === 'shield') return 1.15;
+  if (move.arc === 'vertical') return base * 0.92;
+  return base * 0.98;
+}
+
+/** 招式是否還能被取消成假動作。 */
+function canFeint(move, phase) {
+  return phase < move.feintUntil;
+}
+
+// ========================================================================
+// src/game/fighter.js
+// ========================================================================
+
+// 戰士實體：狀態機（待機/移動/攻擊/格擋/翻滾/硬直/死亡）、物理、姿勢合成。
+// 這一層完全不碰 DOM，Node 端可以直接跑整場模擬。
+
+
+
+
+
+
+
+const ARENA_RADIUS = 11.5;
+const BASE_SPEED = 3.5;
+const GRAVITY = 22;
+const JUMP_SPEED = 6.4;
+
+/** 空白輸入，netcode 與 AI 都以這個為模板。 */
+function emptyInput() {
+  return {
+    moveX: 0, moveZ: 0,   // 世界座標的移動意圖（-1~1）
+    attack: 0,            // 0=無，1=右斬 2=左斬 3=上劈 4=突刺 5=盾擊
+    block: false,
+    dodge: false,
+    jump: false,
+  };
+}
+
+const ATTACK_BY_CODE = [null, 'slashR', 'slashL', 'overhead', 'thrust', 'bash'];
+const CODE_BY_ATTACK = { slashR: 1, slashL: 2, overhead: 3, thrust: 4, bash: 5 };
+
+class Fighter {
+  constructor(id, loadoutConfig, opts = {}) {
+    this.id = id;
+    this.name = opts.name || `戰士${id}`;
+    this.loadout = buildLoadout(loadoutConfig);
+    this.rig = createRig(this.loadout, loadoutConfig.skin);
+
+    this.x = opts.x || 0;
+    this.y = 0;
+    this.z = opts.z || 0;
+    this.vx = 0; this.vy = 0; this.vz = 0;
+    this.yaw = opts.yaw || 0;
+
+    this.health = this.loadout.maxHealth;
+    this.stamina = this.loadout.maxStamina;
+
+    this.action = null;       // { key, move, elapsed, duration, hasHit, charging }
+    this.blocking = false;
+    this.blockTimer = 99;     // 舉盾後經過的秒數（招架窗口用）
+    this.stagger = 0;
+    this.staggerFrom = null;
+    this.dodge = null;        // { elapsed, dirX, dirZ }
+    this.grounded = true;
+
+    this.walkPhase = 0;
+    this.speedBlend = 0;
+    this.time = 0;
+    this.flash = 0;
+    this.dead = false;
+    this.deathTimer = 0;
+    this.lastHitTime = -99;
+
+    this.pose = {};
+    this._poseA = {};
+    this._poseB = {};
+    this.capsules = [];
+    this.prevBlade = null;
+    this.blade = null;
+
+    // 統計，結算畫面用
+    this.stats = { hits: 0, blocked: 0, parries: 0, damageDealt: 0, damageTaken: 0, headshots: 0 };
+  }
+
+  get alive() { return this.health > 0; }
+
+  /** 這名戰士現在能不能下新指令。 */
+  get canAct() {
+    return this.alive && this.stagger <= 0 && !this.dodge && !this.action;
+  }
+
+  /** 目前招式的相位 0~1。 */
+  get actionPhase() {
+    return this.action ? clamp(this.action.elapsed / this.action.duration, 0, 1) : 0;
+  }
+
+  /** 翻滾無敵中？ */
+  get invulnerable() {
+    if (!this.dodge) return false;
+    const p = this.dodge.elapsed / DODGE_DURATION;
+    return p >= DODGE_IFRAMES[0] && p <= DODGE_IFRAMES[1];
+  }
+
+  reset(x, z, yaw) {
+    this.x = x; this.z = z; this.y = 0; this.yaw = yaw;
+    this.vx = this.vy = this.vz = 0;
+    this.health = this.loadout.maxHealth;
+    this.stamina = this.loadout.maxStamina;
+    this.action = null;
+    this.blocking = false;
+    this.blockTimer = 99;
+    this.stagger = 0;
+    this.dodge = null;
+    this.dead = false;
+    this.deathTimer = 0;
+    this.flash = 0;
+    for (const p of Object.values(this.loadout.pieces)) p.durability = p.maxDurability;
+    this.stats = { hits: 0, blocked: 0, parries: 0, damageDealt: 0, damageTaken: 0, headshots: 0 };
+  }
+
+  /** 嘗試起手一招，成功回傳 true。 */
+  startAttack(key) {
+    const move = MOVES[key];
+    if (!move || !this.canAct) return false;
+    if (move.weapon === 'shield' && this.loadout.offhand.kind !== 'shield') return false;
+    const cost = move.staminaCost * (2 - this.loadout.staminaMul);
+    if (this.stamina < cost * 0.5) return false; // 體力太低揮不動
+    this.stamina -= cost;
+    this.blocking = false;
+    this.action = {
+      key, move,
+      elapsed: 0,
+      duration: moveDuration(move, this.loadout),
+      hasHit: false,
+      hitIds: new Set(),
+    };
+    return true;
+  }
+
+  /** 假動作：在蓄力階段取消攻擊（消耗少量體力）。 */
+  feint() {
+    if (!this.action) return false;
+    if (!canFeint(this.action.move, this.actionPhase)) return false;
+    this.action = null;
+    this.stamina -= 4;
+    return true;
+  }
+
+  startDodge(dirX, dirZ) {
+    if (!this.alive || this.dodge || this.stagger > 0) return false;
+    if (this.stamina < DODGE_STAMINA) return false;
+    // 攻擊出刃後就不能取消成翻滾
+    if (this.action && this.actionPhase > this.action.move.feintUntil) return false;
+    this.stamina -= DODGE_STAMINA;
+    this.action = null;
+    this.blocking = false;
+    let dx = dirX, dz = dirZ;
+    if (!dx && !dz) { dx = -Math.sin(this.yaw); dz = -Math.cos(this.yaw); } // 沒方向就往後翻
+    const len = Math.hypot(dx, dz) || 1;
+    this.dodge = { elapsed: 0, dirX: dx / len, dirZ: dz / len };
+    return true;
+  }
+
+  /**
+   * 主更新。
+   * @param input  emptyInput() 形狀的輸入
+   * @param dt     秒
+   * @param target 對手（用來自動面向；可為 null）
+   */
+  update(input, dt, target) {
+    this.time += dt;
+    if (this.flash > 0) this.flash = Math.max(0, this.flash - dt * 5);
+
+    if (!this.alive) {
+      this.dead = true;
+      this.deathTimer += dt;
+      this.vx *= 0.85; this.vz *= 0.85;
+      this.integrate(dt, target);
+      this.updatePose(dt, target);
+      return;
+    }
+
+    // --- 硬直 ---
+    if (this.stagger > 0) {
+      this.stagger = Math.max(0, this.stagger - dt);
+      this.vx *= 0.86; this.vz *= 0.86;
+      this.blocking = false;
+      this.integrate(dt, target);
+      this.faceTarget(target, dt, 3.0);
+      this.updatePose(dt, target);
+      this.regenStamina(dt, 0.5);
+      return;
+    }
+
+    // --- 翻滾 ---
+    if (this.dodge) {
+      this.dodge.elapsed += dt;
+      const p = this.dodge.elapsed / DODGE_DURATION;
+      if (p >= 1) {
+        this.dodge = null;
+      } else {
+        const speed = DODGE_SPEED * (1 - p * p) * this.loadout.moveMul;
+        this.vx = this.dodge.dirX * speed;
+        this.vz = this.dodge.dirZ * speed;
+        this.integrate(dt, target);
+        this.faceTarget(target, dt, 2.0);
+        this.updatePose(dt, target);
+        return;
+      }
+    }
+
+    // --- 新指令 ---
+    if (input.dodge) {
+      if (this.startDodge(input.moveX, input.moveZ)) {
+        this.updatePose(dt, target);
+        return;
+      }
+    }
+    if (input.attack) {
+      const key = ATTACK_BY_CODE[input.attack];
+      if (key) this.startAttack(key);
+    }
+
+    // --- 格擋 ---
+    const wantBlock = !!input.block && !this.action && this.stamina > 4;
+    if (wantBlock && !this.blocking) this.blockTimer = 0;
+    else if (wantBlock) this.blockTimer += dt;
+    this.blocking = wantBlock;
+    if (!wantBlock) this.blockTimer = 99;
+
+    // --- 攻擊推進 ---
+    let moveScale = 1;
+    if (this.action) {
+      const a = this.action;
+      a.elapsed += dt;
+      const phase = this.actionPhase;
+      moveScale = 0.18; // 揮劍時幾乎不能自由移動
+      // 揮擊瞬間會自然往前踏一步
+      if (phase > a.move.feintUntil && phase < a.move.active[1]) {
+        const push = a.move.advance * dt * 3.0;
+        this.vx += Math.sin(this.yaw) * push;
+        this.vz += Math.cos(this.yaw) * push;
+      }
+      if (phase >= 1) this.action = null;
+    }
+
+    // --- 移動 ---
+    const speed = BASE_SPEED * this.loadout.moveMul *
+      (this.blocking ? 0.45 : 1) * moveScale *
+      (this.stamina < 12 ? 0.7 : 1);
+
+    let mx = input.moveX, mz = input.moveZ;
+    const mlen = Math.hypot(mx, mz);
+    if (mlen > 1) { mx /= mlen; mz /= mlen; }
+    const intent = Math.min(1, mlen);
+
+    // 側移/後退比前進慢（有面向對手時）
+    let dirPenalty = 1;
+    if (target && intent > 0.01) {
+      const toT = Math.atan2(target.x - this.x, target.z - this.z);
+      const moveAng = Math.atan2(mx, mz);
+      const rel = Math.abs(wrapAngle(moveAng - toT));
+      dirPenalty = lerp(1, 0.62, clamp(rel / Math.PI, 0, 1));
+    }
+
+    const accel = 26 * dt;
+    const targetVx = mx * speed * dirPenalty;
+    const targetVz = mz * speed * dirPenalty;
+    this.vx += (targetVx - this.vx) * Math.min(1, accel);
+    this.vz += (targetVz - this.vz) * Math.min(1, accel);
+
+    // --- 跳躍 ---
+    if (input.jump && this.grounded && this.stamina > 10) {
+      this.vy = JUMP_SPEED;
+      this.grounded = false;
+      this.stamina -= 8;
+    }
+
+    this.speedBlend = lerp(this.speedBlend, clamp(Math.hypot(this.vx, this.vz) / (BASE_SPEED * 0.9), 0, 1), dt * 9);
+    this.walkPhase = advanceWalkPhase(this.walkPhase, this.speedBlend, dt);
+
+    this.integrate(dt, target);
+    this.faceTarget(target, dt, this.blocking ? 5.5 : 7.0, mx, mz);
+    this.regenStamina(dt, this.blocking ? 0.35 : (this.action ? 0.2 : 1));
+    this.updatePose(dt, target);
+  }
+
+  regenStamina(dt, scale) {
+    const rate = 17 * this.loadout.staminaMul * scale;
+    this.stamina = Math.min(this.loadout.maxStamina, this.stamina + rate * dt);
+  }
+
+  faceTarget(target, dt, rate, mx = 0, mz = 0) {
+    let want;
+    if (target && target.alive) {
+      want = Math.atan2(target.x - this.x, target.z - this.z);
+    } else if (mx || mz) {
+      want = Math.atan2(mx, mz);
+    } else return;
+    this.yaw = turnToward(this.yaw, want, rate * dt);
+  }
+
+  integrate(dt, target) {
+    // 垂直
+    if (!this.grounded || this.y > 0 || this.vy !== 0) {
+      this.vy -= GRAVITY * dt;
+      this.y += this.vy * dt;
+      if (this.y <= 0) { this.y = 0; this.vy = 0; this.grounded = true; }
+      else this.grounded = false;
+    }
+
+    this.x += this.vx * dt;
+    this.z += this.vz * dt;
+
+    // 地面摩擦
+    const fr = this.grounded ? Math.pow(0.0016, dt) : Math.pow(0.4, dt);
+    this.vx *= fr; this.vz *= fr;
+
+    // 場地邊界（圓形競技場）
+    const d = Math.hypot(this.x, this.z);
+    if (d > ARENA_RADIUS) {
+      const s = ARENA_RADIUS / d;
+      this.x *= s; this.z *= s;
+      this.vx *= 0.3; this.vz *= 0.3;
+    }
+
+    // 角色互相推開，避免重疊
+    if (target) {
+      const dx = this.x - target.x, dz = this.z - target.z;
+      const dist = Math.hypot(dx, dz);
+      const minDist = 1.28;
+      if (dist < minDist && dist > 1e-4) {
+        const push = (minDist - dist) * 0.5;
+        this.x += (dx / dist) * push;
+        this.z += (dz / dist) * push;
+      } else if (dist <= 1e-4) {
+        this.x += 0.05;
+      }
+    }
+  }
+
+  /** 合成這一幀的姿勢並更新骨架世界矩陣。 */
+  updatePose(dt, target) {
+    let pose;
+
+    if (!this.alive) {
+      pose = blendPose(POSE_GUARD, POSE_DOWN, clamp(this.deathTimer * 2.4, 0, 1), this._poseA);
+    } else if (this.stagger > 0) {
+      const k = clamp(this.stagger * 1.6, 0, 1);
+      pose = blendPose(POSE_GUARD, POSE_HURT, k, this._poseA);
+    } else if (this.dodge) {
+      pose = sampleClip(CLIPS.dodge, this.dodge.elapsed / DODGE_DURATION);
+    } else if (this.action) {
+      const clip = CLIPS[this.action.move.clip];
+      pose = sampleClip(clip, this.actionPhase);
+    } else {
+      const base = this.blocking ? POSE_BLOCK : POSE_GUARD;
+      // 走路只影響下半身與軀幹，上半身維持架式
+      if (this.speedBlend > 0.02) {
+        const wp = walkPose(this.walkPhase, this.speedBlend, this._poseB);
+        pose = Object.assign({}, base);
+        for (const k of ['legRUpper', 'legLUpper', 'legRLower', 'legLLower', 'footR', 'footL']) {
+          if (wp[k]) pose[k] = wp[k];
+        }
+        // 軀幹與髖部把架式和走路混起來
+        pose.hips = addSingle(base.hips, wp.hips, 1);
+        pose.torso = addSingle(base.torso, wp.torso, 1);
+        pose.armRUpper = addSingle(base.armRUpper, { rx: Math.sin(this.walkPhase * Math.PI * 2) * 0.12 * this.speedBlend }, 1);
+        pose.armLUpper = addSingle(base.armLUpper, { rx: -Math.sin(this.walkPhase * Math.PI * 2) * 0.12 * this.speedBlend }, 1);
+      } else {
+        pose = addPose(base, idlePose(this.time, this._poseB), 1, this._poseA);
+      }
+    }
+
+    this.pose = pose;
+
+    const bob = this.speedBlend > 0.02 && !this.action && !this.dodge
+      ? walkBob(this.walkPhase, this.speedBlend) : 0;
+    const crouch = this.dodge ? Math.sin(clamp(this.dodge.elapsed / DODGE_DURATION, 0, 1) * Math.PI) * 0.45 : 0;
+    const lean = this.dodge ? Math.sin(clamp(this.dodge.elapsed / DODGE_DURATION, 0, 1) * Math.PI) * 0.35 : 0;
+
+    poseRig(this.rig, this, pose, { crouch: crouch - bob, lean });
+
+    this.prevBlade = this.blade;
+    this.blade = getBladeSegment(this.rig);
+    this.capsules = getHitCapsules(this.rig, this.capsules);
+    this.renderExtras = { crouch, lean, capeSway: -this.speedBlend * 0.5 - (this.vy > 0 ? 0.3 : 0) };
+  }
+
+  /** 目前武器的最遠攻擊距離（AI 用）。 */
+  bestReach() {
+    let r = 0;
+    for (const key of this.loadout.weapon.moves) {
+      const m = MOVES[key];
+      if (m) r = Math.max(r, moveReach(m, this.loadout));
+    }
+    return r;
+  }
+}
+
+function addSingle(a, b, w) {
+  a = a || {}; b = b || {};
+  return {
+    rx: (a.rx || 0) + (b.rx || 0) * w,
+    ry: (a.ry || 0) + (b.ry || 0) * w,
+    rz: (a.rz || 0) + (b.rz || 0) * w,
+  };
+}
+
+/**
+ * 檢查 attacker 這一幀有沒有砍中 defender。
+ * 需要在雙方 updatePose 之後呼叫。
+ * @returns 命中事件或 null
+ */
+function checkAttackHit(attacker, defender) {
+  const a = attacker.action;
+  if (!a || a.hasHit || !attacker.alive) return null;
+  const phase = attacker.actionPhase;
+  if (!isActivePhase(a.move, phase)) return null;
+  if (!defender.alive || defender.invulnerable) return null;
+
+  // 距離先做粗篩，省掉大部分的線段運算
+  const reach = moveReach(a.move, attacker.loadout) + 0.6;
+  if (distXZ(attacker, defender) > reach) return null;
+
+  let hit;
+  if (a.move.weapon === 'shield') {
+    // 盾擊用盾牌前方的短線段當判定
+    const shieldSeg = shieldSegment(attacker);
+    hit = sweepBladeHit(shieldSeg, shieldSeg, defender.capsules, 0.22, 1);
+  } else {
+    const prev = attacker.prevBlade || attacker.blade;
+    hit = sweepBladeHit(prev, attacker.blade, defender.capsules,
+      attacker.loadout.weapon.blade.width * 0.5 + 0.05, 5);
+  }
+  if (!hit) return null;
+
+  a.hasHit = true;
+  const event = resolveHit(attacker, defender, hit, a.move, { charge: 1 });
+
+  // 統計
+  if (event.parried) {
+    defender.stats.parries++;
+  } else if (event.blocked) {
+    defender.stats.blocked++;
+    attacker.stats.hits++;
+  } else {
+    attacker.stats.hits++;
+    if (event.critical) attacker.stats.headshots++;
+  }
+  attacker.stats.damageDealt += event.damage;
+  defender.stats.damageTaken += event.damage;
+  if (event.damage > 0) defender.flash = 1;
+
+  return event;
+}
+
+function shieldSegment(f) {
+  const forwardX = Math.sin(f.yaw), forwardZ = Math.cos(f.yaw);
+  const y = f.y + 1.25;
+  return {
+    a: { x: f.x + forwardX * 0.35, y, z: f.z + forwardZ * 0.35 },
+    b: { x: f.x + forwardX * 1.0, y, z: f.z + forwardZ * 1.0 },
+  };
+}
+
+// ========================================================================
+// src/net/protocol.js
+// ========================================================================
+
+// 對戰封包協定。
+// 目標是塞得進 BLE 預設 20 bytes 的 MTU，所有欄位都量化過。
+// 上層再套一層分片（fragment），超過 MTU 的訊息會自動切開重組。
+
+const PROTOCOL_VERSION = 3;
+
+const MSG = {
+  HELLO: 0x01,
+  LOADOUT: 0x02,
+  READY: 0x03,
+  START: 0x04,
+  INPUT: 0x10,
+  STATE: 0x11,
+  EVENT: 0x12,
+  ROUND: 0x13,
+  PING: 0x20,
+  PONG: 0x21,
+  BYE: 0x2f,
+};
+
+/** BLE 保守值：ATT MTU 23 - 3 bytes header = 20。 */
+const DEFAULT_MTU = 20;
+
+// ---------------------------------------------------------------------------
+// 量化工具
+// ---------------------------------------------------------------------------
+
+const POS_SCALE = 200;   // 公尺 -> 0.5 公分
+const clampI16 = (v) => Math.max(-32768, Math.min(32767, Math.round(v)));
+
+function packAngle(rad) {
+  let a = rad % (Math.PI * 2);
+  if (a < 0) a += Math.PI * 2;
+  return Math.round(a / (Math.PI * 2) * 255) & 255;
+}
+function unpackAngle(b) {
+  return (b / 255) * Math.PI * 2;
+}
+
+/**
+ * 輸入封包：把移動方向壓成 16 個方位 + 強度，按鍵壓成 bitmask。
+ * [type, seq, dir, buttons]  共 4 bytes
+ */
+function encodeInput(seq, input) {
+  const buf = new Uint8Array(4);
+  buf[0] = MSG.INPUT;
+  buf[1] = seq & 255;
+
+  const mag = Math.min(1, Math.hypot(input.moveX, input.moveZ));
+  let dirByte = 0;
+  if (mag > 0.08) {
+    const ang = Math.atan2(input.moveX, input.moveZ);
+    const sector = Math.round(((ang + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2) * 16) % 16;
+    const magQ = Math.min(3, Math.round(mag * 3));   // 0~3
+    dirByte = 0x80 | (sector << 2) | magQ;
+  }
+  buf[2] = dirByte;
+
+  let btn = input.attack & 0x07;                 // 0~5
+  if (input.block) btn |= 0x08;
+  if (input.dodge) btn |= 0x10;
+  if (input.jump) btn |= 0x20;
+  buf[3] = btn;
+  return buf;
+}
+
+function decodeInput(buf, out) {
+  const seq = buf[1];
+  const dirByte = buf[2];
+  const btn = buf[3];
+  if (dirByte & 0x80) {
+    const sector = (dirByte >> 2) & 0x0f;
+    const magQ = dirByte & 0x03;
+    const ang = (sector / 16) * Math.PI * 2;
+    const mag = magQ / 3;
+    out.moveX = Math.sin(ang) * mag;
+    out.moveZ = Math.cos(ang) * mag;
+  } else {
+    out.moveX = 0; out.moveZ = 0;
+  }
+  out.attack = btn & 0x07;
+  out.block = !!(btn & 0x08);
+  out.dodge = !!(btn & 0x10);
+  out.jump = !!(btn & 0x20);
+  return seq;
+}
+
+/**
+ * 狀態快照（host -> guest）。
+ * header 2 bytes + 每位戰士 9 bytes = 20 bytes。
+ *
+ * 每位戰士：
+ *   x:int16, z:int16, yaw:u8, hp:u8, sp:u8, flags:u8, action:u8
+ *   flags: bit0 blocking, bit1 dodging, bit2 staggered, bit3 dead, bit4 airborne
+ *   action: 高 3 bits = 招式代碼, 低 5 bits = 相位(0~31)
+ */
+function encodeState(tick, fighters) {
+  const buf = new Uint8Array(2 + fighters.length * 9);
+  const view = new DataView(buf.buffer);
+  buf[0] = MSG.STATE;
+  buf[1] = tick & 255;
+  let o = 2;
+  for (const f of fighters) {
+    view.setInt16(o, clampI16(f.x * POS_SCALE), true); o += 2;
+    view.setInt16(o, clampI16(f.z * POS_SCALE), true); o += 2;
+    buf[o++] = packAngle(f.yaw);
+    buf[o++] = Math.max(0, Math.min(255, Math.round(f.health * 2)));
+    buf[o++] = Math.max(0, Math.min(255, Math.round(f.stamina * 2)));
+    let flags = 0;
+    if (f.blocking) flags |= 1;
+    if (f.dodge) flags |= 2;
+    if (f.stagger > 0) flags |= 4;
+    if (!f.alive) flags |= 8;
+    if (f.y > 0.02) flags |= 16;
+    buf[o++] = flags;
+    const code = f.action ? (ATTACK_CODES[f.action.key] || 0) : 0;
+    const phase = f.action ? Math.min(31, Math.round(f.actionPhase * 31)) : 0;
+    buf[o++] = (code << 5) | phase;
+  }
+  return buf;
+}
+
+function decodeState(buf, count = 2) {
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const tick = buf[1];
+  const out = [];
+  let o = 2;
+  for (let i = 0; i < count; i++) {
+    if (o + 9 > buf.length) break;
+    const x = view.getInt16(o, true) / POS_SCALE; o += 2;
+    const z = view.getInt16(o, true) / POS_SCALE; o += 2;
+    const yaw = unpackAngle(buf[o++]);
+    const health = buf[o++] / 2;
+    const stamina = buf[o++] / 2;
+    const flags = buf[o++];
+    const act = buf[o++];
+    out.push({
+      x, z, yaw, health, stamina,
+      blocking: !!(flags & 1),
+      dodging: !!(flags & 2),
+      staggered: !!(flags & 4),
+      dead: !!(flags & 8),
+      airborne: !!(flags & 16),
+      actionKey: ATTACK_NAMES[act >> 5] || null,
+      actionPhase: (act & 31) / 31,
+    });
+  }
+  return { tick, fighters: out };
+}
+
+const ATTACK_CODES = { slashR: 1, slashL: 2, overhead: 3, thrust: 4, bash: 5 };
+const ATTACK_NAMES = [null, 'slashR', 'slashL', 'overhead', 'thrust', 'bash'];
+
+/**
+ * 命中事件（host -> guest），只給表現層播特效用。
+ * [type, defender, partIdx, flags, damage, x_i16, y_u8, z_i16]  = 11 bytes
+ */
+const PARTS = ['head', 'torso', 'armR', 'armL', 'legR', 'legL'];
+function encodeEvent(ev) {
+  const buf = new Uint8Array(11);
+  const view = new DataView(buf.buffer);
+  buf[0] = MSG.EVENT;
+  buf[1] = ev.defender & 255;
+  buf[2] = Math.max(0, PARTS.indexOf(ev.part));
+  let flags = 0;
+  if (ev.blocked) flags |= 1;
+  if (ev.parried) flags |= 2;
+  if (ev.critical) flags |= 4;
+  if (ev.guardBreak) flags |= 8;
+  if (ev.lethal) flags |= 16;
+  buf[3] = flags;
+  buf[4] = Math.min(255, Math.round(ev.damage * 2));
+  view.setInt16(5, clampI16((ev.point?.x || 0) * POS_SCALE), true);
+  buf[7] = Math.max(0, Math.min(255, Math.round((ev.point?.y || 0) * 80)));
+  view.setInt16(8, clampI16((ev.point?.z || 0) * POS_SCALE), true);
+  buf[10] = 0;
+  return buf;
+}
+
+function decodeEvent(buf) {
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const flags = buf[3];
+  return {
+    type: 'hit',
+    defender: buf[1],
+    part: PARTS[buf[2]] || 'torso',
+    blocked: !!(flags & 1),
+    parried: !!(flags & 2),
+    critical: !!(flags & 4),
+    guardBreak: !!(flags & 8),
+    lethal: !!(flags & 16),
+    damage: buf[4] / 2,
+    point: {
+      x: view.getInt16(5, true) / POS_SCALE,
+      y: buf[7] / 80,
+      z: view.getInt16(8, true) / POS_SCALE,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 配裝同步
+// ---------------------------------------------------------------------------
+
+const MAT_LIST = ['none', 'cloth', 'leather', 'chainmail', 'iron', 'gold', 'diamond', 'netherite'];
+const SLOT_LIST = ['helmet', 'chestplate', 'pauldrons', 'vambraces', 'gauntlets', 'belt', 'leggings', 'boots'];
+
+/** 配裝封包：8 護甲 + 武器 + 副手 + 4 組顏色 + 名字。 */
+function encodeLoadout(playerId, cfg, weaponKeys, offhandKeys, name = '') {
+  const nameBytes = new TextEncoder().encode(name.slice(0, 12));
+  const buf = new Uint8Array(13 + 12 + 1 + nameBytes.length);
+  buf[0] = MSG.LOADOUT;
+  buf[1] = playerId & 255;
+  for (let i = 0; i < SLOT_LIST.length; i++) {
+    const mat = (cfg.armor || {})[SLOT_LIST[i]] || 'none';
+    buf[2 + i] = Math.max(0, MAT_LIST.indexOf(mat));
+  }
+  buf[10] = Math.max(0, weaponKeys.indexOf(cfg.weapon));
+  buf[11] = Math.max(0, offhandKeys.indexOf(cfg.offhand));
+  buf[12] = PROTOCOL_VERSION;
+  const skin = cfg.skin || {};
+  const colors = [skin.skin, skin.shirt, skin.pants, skin.cape];
+  let o = 13;
+  for (const c of colors) {
+    const v = parseInt((c || '#888888').slice(1), 16);
+    buf[o++] = (v >> 16) & 255;
+    buf[o++] = (v >> 8) & 255;
+    buf[o++] = v & 255;
+  }
+  buf[o++] = nameBytes.length;
+  buf.set(nameBytes, o);
+  return buf;
+}
+
+function decodeLoadout(buf, weaponKeys, offhandKeys) {
+  const armor = {};
+  for (let i = 0; i < SLOT_LIST.length; i++) {
+    const mat = MAT_LIST[buf[2 + i]] || 'none';
+    if (mat !== 'none') armor[SLOT_LIST[i]] = mat;
+  }
+  const hex = (o) => '#' + [buf[o], buf[o + 1], buf[o + 2]]
+    .map((v) => v.toString(16).padStart(2, '0')).join('');
+  const nameLen = buf[25] || 0;
+  const name = nameLen ? new TextDecoder().decode(buf.subarray(26, 26 + nameLen)) : '';
+  return {
+    playerId: buf[1],
+    version: buf[12],
+    name,
+    config: {
+      armor,
+      weapon: weaponKeys[buf[10]] || weaponKeys[0],
+      offhand: offhandKeys[buf[11]] || offhandKeys[0],
+      skin: { skin: hex(13), shirt: hex(16), pants: hex(19), cape: hex(22) },
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 分片：讓任意長度的訊息能過 20 bytes 的管道
+// ---------------------------------------------------------------------------
+
+const FRAG_MAGIC = 0xf0;
+
+/** 把一則訊息切成數個 <= mtu 的片段。 */
+function fragment(msg, mtu = DEFAULT_MTU) {
+  if (msg.length <= mtu) return [msg];
+  const chunkSize = mtu - 3;                    // magic + idx + count
+  const count = Math.ceil(msg.length / chunkSize);
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const part = msg.subarray(i * chunkSize, Math.min(msg.length, (i + 1) * chunkSize));
+    const frame = new Uint8Array(3 + part.length);
+    frame[0] = FRAG_MAGIC;
+    frame[1] = i;
+    frame[2] = count;
+    frame.set(part, 3);
+    out.push(frame);
+  }
+  return out;
+}
+
+/** 分片重組器。餵進每個收到的片段，完整時回傳訊息，否則 null。 */
+class Reassembler {
+  constructor() { this.parts = []; this.expect = 0; }
+  push(frame) {
+    if (frame[0] !== FRAG_MAGIC) return frame;   // 沒分片就直接放行
+    const idx = frame[1], count = frame[2];
+    if (idx === 0) { this.parts = []; this.expect = count; }
+    this.parts[idx] = frame.subarray(3);
+    if (this.parts.filter(Boolean).length !== this.expect || this.expect === 0) return null;
+    const total = this.parts.reduce((a, p) => a + p.length, 0);
+    const out = new Uint8Array(total);
+    let o = 0;
+    for (const p of this.parts) { out.set(p, o); o += p.length; }
+    this.parts = []; this.expect = 0;
+    return out;
+  }
+}
+
+/** 握手封包。 */
+function encodeHello(role, seed) {
+  const buf = new Uint8Array(5);
+  const view = new DataView(buf.buffer);
+  buf[0] = MSG.HELLO;
+  buf[1] = PROTOCOL_VERSION;
+  buf[2] = role;              // 0 = host, 1 = guest
+  view.setUint16(3, seed & 0xffff, true);
+  return buf;
+}
+
+function decodeHello(buf) {
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  return { version: buf[1], role: buf[2], seed: view.getUint16(3, true) };
+}
+
+function encodeRound(state, roundNo, winner, timeLeft) {
+  return new Uint8Array([MSG.ROUND, state, roundNo, winner & 255, Math.min(255, Math.round(timeLeft))]);
+}
+
+function decodeRound(buf) {
+  return { state: buf[1], roundNo: buf[2], winner: buf[3], timeLeft: buf[4] };
+}
+
+const ROUND_STATE = { WAITING: 0, COUNTDOWN: 1, FIGHTING: 2, OVER: 3 };
+
+// ========================================================================
+// src/game/ai.js
+// ========================================================================
+
+// 超智能 NPC。
+//
+// 設計重點（不是靠作弊，是靠建模）：
+//   1. 感知延遲     —— 透過延遲緩衝區看世界，反應時間由難度決定，不會有神反應。
+//   2. 對手建模     —— 統計你的出招頻率、接續習慣（n-gram）、距離偏好、格擋率、
+//                      被打斷後的反應，越打越懂你。
+//   3. 威脅評估     —— 推算對方這一刀什麼時候到，決定招架 / 翻滾 / 搶攻 / 拉開。
+//   4. 效用決策     —— 對每個候選動作做一層 rollout，用「預期收益 - 風險」挑最好的。
+//   5. 節奏與心理   —— 假動作騙格擋、盾擊破防、體力管理、劣勢時換打法。
+//   6. 自適應難度   —— 依血量差距微調反應時間與失誤率，避免一面倒。
+
+
+
+
+
+/** 難度設定。reaction 是感知延遲（秒），越小越可怕。 */
+const DIFFICULTIES = {
+  rookie:   { name: '新手',   reaction: 0.42, noise: 0.55, predict: 0.15, aggression: 0.45, parrySkill: 0.10, mistake: 0.32, adapt: 0.2 },
+  normal:   { name: '普通',   reaction: 0.30, noise: 0.35, predict: 0.35, aggression: 0.55, parrySkill: 0.28, mistake: 0.18, adapt: 0.4 },
+  hard:     { name: '困難',   reaction: 0.21, noise: 0.22, predict: 0.55, aggression: 0.65, parrySkill: 0.48, mistake: 0.10, adapt: 0.6 },
+  master:   { name: '大師',   reaction: 0.15, noise: 0.12, predict: 0.75, aggression: 0.72, parrySkill: 0.68, mistake: 0.05, adapt: 0.8 },
+  singular: { name: '超智能', reaction: 0.10, noise: 0.05, predict: 0.95, aggression: 0.80, parrySkill: 0.88, mistake: 0.015, adapt: 1.0 },
+};
+
+/** 打法性格，會影響效用權重；AI 落後時會自己換。 */
+const STYLES = {
+  aggressive: { name: '進攻', pressure: 1.35, patience: 0.55, riskTolerance: 1.3, preferRange: 0.88 },
+  balanced:   { name: '均衡', pressure: 1.0, patience: 1.0, riskTolerance: 1.0, preferRange: 1.0 },
+  defensive:  { name: '防守', pressure: 0.65, patience: 1.5, riskTolerance: 0.7, preferRange: 1.15 },
+  technical:  { name: '技巧', pressure: 0.9, patience: 1.25, riskTolerance: 0.9, preferRange: 1.05 },
+};
+
+const ATTACK_KEYS = ['slashR', 'slashL', 'overhead', 'thrust', 'bash'];
+
+/** 對手模型：把觀察到的行為壓成幾張統計表。 */
+class OpponentModel {
+  constructor() {
+    this.moveCount = Object.fromEntries(ATTACK_KEYS.map((k) => [k, 1]));  // 拉普拉斯平滑
+    this.total = ATTACK_KEYS.length;
+    // n-gram：上一招 -> 下一招
+    this.bigram = {};
+    for (const a of ATTACK_KEYS) {
+      this.bigram[a] = Object.fromEntries(ATTACK_KEYS.map((k) => [k, 0.5]));
+    }
+    this.lastMove = null;
+
+    this.blockAttempts = 1;
+    this.blockSuccess = 0.4;     // 對方擋下我攻擊的比例
+    this.dodgeAttempts = 1;
+    this.dodgeCount = 0.3;
+
+    this.attackRanges = [];      // 對方出手時的距離，用來抓他的「舒適距離」
+    this.avgAttackRange = 2.2;
+
+    this.aggression = 0.5;       // 0~1，最近有多常主動進攻
+    this.pressureDecay = 0.995;
+
+    this.timeSinceTheirAttack = 0;
+    this.attackIntervals = [];
+    this.avgInterval = 1.6;
+
+    this.punishedMe = 0;         // 我出招被反擊的次數
+    this.iGotPunished = 0;
+  }
+
+  /** 對方起手一招。 */
+  observeAttack(key, range) {
+    if (!this.moveCount[key]) this.moveCount[key] = 1;
+    this.moveCount[key] += 1;
+    this.total += 1;
+    if (this.lastMove) {
+      this.bigram[this.lastMove][key] = (this.bigram[this.lastMove][key] || 0) + 1;
+    }
+    this.lastMove = key;
+
+    this.attackRanges.push(range);
+    if (this.attackRanges.length > 24) this.attackRanges.shift();
+    this.avgAttackRange = this.attackRanges.reduce((a, b) => a + b, 0) / this.attackRanges.length;
+
+    if (this.timeSinceTheirAttack > 0.15) {
+      this.attackIntervals.push(this.timeSinceTheirAttack);
+      if (this.attackIntervals.length > 16) this.attackIntervals.shift();
+      this.avgInterval = this.attackIntervals.reduce((a, b) => a + b, 0) / this.attackIntervals.length;
+    }
+    this.timeSinceTheirAttack = 0;
+    this.aggression = clamp(this.aggression + 0.09, 0, 1);
+  }
+
+  observeBlock(blocked) {
+    this.blockAttempts += 1;
+    if (blocked) this.blockSuccess += 1;
+  }
+
+  observeDodge() {
+    this.dodgeAttempts += 1;
+    this.dodgeCount += 1;
+  }
+
+  tick(dt) {
+    this.timeSinceTheirAttack += dt;
+    this.aggression *= Math.pow(this.pressureDecay, dt * 60);
+  }
+
+  /** 對方下一招最可能是什麼（結合整體頻率與接續習慣）。 */
+  predictNext() {
+    const dist = {};
+    let sum = 0;
+    for (const k of ATTACK_KEYS) {
+      const base = this.moveCount[k] / this.total;
+      const cond = this.lastMove
+        ? this.bigram[this.lastMove][k] / Object.values(this.bigram[this.lastMove]).reduce((a, b) => a + b, 0)
+        : base;
+      const p = base * 0.4 + cond * 0.6;
+      dist[k] = p;
+      sum += p;
+    }
+    for (const k of ATTACK_KEYS) dist[k] /= (sum || 1);
+    return dist;
+  }
+
+  get blockRate() { return clamp(this.blockSuccess / this.blockAttempts, 0, 1); }
+  get dodgeRate() { return clamp(this.dodgeCount / this.dodgeAttempts, 0, 1); }
+
+  /** 對方現在「該出手了」的機率（依他自己的節奏推算）。 */
+  attackImminence() {
+    const r = this.timeSinceTheirAttack / Math.max(0.3, this.avgInterval);
+    return clamp(r, 0, 1.5);
+  }
+}
+
+class FighterAI {
+  constructor(fighter, opts = {}) {
+    this.fighter = fighter;
+    this.difficulty = DIFFICULTIES[opts.difficulty] || DIFFICULTIES.hard;
+    this.style = STYLES[opts.style] || STYLES.balanced;
+    this.baseStyleKey = opts.style || 'balanced';
+    this.rng = makeRng(opts.seed || 0x5eed);
+    this.model = new OpponentModel();
+
+    this.perception = [];        // 感知延遲緩衝
+    this.decisionTimer = 0;
+    this.decisionInterval = 0.06;
+    this.input = emptyInput();
+
+    this.plan = { kind: 'neutral', until: 0 };
+    this.time = 0;
+    this.strafeDir = 1;
+    this.strafeTimer = 0;
+    this.feintPending = null;
+    this.lastOppAction = null;
+    this.commitCooldown = 0;
+    this.blockHold = 0;
+    this.adaptiveBoost = 0;      // 自適應難度：落後時 > 0
+
+    this.debug = { intent: '待機', threat: 0, predicted: null, confidence: 0 };
+  }
+
+  setDifficulty(key) {
+    if (DIFFICULTIES[key]) this.difficulty = DIFFICULTIES[key];
+  }
+
+  /** 有效反應時間（含自適應調整）。 */
+  get reactionTime() {
+    const d = this.difficulty;
+    return Math.max(0.05, d.reaction * (1 - this.adaptiveBoost * 0.35 * d.adapt));
+  }
+
+  /** 記錄一份對手快照，之後依延遲讀取。 */
+  observe(opponent, dt) {
+    this.time += dt;
+    this.perception.push({
+      t: this.time,
+      x: opponent.x, z: opponent.z, y: opponent.y, yaw: opponent.yaw,
+      health: opponent.health, stamina: opponent.stamina,
+      blocking: opponent.blocking,
+      staggered: opponent.stagger > 0,
+      dodging: !!opponent.dodge,
+      actionKey: opponent.action ? opponent.action.key : null,
+      actionPhase: opponent.actionPhase,
+      actionDuration: opponent.action ? opponent.action.duration : 0,
+      alive: opponent.alive,
+    });
+    // 只留 1.5 秒
+    while (this.perception.length > 2 && this.time - this.perception[0].t > 1.5) {
+      this.perception.shift();
+    }
+    this.model.tick(dt);
+
+    // 即時事件（起手偵測用實際狀態，但決策仍受延遲限制）
+    const key = opponent.action ? opponent.action.key : null;
+    if (key && key !== this.lastOppAction) {
+      this.model.observeAttack(key, distXZ(this.fighter, opponent));
+    }
+    this.lastOppAction = key;
+  }
+
+  /** 讀取「延遲後」的世界。 */
+  perceived() {
+    const target = this.time - this.reactionTime;
+    let best = this.perception[0];
+    for (const p of this.perception) {
+      if (p.t <= target) best = p;
+      else break;
+    }
+    return best || this.perception[this.perception.length - 1];
+  }
+
+  /**
+   * 主思考迴圈，回傳這一幀要送給 Fighter.update 的輸入。
+   */
+  think(opponent, dt) {
+    const me = this.fighter;
+    this.opponentLoadout = opponent.loadout; // 對手的武器長度是看得見的資訊
+    this.observe(opponent, dt);
+
+    const inp = this.input;
+    inp.attack = 0;
+    inp.dodge = false;
+    inp.jump = false;
+    // block 與移動是連續量，先沿用上一幀再視情況覆寫
+
+    if (!me.alive || !opponent.alive) {
+      inp.moveX = inp.moveZ = 0;
+      inp.block = false;
+      return inp;
+    }
+
+    // 自適應難度：落後越多越兇
+    const hpDiff = (opponent.health / opponent.loadout.maxHealth) - (me.health / me.loadout.maxHealth);
+    this.adaptiveBoost = clamp(hpDiff, 0, 1);
+
+    // 落後時自動改打法
+    if (hpDiff > 0.28) this.style = STYLES.aggressive;
+    else if (hpDiff < -0.3) this.style = STYLES.defensive;
+    else this.style = STYLES[this.baseStyleKey] || STYLES.balanced;
+
+    this.commitCooldown = Math.max(0, this.commitCooldown - dt);
+    this.strafeTimer -= dt;
+    if (this.strafeTimer <= 0) {
+      this.strafeTimer = 0.8 + this.rng() * 1.4;
+      this.strafeDir = this.rng() < 0.5 ? -1 : 1;
+    }
+
+    const p = this.perceived();
+    if (!p) return inp;
+
+    const dist = Math.hypot(p.x - me.x, p.z - me.z);
+    const threat = this.assessThreat(p, dist);
+    this.debug.threat = threat.level;
+
+    // 動作已經送出去就不能反悔（除了可取消的蓄力）
+    if (me.action) {
+      this.handleOngoingAttack(inp, p, dist, threat);
+      return inp;
+    }
+    if (me.dodge || me.stagger > 0) {
+      inp.block = false;
+      inp.moveX = inp.moveZ = 0;
+      return inp;
+    }
+
+    this.decisionTimer -= dt;
+    if (this.decisionTimer > 0 && this.plan.until > this.time) {
+      this.executePlan(inp, p, dist, threat);
+      return inp;
+    }
+    this.decisionTimer = this.decisionInterval;
+
+    this.plan = this.choosePlan(p, dist, threat, opponent);
+    this.executePlan(inp, p, dist, threat);
+    return inp;
+  }
+
+  /**
+   * 推算對手這一刀什麼時候會到、有多痛。
+   */
+  assessThreat(p, dist) {
+    const me = this.fighter;
+    const out = { level: 0, timeToImpact: 99, move: null, key: null, incoming: false };
+
+    if (p.actionKey) {
+      const move = MOVES[p.actionKey];
+      if (move) {
+        const dur = p.actionDuration || moveDuration(move, { attackSpeed: 1 });
+        const impactPhase = (move.active[0] + move.active[1]) * 0.5;
+        const tti = (impactPhase - p.actionPhase) * dur;
+        const reach = moveReach(move, this.opponentLoadout ||
+          { weapon: { blade: { length: 0.85 }, hilt: { length: 0.2 } } });
+        out.key = p.actionKey;
+        out.move = move;
+        out.timeToImpact = tti;
+        out.incoming = tti > -0.12 && dist < reach + 1.4;
+        if (out.incoming) {
+          const distFactor = clamp(1.6 - dist / (reach + 0.6), 0, 1);
+          out.level = clamp(move.damageMul * distFactor * 1.1, 0, 1.6);
+        }
+      }
+    }
+
+    if (!out.incoming) {
+      // 沒有實際動作時，用節奏模型預判「他快出手了」
+      const imminence = this.model.attackImminence();
+      const inRange = dist < this.model.avgAttackRange + 0.6;
+      out.level = inRange ? imminence * 0.45 * this.difficulty.predict : 0;
+      out.predictedKey = this.pickTop(this.model.predictNext());
+      this.debug.predicted = out.predictedKey;
+    }
+    return out;
+  }
+
+  pickTop(dist) {
+    let best = null, bv = -1;
+    for (const [k, v] of Object.entries(dist)) {
+      if (v > bv) { bv = v; best = k; }
+    }
+    this.debug.confidence = bv;
+    return best;
+  }
+
+  /**
+   * 選一個計畫。這裡是「效用 + 一層 rollout」的核心。
+   */
+  choosePlan(p, dist, threat, opponent) {
+    const me = this.fighter;
+    const d = this.difficulty;
+    const st = this.style;
+    const now = this.time;
+    const staminaRatio = me.stamina / me.loadout.maxStamina;
+    const hpRatio = me.health / me.loadout.maxHealth;
+
+    // 偶爾故意失誤，讓 AI 不是完美機器
+    if (this.rng() < d.mistake) {
+      return { kind: this.rng() < 0.5 ? 'circle' : 'approach', until: now + 0.25 + this.rng() * 0.35 };
+    }
+
+    const candidates = [];
+
+    // ---- 防禦類 ----
+    if (threat.incoming) {
+      const tti = threat.timeToImpact;
+      // 招架：算好時間點才舉盾，早舉會變成普通格擋
+      const canParry = me.loadout.offhand.kind === 'shield' || true;
+      if (canParry) {
+        // 想在命中瞬間讓 blockTimer 落在招架窗口內
+        const idealDelay = Math.max(0, tti - PARRY_WINDOW * 0.5);
+        const timingErr = Math.abs(idealDelay) + (1 - d.parrySkill) * 0.25;
+        const parryScore = (14 * d.parrySkill) / (1 + timingErr * 6) * st.riskTolerance;
+        candidates.push({ kind: 'parry', score: parryScore, until: now + Math.max(0.12, tti + 0.2), tti });
+      }
+      // 普通格擋：穩但耗體力
+      candidates.push({
+        kind: 'block',
+        score: (7 + threat.level * 4) * (staminaRatio > 0.3 ? 1 : 0.3) * st.patience,
+        until: now + Math.max(0.15, tti + 0.15),
+      });
+      // 翻滾：對重招最有效
+      const heavy = threat.move && threat.move.damageMul > 1.2;
+      candidates.push({
+        kind: 'dodge',
+        score: (heavy ? 12 : 6.5) * (me.stamina > 28 ? 1 : 0.15) *
+               (tti > 0.12 && tti < 0.55 ? 1 : 0.25) * (1 - st.pressure * 0.15),
+        until: now + DODGE_DURATION,
+      });
+      // 後撤到刀外
+      candidates.push({
+        kind: 'retreat',
+        score: 5.5 * st.patience * (tti > 0.18 ? 1 : 0.3),
+        until: now + 0.3,
+      });
+      // 搶攻：對手蓄力很慢的重招時可以打斷
+      if (threat.move && threat.timeToImpact > 0.28 && me.stamina > 30) {
+        candidates.push({ kind: 'interrupt', score: 8 * st.pressure * d.predict, until: now + 0.4 });
+      }
+    }
+
+    // ---- 進攻類 ----
+    const oppVulnerable = p.staggered || (p.actionKey && p.actionPhase > MOVES[p.actionKey]?.active[1]);
+    if (oppVulnerable) {
+      // 對手硬直 / 收招 -> 全力懲罰
+      candidates.push({ kind: 'punish', score: 22 * st.pressure, until: now + 0.5 });
+    }
+
+    if (!threat.incoming || threat.timeToImpact > 0.45) {
+      const atkScore = this.scoreAttack(p, dist, staminaRatio);
+      if (atkScore.best) {
+        candidates.push({
+          kind: 'attack', move: atkScore.best, score: atkScore.score, until: now + 0.5,
+        });
+      }
+      // 假動作：對手很愛擋就騙他
+      if (this.model.blockRate > 0.45 && me.stamina > 40 && dist < me.bestReach() + 0.4) {
+        candidates.push({ kind: 'feint', score: 9 * this.model.blockRate * d.predict * st.pressure, until: now + 0.7 });
+      }
+      // 盾擊破防
+      if (me.loadout.offhand.kind === 'shield' && this.model.blockRate > 0.5 && dist < 1.5) {
+        candidates.push({ kind: 'bash', score: 11 * this.model.blockRate, until: now + 0.5 });
+      }
+    }
+
+    // ---- 走位類 ----
+    const idealRange = me.bestReach() * st.preferRange;
+    const rangeErr = dist - idealRange;
+    candidates.push({
+      kind: rangeErr > 0.35 ? 'approach' : (rangeErr < -0.7 ? 'retreat' : 'circle'),
+      score: 4.2 + Math.abs(rangeErr) * 1.6,
+      until: now + 0.22,
+    });
+
+    // 體力不夠就拉開回氣
+    if (staminaRatio < 0.28) {
+      candidates.push({ kind: 'recover', score: 13 * (1 - staminaRatio), until: now + 0.5 });
+    }
+    // 血量落後且對手強勢時更保守
+    if (hpRatio < 0.3 && this.model.aggression > 0.5) {
+      candidates.push({ kind: 'retreat', score: 6, until: now + 0.35 });
+    }
+
+    // 加上一點雜訊，避免行為完全機械化
+    for (const c of candidates) {
+      c.score *= 1 + (this.rng() - 0.5) * 2 * d.noise;
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    const chosen = candidates[0] || { kind: 'circle', until: now + 0.3 };
+    this.debug.intent = PLAN_LABELS[chosen.kind] || chosen.kind;
+    return chosen;
+  }
+
+  /**
+   * 對每個可用招式做一層 rollout：預期傷害 - 被反擊的風險。
+   */
+  scoreAttack(p, dist, staminaRatio) {
+    const me = this.fighter;
+    const d = this.difficulty;
+    const st = this.style;
+    const blockRate = this.model.blockRate;
+    const dodgeRate = this.model.dodgeRate;
+
+    let best = null, bestScore = -Infinity;
+
+    for (const key of me.loadout.weapon.moves) {
+      const move = MOVES[key];
+      if (!move) continue;
+      if (move.weapon === 'shield' && me.loadout.offhand.kind !== 'shield') continue;
+
+      const reach = moveReach(move, me.loadout);
+      const dur = moveDuration(move, me.loadout);
+      const cost = move.staminaCost * (2 - me.loadout.staminaMul);
+      if (me.stamina < cost) continue;
+
+      // 距離適配度：太遠打空、太近也會揮空
+      const windupTime = move.active[0] * dur;
+      // 出招期間雙方會靠近，把推進距離算進去
+      const closing = move.advance * 0.18;
+      const effDist = dist - closing;
+      const fit = 1 - clamp(Math.abs(effDist - reach * 0.85) / (reach * 0.7), 0, 1);
+      if (fit <= 0.02) continue;
+
+      // 預期傷害
+      const dmg = me.loadout.weapon.damage * move.damageMul;
+      // 對手擋下的機率（他愛擋 + 他現在正在擋）
+      const pBlock = clamp(blockRate * 0.8 + (p.blocking ? 0.5 : 0), 0, 0.95);
+      const pDodge = clamp(dodgeRate * 0.6, 0, 0.6);
+      const expected = dmg * fit * (1 - pBlock * 0.7) * (1 - pDodge * 0.8);
+
+      // 風險：招越慢，被對手趁隙反擊的機率越高
+      const oppThreatRate = this.model.attackImminence();
+      const risk = dur * (0.55 + oppThreatRate * 0.9) * 9 / st.riskTolerance;
+
+      // 重招在對手快出手時特別危險
+      const commitPenalty = move.damageMul > 1.2 ? oppThreatRate * 6 : 0;
+
+      let score = expected * 1.35 * st.pressure - risk - commitPenalty;
+      score *= (staminaRatio > 0.45 ? 1 : 0.6);
+
+      // 進攻慾望（難度越高越懂得找機會）
+      score += d.aggression * 3 * fit;
+
+      // 這招最近常被招架就少用
+      if (this.punishHistory && this.punishHistory[key]) score -= this.punishHistory[key] * 2.5;
+
+      if (score > bestScore) { bestScore = score; best = key; }
+    }
+    return { best, score: bestScore };
+  }
+
+  /** 攻擊已經送出後的處理：假動作取消、追擊。 */
+  handleOngoingAttack(inp, p, dist, threat) {
+    const me = this.fighter;
+    inp.block = false;
+    inp.moveX = inp.moveZ = 0;
+
+    // 假動作：對手已經舉盾就取消，等他放下再打
+    if (this.feintPending && me.action) {
+      const phase = me.actionPhase;
+      if (phase > this.feintPending.at) {
+        if (p.blocking || this.rng() < 0.7) {
+          me.feint();
+          this.plan = { kind: 'punishFeint', until: this.time + 0.45 };
+          this.debug.intent = '假動作騙招';
+        }
+        this.feintPending = null;
+      }
+      return;
+    }
+
+    // 已經出刃了就往前推一點，確保打得到
+    const phase = me.actionPhase;
+    const move = me.action.move;
+    if (phase < move.active[0] && dist > moveReach(move, me.loadout) * 0.8) {
+      const toX = p.x - me.x, toZ = p.z - me.z;
+      const len = Math.hypot(toX, toZ) || 1;
+      inp.moveX = toX / len; inp.moveZ = toZ / len;
+    }
+
+    // 蓄力階段發現對方要反擊 -> 取消保命
+    if (threat.incoming && threat.timeToImpact < 0.2 && phase < move.feintUntil
+        && this.rng() < this.difficulty.predict) {
+      me.feint();
+      this.debug.intent = '取消攻擊';
+    }
+  }
+
+  /** 把計畫轉成實際輸入。 */
+  executePlan(inp, p, dist, threat) {
+    const me = this.fighter;
+    const toX = p.x - me.x, toZ = p.z - me.z;
+    const len = Math.hypot(toX, toZ) || 1;
+    const fx = toX / len, fz = toZ / len;         // 朝向對手
+    const sx = -fz, sz = fx;                       // 側向
+
+    inp.moveX = 0; inp.moveZ = 0;
+    inp.block = false;
+    inp.dodge = false;
+    inp.attack = 0;
+
+    switch (this.plan.kind) {
+      case 'parry': {
+        // 精準時機舉盾：太早舉就變普通格擋了
+        const tti = threat.timeToImpact ?? this.plan.tti ?? 0.2;
+        const skill = this.difficulty.parrySkill;
+        const jitter = (this.rng() - 0.5) * 0.16 * (1 - skill);
+        if (tti + jitter <= PARRY_WINDOW * 0.9) inp.block = true;
+        else inp.moveX = -fx * 0.25, inp.moveZ = -fz * 0.25;
+        break;
+      }
+      case 'block':
+        inp.block = true;
+        inp.moveX = -fx * 0.15; inp.moveZ = -fz * 0.15;
+        break;
+      case 'dodge': {
+        // 往側後方翻，順便繞到側面
+        const dx = sx * this.strafeDir * 0.85 - fx * 0.5;
+        const dz = sz * this.strafeDir * 0.85 - fz * 0.5;
+        inp.moveX = dx; inp.moveZ = dz;
+        inp.dodge = true;
+        break;
+      }
+      case 'retreat':
+      case 'recover':
+        inp.moveX = -fx + sx * this.strafeDir * 0.5;
+        inp.moveZ = -fz + sz * this.strafeDir * 0.5;
+        inp.block = this.plan.kind === 'recover' ? false : (me.stamina > 25);
+        break;
+      case 'approach':
+        inp.moveX = fx; inp.moveZ = fz;
+        break;
+      case 'circle':
+        inp.moveX = sx * this.strafeDir + fx * 0.18;
+        inp.moveZ = sz * this.strafeDir + fz * 0.18;
+        break;
+      case 'punish':
+      case 'punishFeint': {
+        // 挑最快的招懲罰
+        const key = this.fastestUsableMove();
+        if (dist > moveReach(MOVES[key], me.loadout) * 0.85) {
+          inp.moveX = fx; inp.moveZ = fz;
+        }
+        if (dist < moveReach(MOVES[key], me.loadout) + 0.25 && this.commitCooldown <= 0) {
+          inp.attack = CODE_BY_ATTACK[key];
+          this.commitCooldown = 0.15;
+        }
+        break;
+      }
+      case 'interrupt': {
+        const key = this.fastestUsableMove();
+        inp.moveX = fx * 0.8; inp.moveZ = fz * 0.8;
+        if (dist < moveReach(MOVES[key], me.loadout) + 0.2 && this.commitCooldown <= 0) {
+          inp.attack = CODE_BY_ATTACK[key];
+          this.commitCooldown = 0.2;
+        }
+        break;
+      }
+      case 'bash':
+        if (dist > 1.3) { inp.moveX = fx; inp.moveZ = fz; }
+        else if (this.commitCooldown <= 0) {
+          inp.attack = CODE_BY_ATTACK.bash;
+          this.commitCooldown = 0.3;
+        }
+        break;
+      case 'feint': {
+        const key = this.plan.move || 'overhead';
+        if (this.commitCooldown <= 0) {
+          inp.attack = CODE_BY_ATTACK[key] || CODE_BY_ATTACK.slashR;
+          this.feintPending = { at: (MOVES[key]?.feintUntil || 0.3) * 0.75 };
+          this.commitCooldown = 0.5;
+        }
+        break;
+      }
+      case 'attack': {
+        const key = this.plan.move;
+        const move = MOVES[key];
+        const reach = moveReach(move, me.loadout);
+        if (dist > reach * 0.95) {
+          inp.moveX = fx; inp.moveZ = fz;
+        }
+        if (dist <= reach + 0.15 && this.commitCooldown <= 0) {
+          inp.attack = CODE_BY_ATTACK[key];
+          this.commitCooldown = 0.18;
+        }
+        break;
+      }
+      default:
+        inp.moveX = sx * this.strafeDir * 0.6;
+        inp.moveZ = sz * this.strafeDir * 0.6;
+    }
+
+    // 場地邊界迴避：快撞牆就往場中心修正
+    const r = Math.hypot(me.x, me.z);
+    if (r > 9.6) {
+      const inX = -me.x / (r || 1), inZ = -me.z / (r || 1);
+      inp.moveX = inp.moveX * 0.4 + inX * 0.9;
+      inp.moveZ = inp.moveZ * 0.4 + inZ * 0.9;
+    }
+  }
+
+  fastestUsableMove() {
+    const me = this.fighter;
+    let best = 'slashL', bestDur = Infinity;
+    for (const key of me.loadout.weapon.moves) {
+      const move = MOVES[key];
+      if (!move) continue;
+      const cost = move.staminaCost * (2 - me.loadout.staminaMul);
+      if (me.stamina < cost) continue;
+      const dur = moveDuration(move, me.loadout) * move.active[0];
+      if (dur < bestDur) { bestDur = dur; best = key; }
+    }
+    return best;
+  }
+
+  /** 由外部在事件發生時回饋，讓 AI 學得更快。 */
+  notify(event) {
+    if (!event) return;
+    const me = this.fighter;
+    if (event.attacker === me.id) {
+      this.model.observeBlock(event.blocked || event.parried);
+      if (event.parried) {
+        this.punishHistory = this.punishHistory || {};
+        const k = me.action ? me.action.key : null;
+        if (k) this.punishHistory[k] = (this.punishHistory[k] || 0) + 1;
+        this.model.iGotPunished++;
+      }
+    } else if (event.defender === me.id) {
+      if (!event.blocked && !event.parried) this.model.punishedMe++;
+    }
+  }
+}
+
+const PLAN_LABELS = {
+  parry: '瞄準招架', block: '格擋', dodge: '翻滾迴避', retreat: '拉開距離',
+  recover: '回復體力', approach: '進逼', circle: '繞步', punish: '抓破綻反擊',
+  punishFeint: '騙招後反擊', interrupt: '搶攻打斷', bash: '盾擊破防',
+  feint: '假動作', attack: '進攻',
+};
+
+// ========================================================================
+// src/game/match.js
+// ========================================================================
+
+// 一場對戰：兩名戰士、回合流程、命中結算、特效與運鏡。
+// 不直接碰 DOM，畫面由 renderer 負責，UI 由 main.js 讀 match 的狀態。
+
+
+
+
+
+
+
+
+const MATCH_MODE = {
+  SOLO: 'solo',      // 單機：玩家 vs 超智能 NPC
+  HOST: 'host',      // 連線房主：本地跑完整模擬，權威端
+  GUEST: 'guest',    // 連線加入者：本地預測 + 依房主狀態校正
+  LOCAL: 'local',    // 同機雙人
+  DEMO: 'demo',      // NPC vs NPC（觀戰 / 測試）
+};
+
+const SPAWN_DISTANCE = 4.2;
+
+class Match {
+  constructor(opts = {}) {
+    this.mode = opts.mode || MATCH_MODE.SOLO;
+    this.bestOf = opts.bestOf || 3;
+    this.roundTime = opts.roundTime || 99;
+    this.rng = makeRng(opts.seed || 12345);
+
+    this.fighters = [
+      new Fighter(0, opts.loadouts[0], { name: opts.names?.[0] || '玩家', x: 0, z: -SPAWN_DISTANCE / 2, yaw: 0 }),
+      new Fighter(1, opts.loadouts[1], { name: opts.names?.[1] || '對手', x: 0, z: SPAWN_DISTANCE / 2, yaw: Math.PI }),
+    ];
+
+    this.ais = [null, null];
+    if (this.mode === MATCH_MODE.SOLO) {
+      this.ais[1] = new FighterAI(this.fighters[1], {
+        difficulty: opts.difficulty || 'hard',
+        style: opts.aiStyle || 'balanced',
+        seed: opts.seed || 0x5eed,
+      });
+    } else if (this.mode === MATCH_MODE.DEMO) {
+      this.ais[0] = new FighterAI(this.fighters[0], { difficulty: opts.difficulty || 'master', style: 'aggressive', seed: 7 });
+      this.ais[1] = new FighterAI(this.fighters[1], { difficulty: opts.difficulty || 'master', style: 'technical', seed: 13 });
+    }
+
+    this.inputs = [emptyInput(), emptyInput()];
+    this.state = ROUND_STATE.COUNTDOWN;
+    this.stateTimer = 3.0;
+    this.roundNo = 1;
+    this.wins = [0, 0];
+    this.timeLeft = this.roundTime;
+    this.winner = -1;
+    this.matchOver = false;
+
+    // 表現層
+    this.particles = [];
+    this.floaters = [];
+    this.shake = 0;
+    this.hitstop = 0;
+    this.slowmo = 1;
+    this.messages = [];
+    this.events = [];         // 這一幀產生的命中事件（給網路層轉發）
+    this.log = [];            // 戰鬥紀錄（畫在 UI 上）
+
+    this.camera = {
+      pos: { x: 0, y: 3.4, z: -8 },
+      target: { x: 0, y: 1.3, z: 0 },
+      yaw: 0, axis: 0, offset: 0.6, dist: 8.4, height: 3.4,
+    };
+    this.time = 0;
+    this.resetRound(true);
+  }
+
+  get player() { return this.fighters[0]; }
+  get enemy() { return this.fighters[1]; }
+
+  setDifficulty(key) {
+    for (const ai of this.ais) if (ai) ai.setDifficulty(key);
+  }
+
+  resetRound(initial = false) {
+    const a = this.fighters[0], b = this.fighters[1];
+    // 每回合換邊，避免場地優勢
+    const flip = this.roundNo % 2 === 0;
+    const half = SPAWN_DISTANCE / 2;
+    a.reset(0, flip ? half : -half, flip ? Math.PI : 0);
+    b.reset(0, flip ? -half : half, flip ? 0 : Math.PI);
+    a.updatePose(0, b);
+    b.updatePose(0, a);
+    this.timeLeft = this.roundTime;
+    this.state = ROUND_STATE.COUNTDOWN;
+    this.stateTimer = initial ? 3.0 : 2.4;
+    this.particles.length = 0;
+    this.floaters.length = 0;
+    this.winner = -1;
+    if (!initial) this.pushMessage(`第 ${this.roundNo} 回合`, '#ffd166');
+  }
+
+  pushMessage(text, color = '#fff', duration = 1.6) {
+    this.messages.push({ text, color, t: 0, duration });
+  }
+
+  pushLog(text) {
+    this.log.push({ text, t: this.time });
+    if (this.log.length > 6) this.log.shift();
+  }
+
+  /** 設定某一方這一幀的輸入（本地玩家 / 網路對手）。 */
+  setInput(index, input) {
+    Object.assign(this.inputs[index], input);
+  }
+
+  /**
+   * 主更新。
+   * @param dt 真實經過秒數
+   */
+  update(dt) {
+    this.time += dt;
+
+    // 命中頓格（hitstop）：大招命中時凍結幾格，打擊感的來源
+    if (this.hitstop > 0) {
+      this.hitstop -= dt;
+      dt *= 0.06;
+    }
+    dt *= this.slowmo;
+
+    this.events.length = 0;
+
+    const [a, b] = this.fighters;
+
+    // AI 思考
+    for (let i = 0; i < 2; i++) {
+      if (this.ais[i]) {
+        const foe = this.fighters[1 - i];
+        const inp = this.ais[i].think(foe, dt);
+        this.inputs[i] = inp;
+      }
+    }
+
+    switch (this.state) {
+      case ROUND_STATE.COUNTDOWN: {
+        this.stateTimer -= dt;
+        // 倒數時只播待機動作，不能動
+        for (let i = 0; i < 2; i++) {
+          this.fighters[i].update(emptyInput(), dt, this.fighters[1 - i]);
+        }
+        if (this.stateTimer <= 0) {
+          this.state = ROUND_STATE.FIGHTING;
+          this.pushMessage('開始！', '#7bd88f', 1.0);
+        }
+        break;
+      }
+      case ROUND_STATE.FIGHTING: {
+        this.timeLeft = Math.max(0, this.timeLeft - dt);
+        a.update(this.inputs[0], dt, b);
+        b.update(this.inputs[1], dt, a);
+
+        // 命中判定（雙方都要檢查，同一幀有可能互砍）
+        const e0 = checkAttackHit(a, b);
+        const e1 = checkAttackHit(b, a);
+        if (e0) this.onHit(e0, a, b);
+        if (e1) this.onHit(e1, b, a);
+
+        if (!a.alive || !b.alive || this.timeLeft <= 0) this.endRound();
+        break;
+      }
+      case ROUND_STATE.OVER: {
+        this.stateTimer -= dt;
+        for (let i = 0; i < 2; i++) {
+          this.fighters[i].update(emptyInput(), dt, this.fighters[1 - i]);
+        }
+        if (this.stateTimer <= 0 && !this.matchOver) {
+          this.roundNo++;
+          this.resetRound();
+        }
+        break;
+      }
+    }
+
+    this.updateEffects(dt);
+    this.updateCamera(dt);
+  }
+
+  /** 由網路層把房主算出來的事件塞進來播特效。 */
+  applyRemoteEvent(ev) {
+    this.spawnHitEffects(ev);
+  }
+
+  onHit(ev, attacker, defender) {
+    this.events.push(ev);
+    this.spawnHitEffects(ev);
+
+    // 讓 AI 學到這次交手的結果
+    for (const ai of this.ais) if (ai) ai.notify(ev);
+
+    if (ev.parried) {
+      this.pushLog(`${defender.name} 完美招架！`);
+      this.hitstop = 0.14;
+      this.shake = Math.max(this.shake, 0.5);
+    } else if (ev.guardBreak) {
+      this.pushLog(`${defender.name} 被破防！`);
+      this.hitstop = 0.12;
+      this.shake = Math.max(this.shake, 0.7);
+    } else if (ev.blocked) {
+      this.pushLog(`${defender.name} 擋下 ${ev.label}`);
+      this.hitstop = 0.05;
+      this.shake = Math.max(this.shake, 0.22);
+    } else {
+      this.pushLog(`${attacker.name} 命中 ${defender.name} 的${ev.label} -${Math.round(ev.damage)}`);
+      this.hitstop = ev.critical ? 0.13 : 0.07;
+      this.shake = Math.max(this.shake, ev.critical ? 0.85 : 0.45);
+    }
+    if (ev.armorBroken) this.pushLog(`${defender.name} 的裝備碎裂了`);
+    if (ev.lethal) {
+      this.hitstop = 0.25;
+      this.shake = 1.1;
+    }
+  }
+
+  spawnHitEffects(ev) {
+    const p = ev.point || { x: 0, y: 1, z: 0 };
+    const n = ev.parried ? 26 : ev.blocked ? 16 : 22;
+    const color = ev.parried ? '#ffe066' : ev.blocked ? '#9fd3ff' : (ev.critical ? '#ff6b6b' : '#ff9f43');
+    for (let i = 0; i < n; i++) {
+      const sp = 2.2 + this.rng() * 5.5;
+      const th = this.rng() * Math.PI * 2;
+      const ph = (this.rng() - 0.3) * Math.PI;
+      this.particles.push({
+        x: p.x, y: p.y, z: p.z,
+        vx: Math.cos(th) * Math.cos(ph) * sp,
+        vy: Math.sin(ph) * sp + 1.5,
+        vz: Math.sin(th) * Math.cos(ph) * sp,
+        life: 0.35 + this.rng() * 0.45,
+        age: 0,
+        r: 0.018 + this.rng() * 0.032,
+        color,
+      });
+    }
+    let text, tcolor;
+    if (ev.parried) { text = '招架!'; tcolor = '#ffe066'; }
+    else if (ev.guardBreak) { text = '破防!'; tcolor = '#ff6b6b'; }
+    else if (ev.blocked) { text = `擋下 ${Math.round(ev.damage)}`; tcolor = '#9fd3ff'; }
+    else if (ev.critical) { text = `爆擊 ${Math.round(ev.damage)}`; tcolor = '#ff6b6b'; }
+    else { text = `${Math.round(ev.damage)}`; tcolor = '#ffffff'; }
+    this.floaters.push({
+      x: p.x, y: p.y + 0.25, z: p.z, text, color: tcolor,
+      age: 0, life: 1.1, size: ev.critical || ev.parried ? 30 : 22,
+    });
+  }
+
+  endRound() {
+    const [a, b] = this.fighters;
+    let winner;
+    if (!a.alive && !b.alive) winner = -1;
+    else if (!a.alive) winner = 1;
+    else if (!b.alive) winner = 0;
+    else winner = a.health === b.health ? -1 : (a.health > b.health ? 0 : 1);
+
+    this.winner = winner;
+    if (winner >= 0) this.wins[winner]++;
+    this.state = ROUND_STATE.OVER;
+    this.stateTimer = 3.2;
+
+    if (winner < 0) this.pushMessage('平手', '#cbd5e1', 2.2);
+    else this.pushMessage(`${this.fighters[winner].name} 獲勝`, winner === 0 ? '#7bd88f' : '#ff6b6b', 2.2);
+
+    const needed = Math.ceil(this.bestOf / 2);
+    if (this.wins[0] >= needed || this.wins[1] >= needed) {
+      this.matchOver = true;
+      this.finalWinner = this.wins[0] >= needed ? 0 : 1;
+      this.stateTimer = 99;
+    }
+  }
+
+  updateEffects(dt) {
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.age += dt;
+      if (p.age >= p.life) { this.particles.splice(i, 1); continue; }
+      p.vy -= 16 * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      if (p.y < 0.02) { p.y = 0.02; p.vy *= -0.35; p.vx *= 0.6; p.vz *= 0.6; }
+    }
+    for (let i = this.floaters.length - 1; i >= 0; i--) {
+      const f = this.floaters[i];
+      f.age += dt;
+      if (f.age >= f.life) { this.floaters.splice(i, 1); continue; }
+      f.y += dt * 0.9;
+    }
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      this.messages[i].t += dt;
+      if (this.messages[i].t >= this.messages[i].duration) this.messages.splice(i, 1);
+    }
+    this.shake = Math.max(0, this.shake - dt * 2.6);
+  }
+
+  updateCamera(dt) {
+    const [a, b] = this.fighters;
+    const midX = (a.x + b.x) / 2, midZ = (a.z + b.z) / 2;
+    const sep = distXZ(a, b);
+
+    // 相機掛在「玩家 -> 對手」的反方向，讓玩家永遠在畫面近端
+    const anchor = this.mode === MATCH_MODE.GUEST ? b : a;
+    const other = anchor === a ? b : a;
+    const wantYaw = Math.atan2(other.x - anchor.x, other.z - anchor.z);
+
+    const cam = this.camera;
+    cam.axis = lerpAngle(cam.axis ?? wantYaw, wantYaw, Math.min(1, dt * 3.2));
+    const wantDist = clamp(7.0 + sep * 0.5, 7.0, 11.0);
+    cam.dist = lerp(cam.dist, wantDist, Math.min(1, dt * 2.4));
+    cam.height = lerp(cam.height, 3.2 + sep * 0.12, Math.min(1, dt * 2.4));
+
+    // 鏡頭看向兩人中點偏錨點一點
+    const tx = lerp(midX, anchor.x, 0.22);
+    const tz = lerp(midZ, anchor.z, 0.22);
+    cam.target.x = lerp(cam.target.x, tx, Math.min(1, dt * 5));
+    cam.target.z = lerp(cam.target.z, tz, Math.min(1, dt * 5));
+    cam.target.y = lerp(cam.target.y, 1.5 + (a.y + b.y) * 0.3, Math.min(1, dt * 5));
+
+    // 相機偏離「兩人連線」的角度。正後方會讓對手完全被自己擋住，
+    // 所以貼身時把鏡頭甩到接近側面，拉開後再收回背後視角。
+    // 目標是兩人在畫面上的橫向間距大約 SEPARATION 公尺。
+    const SEPARATION = 1.35;
+    const wantOffset = Math.asin(clamp(SEPARATION / Math.max(sep, 0.5), 0, 0.84));
+    cam.offset = lerp(cam.offset ?? wantOffset, clamp(wantOffset, 0.38, 1.0), Math.min(1, dt * 1.8));
+
+    const camAngle = cam.axis + Math.PI + cam.offset;
+    const shake = this.shake * this.shake;
+
+    cam.pos.x = cam.target.x + Math.sin(camAngle) * cam.dist + (this.rng() - 0.5) * shake * 0.9;
+    cam.pos.z = cam.target.z + Math.cos(camAngle) * cam.dist + (this.rng() - 0.5) * shake * 0.9;
+    cam.pos.y = cam.height + (this.rng() - 0.5) * shake * 0.7;
+
+    // 給操作用的「畫面前方」：實際從相機看向目標的水平角度，
+    // 這樣按 W 就是往畫面深處走，跟看到的一致。
+    cam.yaw = Math.atan2(cam.target.x - cam.pos.x, cam.target.z - cam.pos.z);
+  }
+
+  /** 把整場畫出來。 */
+  render(renderer) {
+    renderer.begin();
+    renderer.setCamera(this.camera.pos, this.camera.target);
+
+    drawArena(renderer);
+
+    for (const f of this.fighters) {
+      renderer.pushShadow(f.x, f.z, 0.55 - f.y * 0.08, clamp(0.36 - f.y * 0.05, 0.08, 0.4));
+      drawRig(f.rig, renderer, {
+        flash: f.flash,
+        alpha: 1,
+        capeSway: f.renderExtras?.capeSway || 0,
+      });
+    }
+
+    for (const p of this.particles) {
+      const k = 1 - p.age / p.life;
+      renderer.pushPoint(p, p.r * (0.4 + k), p.color, k);
+    }
+    for (const f of this.floaters) {
+      const k = 1 - f.age / f.life;
+      renderer.pushLabel({ x: f.x, y: f.y, z: f.z }, f.text, f.color,
+        f.size * (0.8 + k * 0.35), Math.min(1, k * 2.2));
+    }
+
+    renderer.end({
+      skyTop: '#060a14', skyMid: '#16243c', skyBottom: '#31212c',
+      groundSize: 60, groundStep: 3,
+    });
+  }
+}
+
+/** 競技場：圓形石台（貼地平面）+ 邊界火把柱（方塊）。 */
+function drawArena(renderer) {
+  const R = ARENA_RADIUS;
+
+  // 地板一律用貼地多邊形畫，不進畫家排序，永遠在角色之下
+  renderer.pushGroundPoly(Renderer.circlePoints(0, 0, R + 0.9, 48), '#232838');
+  renderer.pushGroundPoly(Renderer.circlePoints(0, 0, R, 48), '#454f66', { y: 0.001 });
+  renderer.pushGroundPoly(Renderer.circlePoints(0, 0, R - 0.7, 48), '#515c76', { y: 0.002 });
+  renderer.pushGroundPoly(Renderer.circlePoints(0, 0, 3.2, 40), '#5b6a88', { y: 0.003 });
+  renderer.pushGroundPoly(Renderer.circlePoints(0, 0, 2.9, 40), '#4d5771', { y: 0.004 });
+  renderer.pushGroundPoly(Renderer.circlePoints(0, 0, 1.35, 32), '#6d7ea1', { y: 0.005 });
+
+  // 兩條開場站位線
+  for (const sign of [-1, 1]) {
+    renderer.pushGroundPoly([
+      { x: -1.5, z: sign * 2.1 - 0.06 }, { x: 1.5, z: sign * 2.1 - 0.06 },
+      { x: 1.5, z: sign * 2.1 + 0.06 }, { x: -1.5, z: sign * 2.1 + 0.06 },
+    ], '#7e8fb5', { y: 0.006, alpha: 0.65 });
+  }
+
+  // 邊界火把柱：小方塊，畫家排序不會出問題
+  const m = new Float32Array(16);
+  const setT = (x, y, z) => {
+    m.fill(0); m[0] = m[5] = m[10] = m[15] = 1;
+    m[12] = x; m[13] = y; m[14] = z;
+  };
+  const posts = 14;
+  for (let i = 0; i < posts; i++) {
+    const ang = (i / posts) * Math.PI * 2;
+    const px = Math.sin(ang) * (R + 0.5);
+    const pz = Math.cos(ang) * (R + 0.5);
+    setT(px, 0.95, pz);
+    renderer.pushBox(m, { x: 0.30, y: 1.9, z: 0.30 }, '#59493c');
+    setT(px, 2.02, pz);
+    renderer.pushBox(m, { x: 0.24, y: 0.26, z: 0.24 }, '#ffb347', { emissive: true });
+    // 柱底的石墩，讓邊界更清楚
+    setT(px, 0.14, pz);
+    renderer.pushBox(m, { x: 0.52, y: 0.28, z: 0.52 }, '#3d4459');
+  }
+}
+
+// ========================================================================
+// src/net/transport.js
+// ========================================================================
+
+// 連線層。三種管道共用同一個介面，遊戲邏輯完全不用管底下是什麼：
+//
+//   send(bytes)            送出一則訊息（自動分片）
+//   onMessage = (bytes)=>{} 收到完整訊息
+//   onStatus  = (s,msg)=>{} 連線狀態變化
+//   close()
+//
+//  1. BluetoothTransport  —— Web Bluetooth GATT + Nordic UART Service。
+//     瀏覽器只能當 central（不能廣播成周邊裝置），所以兩支手機直連需要一顆
+//     BLE 中繼（tools/esp32-ble-relay 有現成韌體），雙方都連上同一顆中繼即可。
+//  2. ChannelTransport    —— 同一台機器兩個分頁／視窗，用來測試與雙人同機。
+//  3. WebRTCTransport     —— 手動貼上 offer/answer，不需要伺服器，同 WiFi 直連。
+
+
+
+const STATUS = {
+  IDLE: 'idle',
+  SCANNING: 'scanning',
+  CONNECTING: 'connecting',
+  CONNECTED: 'connected',
+  DISCONNECTED: 'disconnected',
+  ERROR: 'error',
+};
+
+class BaseTransport {
+  constructor() {
+    this.onMessage = () => {};
+    this.onStatus = () => {};
+    this.reasm = new Reassembler();
+    this.mtu = DEFAULT_MTU;
+    this.status = STATUS.IDLE;
+    this.stats = { sent: 0, received: 0, bytesSent: 0, bytesReceived: 0, drops: 0 };
+  }
+  setStatus(s, msg) {
+    this.status = s;
+    this.onStatus(s, msg);
+  }
+  /** 收到原始片段時呼叫。 */
+  handleRaw(bytes) {
+    this.stats.received++;
+    this.stats.bytesReceived += bytes.length;
+    const msg = this.reasm.push(bytes);
+    if (msg) this.onMessage(msg);
+  }
+  get connected() { return this.status === STATUS.CONNECTED; }
+}
+
+// ---------------------------------------------------------------------------
+// 1. 藍牙（Web Bluetooth / Nordic UART Service）
+// ---------------------------------------------------------------------------
+
+const NUS = {
+  service: '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+  rx: '6e400002-b5a3-f393-e0a9-e50e24dcca9e',   // 我方寫入（對方讀）
+  tx: '6e400003-b5a3-f393-e0a9-e50e24dcca9e',   // 通知（我方讀）
+};
+
+class BluetoothTransport extends BaseTransport {
+  constructor() {
+    super();
+    this.device = null;
+    this.rxChar = null;
+    this.queue = [];
+    this.flushing = false;
+  }
+
+  static get available() {
+    return typeof navigator !== 'undefined' && !!navigator.bluetooth;
+  }
+
+  async connect(opts = {}) {
+    if (!BluetoothTransport.available) {
+      this.setStatus(STATUS.ERROR, '這個瀏覽器不支援 Web Bluetooth（請用 Chrome / Edge，且需 HTTPS）');
+      throw new Error('Web Bluetooth unavailable');
+    }
+    this.setStatus(STATUS.SCANNING, '搜尋藍牙裝置中…');
+    try {
+      this.device = await navigator.bluetooth.requestDevice({
+        filters: opts.namePrefix
+          ? [{ namePrefix: opts.namePrefix }, { services: [NUS.service] }]
+          : [{ services: [NUS.service] }],
+        optionalServices: [NUS.service],
+      });
+    } catch (err) {
+      this.setStatus(STATUS.IDLE, '已取消選擇裝置');
+      throw err;
+    }
+
+    this.device.addEventListener('gattserverdisconnected', () => {
+      this.setStatus(STATUS.DISCONNECTED, '藍牙連線中斷');
+    });
+
+    this.setStatus(STATUS.CONNECTING, `連線到 ${this.device.name || '裝置'}…`);
+    const server = await this.device.gatt.connect();
+    const service = await server.getPrimaryService(NUS.service);
+    this.rxChar = await service.getCharacteristic(NUS.rx);
+    const txChar = await service.getCharacteristic(NUS.tx);
+
+    await txChar.startNotifications();
+    txChar.addEventListener('characteristicvaluechanged', (e) => {
+      const dv = e.target.value;
+      this.handleRaw(new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength));
+    });
+
+    // 部分平台能協商更大的 MTU，這裡保守用 20 保證相容
+    this.mtu = opts.mtu || DEFAULT_MTU;
+    this.setStatus(STATUS.CONNECTED, `已連線：${this.device.name || '藍牙裝置'}`);
+    return this;
+  }
+
+  send(bytes) {
+    if (!this.rxChar) return;
+    for (const part of fragment(bytes, this.mtu)) this.queue.push(part);
+    // 佇列太長代表塞車了，丟掉舊的狀態封包（丟包比延遲好）
+    if (this.queue.length > 24) {
+      this.stats.drops += this.queue.length - 12;
+      this.queue.splice(0, this.queue.length - 12);
+    }
+    this.flush();
+  }
+
+  async flush() {
+    if (this.flushing) return;
+    this.flushing = true;
+    while (this.queue.length) {
+      const part = this.queue.shift();
+      try {
+        // 無回應寫入省一半來回時間；不支援就退回一般寫入
+        if (this.rxChar.writeValueWithoutResponse) {
+          await this.rxChar.writeValueWithoutResponse(part);
+        } else {
+          await this.rxChar.writeValue(part);
+        }
+        this.stats.sent++;
+        this.stats.bytesSent += part.length;
+      } catch (err) {
+        this.stats.drops++;
+        if (!this.device?.gatt?.connected) {
+          this.setStatus(STATUS.DISCONNECTED, '藍牙連線中斷');
+          break;
+        }
+      }
+    }
+    this.flushing = false;
+  }
+
+  close() {
+    try { this.device?.gatt?.disconnect(); } catch { /* 已經斷了 */ }
+    this.setStatus(STATUS.IDLE, '已離線');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 2. 同機分頁（BroadcastChannel）
+// ---------------------------------------------------------------------------
+
+class ChannelTransport extends BaseTransport {
+  constructor(roomName = 'sword-duel') {
+    super();
+    this.roomName = roomName;
+    this.chan = null;
+    this.mtu = 4096;     // 同機不用分片
+  }
+
+  static get available() {
+    return typeof BroadcastChannel !== 'undefined';
+  }
+
+  async connect() {
+    this.setStatus(STATUS.CONNECTING, '等待另一個分頁…');
+    this.chan = new BroadcastChannel(this.roomName);
+    this.chan.onmessage = (e) => {
+      if (e.data instanceof ArrayBuffer) this.handleRaw(new Uint8Array(e.data));
+      else if (ArrayBuffer.isView(e.data)) this.handleRaw(new Uint8Array(e.data.buffer));
+    };
+    this.setStatus(STATUS.CONNECTED, `房間：${this.roomName}`);
+    return this;
+  }
+
+  send(bytes) {
+    if (!this.chan) return;
+    // BroadcastChannel 會複製 buffer，直接送整包
+    this.chan.postMessage(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+    this.stats.sent++;
+    this.stats.bytesSent += bytes.length;
+  }
+
+  close() {
+    this.chan?.close();
+    this.chan = null;
+    this.setStatus(STATUS.IDLE, '已關閉');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 3. WebRTC（手動交換連線碼，不需要伺服器）
+// ---------------------------------------------------------------------------
+
+class WebRTCTransport extends BaseTransport {
+  constructor() {
+    super();
+    this.pc = null;
+    this.dc = null;
+    this.mtu = 4096;
+  }
+
+  static get available() {
+    return typeof RTCPeerConnection !== 'undefined';
+  }
+
+  _setupChannel(dc) {
+    this.dc = dc;
+    dc.binaryType = 'arraybuffer';
+    dc.onopen = () => this.setStatus(STATUS.CONNECTED, 'WebRTC 已連線');
+    dc.onclose = () => this.setStatus(STATUS.DISCONNECTED, 'WebRTC 已中斷');
+    dc.onmessage = (e) => this.handleRaw(new Uint8Array(e.data));
+  }
+
+  _newPeer() {
+    // 只走本地網路候選，同一個 WiFi 下不需要 STUN
+    this.pc = new RTCPeerConnection({ iceServers: [] });
+    return this.pc;
+  }
+
+  /** 房主：產生邀請碼。 */
+  async createOffer() {
+    this.setStatus(STATUS.CONNECTING, '產生邀請碼…');
+    const pc = this._newPeer();
+    this._setupChannel(pc.createDataChannel('duel', {
+      ordered: false, maxRetransmits: 0,   // 即時對戰重傳沒意義
+    }));
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await this._waitIce(pc);
+    return compressSdp(pc.localDescription);
+  }
+
+  /** 加入者：吃下邀請碼，產生回應碼。 */
+  async acceptOffer(code) {
+    this.setStatus(STATUS.CONNECTING, '解析邀請碼…');
+    const pc = this._newPeer();
+    pc.ondatachannel = (e) => this._setupChannel(e.channel);
+    await pc.setRemoteDescription(expandSdp(code, 'offer'));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await this._waitIce(pc);
+    return compressSdp(pc.localDescription);
+  }
+
+  /** 房主：吃下回應碼，完成連線。 */
+  async acceptAnswer(code) {
+    await this.pc.setRemoteDescription(expandSdp(code, 'answer'));
+  }
+
+  _waitIce(pc) {
+    return new Promise((resolve) => {
+      if (pc.iceGatheringState === 'complete') return resolve();
+      const done = () => {
+        if (pc.iceGatheringState === 'complete') {
+          pc.removeEventListener('icegatheringstatechange', done);
+          resolve();
+        }
+      };
+      pc.addEventListener('icegatheringstatechange', done);
+      setTimeout(resolve, 2500);   // 收斂太慢就先用現有候選
+    });
+  }
+
+  send(bytes) {
+    if (this.dc?.readyState !== 'open') return;
+    try {
+      this.dc.send(bytes);
+      this.stats.sent++;
+      this.stats.bytesSent += bytes.length;
+    } catch { this.stats.drops++; }
+  }
+
+  close() {
+    try { this.dc?.close(); this.pc?.close(); } catch { /* 忽略 */ }
+    this.setStatus(STATUS.IDLE, '已關閉');
+  }
+}
+
+function compressSdp(desc) {
+  return btoa(JSON.stringify({ t: desc.type, s: desc.sdp }))
+    .replace(/\+/g, '-').replace(/\//g, '_');
+}
+
+function expandSdp(code, fallbackType) {
+  const json = JSON.parse(atob(code.trim().replace(/-/g, '+').replace(/_/g, '/')));
+  return { type: json.t || fallbackType, sdp: json.s };
+}
+
+// ---------------------------------------------------------------------------
+// 4. 本機迴圈（單機測試用，直接把兩端接在一起）
+// ---------------------------------------------------------------------------
+
+class LoopbackTransport extends BaseTransport {
+  constructor(latencyMs = 40, lossRate = 0) {
+    super();
+    this.latency = latencyMs;
+    this.loss = lossRate;
+    this.peer = null;
+    this.mtu = 4096;
+  }
+  static pair(latencyMs = 40, lossRate = 0) {
+    const a = new LoopbackTransport(latencyMs, lossRate);
+    const b = new LoopbackTransport(latencyMs, lossRate);
+    a.peer = b; b.peer = a;
+    a.setStatus(STATUS.CONNECTED, '本機迴圈');
+    b.setStatus(STATUS.CONNECTED, '本機迴圈');
+    return [a, b];
+  }
+  send(bytes) {
+    if (!this.peer) return;
+    if (Math.random() < this.loss) { this.stats.drops++; return; }
+    const copy = bytes.slice();
+    this.stats.sent++;
+    setTimeout(() => this.peer.handleRaw(copy), this.latency);
+  }
+  close() { this.setStatus(STATUS.IDLE, '已關閉'); }
+}
+
+// ========================================================================
+// src/net/netgame.js
+// ========================================================================
+
+// 連線對戰的同步層：把 transport 與 Match 接起來。
+//
+// 架構：房主權威（host authoritative）
+//   - 房主端跑完整模擬，是唯一的裁判（血量、命中、回合都以他為準）。
+//   - 加入者本地照樣完整模擬，讓自己的操作零延遲（本地預測），
+//     再依房主送來的快照做誤差修正；對手則用快照插值播放。
+//   這樣即使走 BLE（頻寬小、延遲高）也能玩得動。
+
+
+
+
+
+
+
+
+const STATE_RATE = 1 / 20;    // 房主每秒送 20 次狀態
+const INPUT_RATE = 1 / 30;    // 加入者每秒送 30 次輸入
+const HANDSHAKE_RATE = 0.5;
+
+/** performance.now()，Node 端測試也能用。 */
+const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+class NetSession {
+  /**
+   * @param transport 已連上的傳輸層
+   * @param isHost    true = 房主
+   * @param localCfg  本地配裝
+   */
+  constructor(transport, isHost, localCfg, opts = {}) {
+    this.transport = transport;
+    this.isHost = isHost;
+    this.localCfg = localCfg;
+    this.localName = opts.name || (isHost ? '房主' : '挑戰者');
+    this.remoteCfg = null;
+    this.remoteName = null;
+    this.match = null;
+    this.seed = opts.seed || ((Math.random() * 65535) | 0);
+
+    this.inputSeq = 0;
+    this.stateAcc = 0;
+    this.inputAcc = 0;
+    this.handshakeAcc = 0;
+    this.lastHandshakeReply = 0;
+    this.ready = false;
+    this.peerReady = false;
+    this.lastRemoteInput = emptyInput();
+    this.snapshot = null;
+    this.snapshotAge = 0;
+    this.pingMs = 0;
+    this.lastPingSent = 0;
+    this.onReady = () => {};
+    this.onStatus = () => {};
+    this.bestOf = opts.bestOf || 3;
+    this.roundTime = opts.roundTime || 99;
+
+    transport.onMessage = (bytes) => this.handleMessage(bytes);
+  }
+
+  /** 我在 match.fighters 裡的索引。 */
+  get localIndex() { return this.isHost ? 0 : 1; }
+  get remoteIndex() { return this.isHost ? 1 : 0; }
+
+  start() {
+    this.sendHandshake();
+  }
+
+  sendHandshake() {
+    this.transport.send(encodeHello(this.isHost ? 0 : 1, this.seed));
+    this.transport.send(encodeLoadout(this.localIndex, this.localCfg,
+      WEAPON_KEYS, OFFHAND_KEYS, this.localName));
+  }
+
+  handleMessage(bytes) {
+    const type = bytes[0];
+    switch (type) {
+      case MSG.HELLO: {
+        const h = decodeHello(bytes);
+        if (h.version !== PROTOCOL_VERSION) {
+          this.onStatus('error', `協定版本不符（對方 v${h.version}，我方 v${PROTOCOL_VERSION}），請更新到同一版`);
+          return;
+        }
+        // 房主的種子為準，確保兩邊的隨機一致
+        if (!this.isHost) this.seed = h.seed;
+        break;
+      }
+      case MSG.LOADOUT: {
+        const l = decodeLoadout(bytes, WEAPON_KEYS, OFFHAND_KEYS);
+        this.remoteCfg = l.config;
+        this.remoteName = l.name || (this.isHost ? '挑戰者' : '房主');
+        this.peerReady = true;
+        // 對方收到我們的握手了嗎？不知道 —— 我們自己的第一份握手可能在對方
+        // 連上之前就送出去了，也可能被 BLE 掉包。所以每次收到對方的配裝就回敬
+        // 一次自己的，直到對方也配對成功不再重送為止。
+        const now = nowMs();
+        if (now - this.lastHandshakeReply > 350) {
+          this.lastHandshakeReply = now;
+          this.sendHandshake();
+        }
+        this.tryCreateMatch();
+        break;
+      }
+      case MSG.INPUT: {
+        if (!this.isHost || !this.match) break;
+        decodeInput(bytes, this.lastRemoteInput);
+        this.match.setInput(this.remoteIndex, this.lastRemoteInput);
+        break;
+      }
+      case MSG.STATE: {
+        if (this.isHost || !this.match) break;
+        this.snapshot = decodeState(bytes, 2);
+        this.snapshotAge = 0;
+        break;
+      }
+      case MSG.EVENT: {
+        if (this.isHost || !this.match) break;
+        this.match.applyRemoteEvent(decodeEvent(bytes));
+        break;
+      }
+      case MSG.ROUND: {
+        if (this.isHost || !this.match) break;
+        this.applyRoundSync(decodeRound(bytes));
+        break;
+      }
+      case MSG.PING:
+        this.transport.send(new Uint8Array([MSG.PONG, bytes[1], bytes[2]]));
+        break;
+      case MSG.PONG: {
+        const sent = (bytes[1] << 8) | bytes[2];
+        const now = (nowMs() | 0) & 0xffff;
+        this.pingMs = (now - sent + 65536) % 65536;
+        break;
+      }
+      case MSG.BYE:
+        this.onStatus('disconnected', '對方離開了');
+        break;
+    }
+  }
+
+  tryCreateMatch() {
+    if (this.match || !this.remoteCfg) return;
+    const loadouts = this.isHost
+      ? [this.localCfg, this.remoteCfg]
+      : [this.remoteCfg, this.localCfg];
+    const names = this.isHost
+      ? [this.localName, this.remoteName]
+      : [this.remoteName, this.localName];
+
+    this.match = new Match({
+      mode: this.isHost ? MATCH_MODE.HOST : MATCH_MODE.GUEST,
+      loadouts, names,
+      bestOf: this.bestOf,
+      roundTime: this.roundTime,
+      seed: this.seed,
+    });
+    this.ready = true;
+    this.onReady(this.match);
+    this.onStatus('connected', `已配對：${this.remoteName}`);
+  }
+
+  /**
+   * 每幀呼叫。
+   * @param localInput 本地玩家這一幀的輸入
+   */
+  update(localInput, dt) {
+    if (!this.match) {
+      // 還沒配對成功就持續重送握手（BLE 可能掉包）
+      this.handshakeAcc += dt;
+      if (this.handshakeAcc >= HANDSHAKE_RATE) {
+        this.handshakeAcc = 0;
+        this.sendHandshake();
+      }
+      return;
+    }
+
+    this.match.setInput(this.localIndex, localInput);
+
+    if (this.isHost) {
+      this.match.update(dt);
+      // 廣播命中事件（先送，讓對方特效不落後）
+      for (const ev of this.match.events) this.transport.send(encodeEvent(ev));
+      this.stateAcc += dt;
+      if (this.stateAcc >= STATE_RATE) {
+        this.stateAcc = 0;
+        this.transport.send(encodeState(this.match.time * 60, this.match.fighters));
+        this.transport.send(encodeRound(
+          this.match.state, this.match.roundNo,
+          this.match.winner < 0 ? 255 : this.match.winner,
+          this.match.timeLeft));
+      }
+    } else {
+      // 加入者：先本地模擬（預測），再往房主的快照修正
+      this.match.update(dt);
+      this.snapshotAge += dt;
+      if (this.snapshot) this.reconcile(dt);
+
+      this.inputAcc += dt;
+      if (this.inputAcc >= INPUT_RATE) {
+        this.inputAcc = 0;
+        this.transport.send(encodeInput(this.inputSeq++, localInput));
+      }
+    }
+
+    // 每秒量一次延遲
+    if (this.match.time - this.lastPingSent > 1.0) {
+      this.lastPingSent = this.match.time;
+      const t = (nowMs() | 0) & 0xffff;
+      this.transport.send(new Uint8Array([MSG.PING, (t >> 8) & 255, t & 255]));
+    }
+  }
+
+  /** 用房主的快照修正本地狀態。 */
+  reconcile(dt) {
+    const snap = this.snapshot;
+    if (!snap) return;
+    const me = this.match.fighters[this.localIndex];
+    const foe = this.match.fighters[this.remoteIndex];
+    const sMe = snap.fighters[this.localIndex];
+    const sFoe = snap.fighters[this.remoteIndex];
+    if (!sMe || !sFoe) return;
+
+    // --- 自己：位置做軟修正，數值直接聽房主的 ---
+    const err = Math.hypot(me.x - sMe.x, me.z - sMe.z);
+    if (err > 1.6) {
+      // 差太多代表預測完全跑掉了，直接拉回去
+      me.x = sMe.x; me.z = sMe.z;
+    } else if (err > 0.04) {
+      const k = Math.min(1, dt * 6);
+      me.x = lerp(me.x, sMe.x, k);
+      me.z = lerp(me.z, sMe.z, k);
+    }
+    me.health = sMe.health;
+    me.stamina = sMe.stamina;
+    if (sMe.dead && me.alive) me.health = 0;
+
+    // --- 對手：完全依快照播放 ---
+    const k = Math.min(1, dt * 14);
+    foe.x = lerp(foe.x, sFoe.x, k);
+    foe.z = lerp(foe.z, sFoe.z, k);
+    foe.yaw = lerpAngle(foe.yaw, sFoe.yaw, Math.min(1, dt * 12));
+    foe.health = sFoe.health;
+    foe.stamina = sFoe.stamina;
+    foe.blocking = sFoe.blocking;
+    if (sFoe.staggered && foe.stagger <= 0) foe.stagger = 0.25;
+    if (!sFoe.staggered) foe.stagger = Math.min(foe.stagger, 0.1);
+
+    applyRemoteAction(foe, sFoe);
+    applyRemoteDodge(foe, sFoe);
+  }
+
+  applyRoundSync(r) {
+    const m = this.match;
+    if (!m) return;
+    m.roundNo = r.roundNo;
+    m.timeLeft = r.timeLeft;
+    if (r.state !== m.state) {
+      // 回合狀態改變時同步過去，並補上本地的表現（倒數、勝負字幕）
+      if (r.state === ROUND_STATE.COUNTDOWN && m.state !== ROUND_STATE.COUNTDOWN) {
+        m.resetRound();
+      } else if (r.state === ROUND_STATE.OVER && m.state !== ROUND_STATE.OVER) {
+        m.winner = r.winner === 255 ? -1 : r.winner;
+        m.state = ROUND_STATE.OVER;
+        m.stateTimer = 3.2;
+        if (m.winner >= 0) {
+          m.wins[m.winner]++;
+          m.pushMessage(`${m.fighters[m.winner].name} 獲勝`,
+            m.winner === this.localIndex ? '#7bd88f' : '#ff6b6b', 2.2);
+        } else {
+          m.pushMessage('平手', '#cbd5e1', 2.2);
+        }
+      } else {
+        m.state = r.state;
+      }
+    }
+  }
+
+  close() {
+    try { this.transport.send(new Uint8Array([MSG.BYE])); } catch { /* 已離線 */ }
+    this.transport.close();
+  }
+}
+
+/** 把快照裡的招式狀態套到遠端角色身上，讓動作正確播放。 */
+function applyRemoteAction(f, snap) {
+  const key = snap.actionKey;
+  if (!key) {
+    // 對方已經收招了；本地還在播就讓它自然播完，避免動作被切斷抽動
+    if (f.action && f.actionPhase > 0.85) f.action = null;
+    return;
+  }
+  const move = MOVES[key];
+  if (!move) return;
+  const duration = moveDuration(move, f.loadout);
+  if (!f.action || f.action.key !== key) {
+    f.action = { key, move, elapsed: snap.actionPhase * duration, duration, hasHit: false, hitIds: new Set() };
+  } else {
+    // 已經在播同一招：往快照的相位靠攏，但不倒退（倒退會看起來在抖）
+    const target = snap.actionPhase * duration;
+    if (target > f.action.elapsed) {
+      f.action.elapsed = lerp(f.action.elapsed, target, 0.5);
+    }
+  }
+}
+
+function applyRemoteDodge(f, snap) {
+  if (snap.dodging && !f.dodge) {
+    const dx = -Math.sin(f.yaw), dz = -Math.cos(f.yaw);
+    f.dodge = { elapsed: 0, dirX: dx, dirZ: dz };
+  } else if (!snap.dodging && f.dodge && f.dodge.elapsed > 0.4) {
+    f.dodge = null;
+  }
+}
+
+/** 給 UI 用的連線狀態摘要。 */
+function sessionInfo(session) {
+  if (!session) return null;
+  const t = session.transport;
+  return {
+    role: session.isHost ? '房主' : '挑戰者',
+    status: t.status,
+    ping: session.pingMs,
+    sent: t.stats.sent,
+    received: t.stats.received,
+    drops: t.stats.drops,
+    remote: session.remoteName,
+  };
+}
+
+// ========================================================================
+// src/main.js
+// ========================================================================
+
+// 進入點：把選單、輸入、渲染與遊戲邏輯接起來。
+
+
+
+
+
+
+
+
+
+
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('view');
+const renderer = new Renderer(canvas);
+
+// ---------------------------------------------------------------------------
+// 全域狀態
+// ---------------------------------------------------------------------------
+
+const app = {
+  match: null,
+  session: null,
+  transport: null,
+  running: false,
+  paused: false,
+  lastTime: 0,
+  mode: 'solo',
+  showAiPanel: true,
+  transportKind: 'bluetooth',
+  netRole: 'host',
+  settings: {
+    difficulty: 'hard',
+    aiStyle: 'balanced',
+    enemyPreset: 'duelist',
+    bestOf: 3,
+    playerName: '玩家',
+  },
+  loadout: structuredClone(LOADOUT_PRESETS.knight),
+};
+
+// 讀回上次的設定
+try {
+  const saved = JSON.parse(localStorage.getItem('blade-duel') || 'null');
+  if (saved?.loadout) Object.assign(app.loadout, saved.loadout);
+  if (saved?.settings) Object.assign(app.settings, saved.settings);
+} catch { /* 存檔壞了就用預設 */ }
+
+function save() {
+  try {
+    localStorage.setItem('blade-duel', JSON.stringify({
+      loadout: app.loadout, settings: app.settings,
+    }));
+  } catch { /* 無痕模式等情況，存不了就算了 */ }
+}
+
+// ---------------------------------------------------------------------------
+// 畫布尺寸
+// ---------------------------------------------------------------------------
+
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  renderer.resize(window.innerWidth, window.innerHeight, dpr);
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+resize();
+
+const isTouch = window.matchMedia('(hover: none) and (pointer: coarse)').matches
+  || navigator.maxTouchPoints > 0;
+if (isTouch) document.body.classList.add('touch');
+
+// ---------------------------------------------------------------------------
+// 輸入
+// ---------------------------------------------------------------------------
+
+const keys = new Set();
+const pressedThisFrame = new Set();   // 這一幀新按下的鍵（攻擊只吃邊緣觸發）
+const touchState = { active: false, dx: 0, dz: 0, block: false, queued: 0, dodge: false };
+
+const KEY_ATTACK = {
+  KeyJ: 'slashR', KeyQ: 'slashL', KeyE: 'overhead', KeyF: 'thrust', KeyR: 'bash',
+};
+
+window.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  if (e.code === 'Escape') { togglePause(); return; }
+  // 選單開著的時候不要吃掉輸入框的按鍵
+  if (!app.running || app.paused) return;
+  if (!keys.has(e.code)) pressedThisFrame.add(e.code);
+  keys.add(e.code);
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+});
+window.addEventListener('keyup', (e) => keys.delete(e.code));
+window.addEventListener('blur', () => { keys.clear(); });
+
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('mousedown', (e) => {
+  if (!app.running || app.paused) return;
+  if (e.button === 0) pressedThisFrame.add('Mouse0');
+  if (e.button === 2) keys.add('Mouse2');
+  if (e.button === 1) pressedThisFrame.add('Mouse1');
+});
+window.addEventListener('mouseup', (e) => {
+  if (e.button === 2) keys.delete('Mouse2');
+});
+
+// --- 觸控搖桿 ---
+const stick = $('stick');
+const knob = $('stick-knob');
+let stickId = null, stickOrigin = { x: 0, y: 0 };
+
+stick.addEventListener('pointerdown', (e) => {
+  stickId = e.pointerId;
+  stick.setPointerCapture(e.pointerId);
+  const r = stick.getBoundingClientRect();
+  stickOrigin = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  updateStick(e);
+});
+stick.addEventListener('pointermove', (e) => {
+  if (e.pointerId === stickId) updateStick(e);
+});
+const endStick = (e) => {
+  if (e.pointerId !== stickId) return;
+  stickId = null;
+  touchState.dx = touchState.dz = 0;
+  knob.style.transform = '';
+};
+stick.addEventListener('pointerup', endStick);
+stick.addEventListener('pointercancel', endStick);
+
+function updateStick(e) {
+  const max = 48;
+  let dx = e.clientX - stickOrigin.x;
+  let dy = e.clientY - stickOrigin.y;
+  const len = Math.hypot(dx, dy);
+  if (len > max) { dx = dx / len * max; dy = dy / len * max; }
+  knob.style.transform = `translate(${dx}px, ${dy}px)`;
+  touchState.dx = dx / max;
+  touchState.dz = -dy / max;   // 螢幕往上 = 往前
+}
+
+for (const btn of document.querySelectorAll('.tb')) {
+  const act = btn.dataset.act;
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    btn.classList.add('on');
+    if (act === 'block') touchState.block = true;
+    else if (act === 'dodge') touchState.dodge = true;
+    else touchState.queued = CODE_BY_ATTACK[act] || 0;
+  });
+  const release = () => {
+    btn.classList.remove('on');
+    if (act === 'block') touchState.block = false;
+  };
+  btn.addEventListener('pointerup', release);
+  btn.addEventListener('pointercancel', release);
+  btn.addEventListener('pointerleave', release);
+}
+
+/** 組出這一幀的本地輸入（鍵盤 + 觸控合併）。 */
+function gatherInput() {
+  const inp = emptyInput();
+  let f = 0, r = 0;
+  if (keys.has('KeyW') || keys.has('ArrowUp')) f += 1;
+  if (keys.has('KeyS') || keys.has('ArrowDown')) f -= 1;
+  if (keys.has('KeyD') || keys.has('ArrowRight')) r += 1;
+  if (keys.has('KeyA') || keys.has('ArrowLeft')) r -= 1;
+  f += touchState.dz;
+  r += touchState.dx;
+
+  // 移動是相對鏡頭的：鏡頭永遠在玩家背後看向對手，所以 W 就是往對手走
+  const yaw = app.match ? app.match.camera.yaw : 0;
+  inp.moveX = f * Math.sin(yaw) + r * Math.cos(yaw);
+  inp.moveZ = f * Math.cos(yaw) - r * Math.sin(yaw);
+  const len = Math.hypot(inp.moveX, inp.moveZ);
+  if (len > 1) { inp.moveX /= len; inp.moveZ /= len; }
+
+  for (const [code, move] of Object.entries(KEY_ATTACK)) {
+    if (pressedThisFrame.has(code)) inp.attack = CODE_BY_ATTACK[move];
+  }
+  if (pressedThisFrame.has('Mouse0')) inp.attack = CODE_BY_ATTACK.slashR;
+  if (pressedThisFrame.has('Mouse1')) inp.attack = CODE_BY_ATTACK.overhead;
+  if (touchState.queued) { inp.attack = touchState.queued; touchState.queued = 0; }
+
+  inp.block = keys.has('KeyK') || keys.has('Mouse2') || touchState.block;
+  inp.dodge = pressedThisFrame.has('ShiftLeft') || pressedThisFrame.has('ShiftRight') || touchState.dodge;
+  inp.jump = pressedThisFrame.has('Space');
+
+  touchState.dodge = false;
+  pressedThisFrame.clear();
+  return inp;
+}
+
+// ---------------------------------------------------------------------------
+// 選單
+// ---------------------------------------------------------------------------
+
+const menu = $('menu');
+const hud = $('hud');
+
+function showPage(name) {
+  for (const p of document.querySelectorAll('.page')) {
+    p.classList.toggle('active', p.dataset.page === name);
+  }
+  menu.classList.remove('hidden');
+  menu.scrollTop = 0;
+}
+
+function hideMenu() {
+  menu.classList.add('hidden');
+}
+
+for (const el of document.querySelectorAll('[data-go]')) {
+  el.addEventListener('click', () => {
+    const to = el.dataset.go;
+    if (to === 'demo') { startDemo(false); return; }
+    showPage(to);
+  });
+}
+
+/** 產生一組單選 chip。 */
+function buildChips(container, items, getSelected, onSelect) {
+  container.innerHTML = '';
+  for (const item of items) {
+    const b = document.createElement('button');
+    b.className = 'chip';
+    b.innerHTML = item.sub ? `${item.label}<small>${item.sub}</small>` : item.label;
+    b.classList.toggle('on', item.key === getSelected());
+    b.addEventListener('click', () => {
+      onSelect(item.key);
+      for (const c of container.children) c.classList.remove('on');
+      b.classList.add('on');
+    });
+    container.appendChild(b);
+  }
+}
+
+// --- 單機設定 ---
+buildChips($('difficulty-chips'),
+  Object.entries(DIFFICULTIES).map(([key, d]) => ({
+    key, label: d.name, sub: `反應 ${Math.round(d.reaction * 1000)}ms`,
+  })),
+  () => app.settings.difficulty,
+  (k) => { app.settings.difficulty = k; updateDifficultyHint(); save(); });
+
+const DIFF_HINTS = {
+  rookie: '反應很慢、常常失誤，適合熟悉操作與招式。',
+  normal: '會格擋也會反擊，開始抓你的破綻。',
+  hard: '主動預判、懂得控制距離，招架成功率不低。',
+  master: '幾乎不失誤，會用假動作騙你的盾，體力管理精準。',
+  singular: '反應 100ms、全力建模你的習慣：你連續用同一招會被直接讀死，落後時還會自動加壓。',
+};
+function updateDifficultyHint() {
+  $('difficulty-hint').textContent = DIFF_HINTS[app.settings.difficulty] || '';
+}
+updateDifficultyHint();
+
+buildChips($('style-chips'),
+  Object.entries(STYLES).map(([key, s]) => ({ key, label: s.name })),
+  () => app.settings.aiStyle,
+  (k) => { app.settings.aiStyle = k; save(); });
+
+buildChips($('enemy-preset-chips'),
+  Object.entries(LOADOUT_PRESETS).map(([key, p]) => ({ key, label: p.name })),
+  () => app.settings.enemyPreset,
+  (k) => { app.settings.enemyPreset = k; save(); });
+
+buildChips($('bestof-chips'),
+  [{ key: 1, label: '單場定勝負' }, { key: 3, label: '三戰兩勝' }, { key: 5, label: '五戰三勝' }],
+  () => app.settings.bestOf,
+  (k) => { app.settings.bestOf = k; save(); });
+
+$('show-ai-panel').checked = app.showAiPanel;
+$('show-ai-panel').addEventListener('change', (e) => { app.showAiPanel = e.target.checked; });
+
+$('start-solo').addEventListener('click', startSolo);
+
+// ---------------------------------------------------------------------------
+// 裝備工坊
+// ---------------------------------------------------------------------------
+
+const nameInput = $('player-name');
+nameInput.value = app.settings.playerName;
+nameInput.addEventListener('input', () => {
+  app.settings.playerName = nameInput.value.trim() || '玩家';
+  save();
+});
+
+buildChips($('preset-chips'),
+  Object.entries(LOADOUT_PRESETS).map(([key, p]) => ({ key, label: p.name })),
+  () => null,
+  (k) => {
+    app.loadout = structuredClone(LOADOUT_PRESETS[k]);
+    renderLoadoutEditor();
+    save();
+  });
+
+function renderLoadoutEditor() {
+  buildChips($('weapon-chips'),
+    WEAPON_KEYS.map((key) => ({
+      key, label: WEAPONS[key].name,
+      sub: `傷${WEAPONS[key].damage} 長${WEAPONS[key].blade.length.toFixed(2)}m`,
+    })),
+    () => app.loadout.weapon,
+    (k) => { app.loadout.weapon = k; updateStats(); save(); });
+
+  buildChips($('offhand-chips'),
+    OFFHAND_KEYS.map((key) => ({
+      key, label: OFFHANDS[key].name,
+      sub: OFFHANDS[key].kind === 'shield' ? `擋${Math.round(OFFHANDS[key].block * 100)}%` : '靈活',
+    })),
+    () => app.loadout.offhand,
+    (k) => { app.loadout.offhand = k; updateStats(); save(); });
+
+  // 護甲逐件
+  const grid = $('armor-grid');
+  grid.innerHTML = '';
+  for (const [slot, spec] of Object.entries(ARMOR_SLOTS)) {
+    const row = document.createElement('div');
+    row.className = 'armor-row';
+    const label = document.createElement('label');
+    label.textContent = spec.name;
+    const chips = document.createElement('div');
+    chips.className = 'chips';
+    row.append(label, chips);
+    grid.appendChild(row);
+    buildChips(chips,
+      MATERIAL_KEYS.map((key) => ({ key, label: key === 'none' ? '無' : MATERIALS[key].name })),
+      () => app.loadout.armor[slot] || 'none',
+      (k) => {
+        if (k === 'none') delete app.loadout.armor[slot];
+        else app.loadout.armor[slot] = k;
+        updateStats(); save();
+      });
+  }
+
+  // 顏色
+  const colors = $('color-row');
+  colors.innerHTML = '';
+  for (const [key, label] of [['skin', '膚色'], ['shirt', '上衣'], ['pants', '褲子'], ['cape', '披風']]) {
+    const wrap = document.createElement('div');
+    wrap.className = 'color-item';
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.value = app.loadout.skin?.[key] || '#888888';
+    input.addEventListener('input', () => {
+      app.loadout.skin = app.loadout.skin || {};
+      app.loadout.skin[key] = input.value;
+      save();
+    });
+    const span = document.createElement('span');
+    span.textContent = label;
+    wrap.append(input, span);
+    colors.appendChild(wrap);
+  }
+
+  updateStats();
+}
+
+function updateStats() {
+  const l = buildLoadout(app.loadout);
+  const rows = [
+    ['攻擊力', clamp(l.ratingOffense / 40, 0, 1), l.ratingOffense],
+    ['防禦力', clamp(l.ratingDefense / 40, 0, 1), l.ratingDefense],
+    ['移動速度', clamp(l.moveMul, 0, 1.2) / 1.2, `${Math.round(l.moveMul * 100)}%`],
+    ['出招速度', clamp(l.attackSpeed, 0, 1.5) / 1.5, `${Math.round(l.attackSpeed * 100)}%`],
+    ['體力回復', clamp(l.staminaMul, 0, 1.2) / 1.2, `${Math.round(l.staminaMul * 100)}%`],
+    ['總重量', clamp(l.weight / 22, 0, 1), `${l.weight.toFixed(1)}kg`],
+  ];
+  $('stat-box').innerHTML = rows.map(([name, ratio, val]) => `
+    <div class="stat-row">
+      <span>${name}</span>
+      <div class="stat-meter${name === '總重量' ? ' warn' : ''}"><i style="width:${(ratio * 100).toFixed(0)}%"></i></div>
+      <b>${val}</b>
+    </div>`).join('') + `
+    <div class="stat-row" style="margin-top:10px">
+      <span>部位減傷</span>
+      <b style="flex:1;text-align:right;font-size:10px;color:var(--dim)">
+        頭 ${Math.round(l.partDefense.head * 100)}% ·
+        身 ${Math.round(l.partDefense.torso * 100)}% ·
+        臂 ${Math.round(l.partDefense.armR * 100)}% ·
+        腿 ${Math.round(l.partDefense.legR * 100)}%
+      </b>
+    </div>`;
+}
+renderLoadoutEditor();
+
+// ---------------------------------------------------------------------------
+// 連線設定
+// ---------------------------------------------------------------------------
+
+const TRANSPORTS = [
+  { key: 'bluetooth', label: '藍牙 BLE', check: () => BluetoothTransport.available },
+  { key: 'webrtc', label: '同網路直連', check: () => WebRTCTransport.available },
+  { key: 'channel', label: '同機雙分頁', check: () => ChannelTransport.available },
+];
+
+const TRANSPORT_HINTS = {
+  bluetooth:
+    '透過 Nordic UART Service 連上 BLE 裝置。瀏覽器只能當中央端（無法自己廣播），'
+    + '所以兩台裝置要對戰時，需要一顆 BLE 中繼把封包轉發過去 —— '
+    + 'tools/esp32-ble-relay 裡有現成的 ESP32 韌體，燒進去、兩邊都連上同一顆即可。'
+    + '需要 Chrome / Edge，且網頁要走 HTTPS 或 localhost。',
+  webrtc:
+    '不需要伺服器：房主產生邀請碼，用任何方式（訊息、AirDrop、口頭念）傳給對方，'
+    + '對方貼上後把回應碼傳回來即可。同一個 Wi-Fi 下延遲最低。',
+  channel:
+    '同一台裝置開兩個分頁或視窗，一邊選房主一邊選挑戰者，房間名稱填一樣。'
+    + '適合先熟悉連線流程，或兩個人擠同一台電腦。',
+};
+
+buildChips($('transport-chips'),
+  TRANSPORTS.map((t) => ({
+    key: t.key,
+    label: t.label,
+    sub: t.check() ? '可用' : '此瀏覽器不支援',
+  })),
+  () => app.transportKind,
+  (k) => { app.transportKind = k; updateTransportUI(); });
+
+buildChips($('role-chips'),
+  [{ key: 'host', label: '房主（當裁判）' }, { key: 'guest', label: '挑戰者' }],
+  () => app.netRole,
+  (k) => { app.netRole = k; updateTransportUI(); });
+
+function updateTransportUI() {
+  $('transport-hint').textContent = TRANSPORT_HINTS[app.transportKind];
+  $('webrtc-box').classList.toggle('hidden', app.transportKind !== 'webrtc');
+  $('channel-box').classList.toggle('hidden', app.transportKind !== 'channel');
+  $('connect-btn').classList.toggle('hidden', app.transportKind === 'webrtc');
+  if (app.transportKind === 'webrtc') {
+    $('gen-code').classList.toggle('hidden', app.netRole !== 'host');
+    $('code-label').textContent = app.netRole === 'host'
+      ? '1. 產生邀請碼，傳給對方' : '2. 把這個回應碼傳回給房主';
+    $('remote-label').textContent = app.netRole === 'host'
+      ? '2. 貼上對方回傳的回應碼' : '1. 貼上房主給你的邀請碼';
+  }
+}
+updateTransportUI();
+
+function setConnStatus(text, kind = '') {
+  const el = $('conn-status');
+  el.textContent = text;
+  el.className = 'conn-status' + (kind ? ' ' + kind : '');
+}
+
+$('connect-btn').addEventListener('click', async () => {
+  try {
+    let t;
+    if (app.transportKind === 'bluetooth') {
+      t = new BluetoothTransport();
+      t.onStatus = (s, msg) => setConnStatus(msg, s === STATUS.CONNECTED ? 'ok' : s === STATUS.ERROR ? 'err' : '');
+      await t.connect();
+    } else if (app.transportKind === 'channel') {
+      t = new ChannelTransport($('room-name').value.trim() || 'sword-duel');
+      t.onStatus = (s, msg) => setConnStatus(msg, s === STATUS.CONNECTED ? 'ok' : '');
+      await t.connect();
+    }
+    app.transport = t;
+    prepareSession();
+  } catch (err) {
+    setConnStatus(`連線失敗：${err.message}`, 'err');
+  }
+});
+
+$('gen-code').addEventListener('click', async () => {
+  try {
+    const t = new WebRTCTransport();
+    t.onStatus = (s, msg) => setConnStatus(msg, s === STATUS.CONNECTED ? 'ok' : '');
+    app.transport = t;
+    setConnStatus('正在收集網路候選…');
+    $('local-code').value = await t.createOffer();
+    setConnStatus('邀請碼已產生，傳給對方後等他的回應碼。');
+  } catch (err) {
+    setConnStatus(`產生失敗：${err.message}`, 'err');
+  }
+});
+
+$('apply-code').addEventListener('click', async () => {
+  const code = $('remote-code').value.trim();
+  if (!code) return setConnStatus('請先貼上代碼', 'err');
+  try {
+    if (app.netRole === 'host') {
+      if (!app.transport) return setConnStatus('請先產生邀請碼', 'err');
+      await app.transport.acceptAnswer(code);
+      setConnStatus('已送出，等待資料通道開啟…');
+    } else {
+      const t = new WebRTCTransport();
+      t.onStatus = (s, msg) => setConnStatus(msg, s === STATUS.CONNECTED ? 'ok' : '');
+      app.transport = t;
+      $('local-code').value = await t.acceptOffer(code);
+      setConnStatus('回應碼已產生，複製後傳回給房主。');
+    }
+    prepareSession();
+  } catch (err) {
+    setConnStatus(`代碼無效：${err.message}`, 'err');
+  }
+});
+
+$('copy-code').addEventListener('click', async () => {
+  const v = $('local-code').value;
+  if (!v) return;
+  try {
+    await navigator.clipboard.writeText(v);
+    setConnStatus('已複製到剪貼簿');
+  } catch {
+    $('local-code').select();
+    setConnStatus('請手動複製（已為你選取）');
+  }
+});
+
+function prepareSession() {
+  if (!app.transport || app.session) return;
+  const session = new NetSession(app.transport, app.netRole === 'host', app.loadout, {
+    name: app.settings.playerName,
+    bestOf: app.settings.bestOf,
+  });
+  session.onStatus = (s, msg) => setConnStatus(msg, s === 'connected' ? 'ok' : s === 'error' ? 'err' : '');
+  session.onReady = () => {
+    setConnStatus(`配對完成，對手：${session.remoteName}`, 'ok');
+    $('start-net').classList.remove('hidden');
+  };
+  app.session = session;
+  session.start();
+  // 沒有連上也持續重試握手
+  const pump = setInterval(() => {
+    if (!app.session) return clearInterval(pump);
+    if (app.session.match) return clearInterval(pump);
+    app.session.update(emptyInput(), 0.25);
+  }, 250);
+}
+
+$('start-net').addEventListener('click', () => {
+  if (!app.session?.match) return;
+  app.match = app.session.match;
+  app.mode = 'net';
+  app.attract = false;
+  enterGame();
+});
+
+// ---------------------------------------------------------------------------
+// 開場
+// ---------------------------------------------------------------------------
+
+function startSolo() {
+  app.session = null;
+  app.mode = 'solo';
+  app.attract = false;
+  app.match = new Match({
+    mode: MATCH_MODE.SOLO,
+    loadouts: [app.loadout, LOADOUT_PRESETS[app.settings.enemyPreset]],
+    names: [app.settings.playerName, `NPC · ${DIFFICULTIES[app.settings.difficulty].name}`],
+    difficulty: app.settings.difficulty,
+    aiStyle: app.settings.aiStyle,
+    bestOf: app.settings.bestOf,
+    seed: (Math.random() * 1e6) | 0,
+  });
+  enterGame();
+}
+
+function startDemo(attract = false) {
+  app.session = null;
+  app.mode = 'demo';
+  app.attract = attract;
+  app.match = new Match({
+    mode: MATCH_MODE.DEMO,
+    loadouts: [LOADOUT_PRESETS.champion, LOADOUT_PRESETS.netherlord],
+    names: ['鑽石鬥士', '獄髓領主'],
+    difficulty: 'singular',
+    bestOf: 5,
+    seed: (Math.random() * 1e6) | 0,
+  });
+  enterGame();
+}
+
+function enterGame() {
+  if (!app.attract) {
+    hideMenu();
+    hud.classList.remove('hidden');
+  }
+  app.running = !app.attract;
+  app.paused = false;
+  app.lastTime = performance.now();
+  $('ai-panel').classList.toggle('hidden', !(app.showAiPanel && app.match.ais.some(Boolean)));
+  $('net-panel').classList.toggle('hidden', app.mode !== 'net');
+  $('touch-layer').classList.toggle('hidden', app.mode === 'demo');
+  initHud();
+  if (!app.rafId) loop(performance.now());
+}
+
+function togglePause() {
+  if (!app.running) return;
+  app.paused = !app.paused;
+  if (app.paused) showPage('pause');
+  else { hideMenu(); app.lastTime = performance.now(); }
+}
+$('pause-btn').addEventListener('click', togglePause);
+$('resume-btn').addEventListener('click', togglePause);
+$('restart-btn').addEventListener('click', () => {
+  app.paused = false;
+  hideMenu();
+  if (app.mode === 'solo') startSolo();
+  else if (app.mode === 'demo') startDemo(false);
+  else { app.paused = false; hideMenu(); }
+});
+$('quit-btn').addEventListener('click', quitToMenu);
+$('result-home').addEventListener('click', quitToMenu);
+$('again-btn').addEventListener('click', () => {
+  if (app.mode === 'solo') startSolo();
+  else if (app.mode === 'demo') startDemo(false);
+  else quitToMenu();
+});
+
+function quitToMenu() {
+  app.running = false;
+  app.paused = false;
+  hud.classList.add('hidden');
+  startDemo(true);   // 回到選單就恢復背景對打
+  if (app.session) { app.session.close(); app.session = null; app.transport = null; }
+  showPage('home');
+}
+
+// ---------------------------------------------------------------------------
+// HUD
+// ---------------------------------------------------------------------------
+
+const hudCache = { hp: [100, 100], ghost: [100, 100], ghostTimer: [0, 0] };
+
+function initHud() {
+  const m = app.match;
+  for (let i = 0; i < 2; i++) {
+    const f = m.fighters[i];
+    $(`p${i}-name`).textContent = f.name;
+    $(`p${i}-gear`).textContent =
+      `${f.loadout.weapon.name}${f.loadout.offhand.kind === 'shield' ? ' + ' + f.loadout.offhand.name : ''}`;
+    hudCache.hp[i] = f.health;
+    hudCache.ghost[i] = f.health;
+    // 護甲耐久格
+    const armorEl = $(`p${i}-armor`);
+    armorEl.innerHTML = '';
+    for (const slot of Object.keys(ARMOR_SLOTS)) {
+      const piece = f.loadout.pieces[slot];
+      const span = document.createElement('span');
+      span.title = ARMOR_SLOTS[slot].name;
+      if (piece) {
+        span.style.color = piece.color;
+        span.innerHTML = '<i style="width:100%"></i>';
+        span.dataset.slot = slot;
+      } else {
+        span.style.opacity = '0.25';
+      }
+      armorEl.appendChild(span);
+    }
+  }
+  $('combat-log').innerHTML = '';
+}
+
+let lastLogLen = 0;
+
+function updateHud(dt) {
+  const m = app.match;
+  if (!m) return;
+
+  for (let i = 0; i < 2; i++) {
+    const f = m.fighters[i];
+    const hpPct = clamp(f.health / f.loadout.maxHealth, 0, 1) * 100;
+    const spPct = clamp(f.stamina / f.loadout.maxStamina, 0, 1) * 100;
+    const hpEl = $(`p${i}-hp`);
+    hpEl.style.width = hpPct + '%';
+    hpEl.classList.toggle('low', hpPct < 30);
+    const spEl = $(`p${i}-sp`);
+    spEl.style.width = spPct + '%';
+    spEl.classList.toggle('empty', spPct < 12);
+
+    // 殘影：受傷後停一下才追上去
+    if (hpPct < hudCache.ghost[i]) {
+      hudCache.ghostTimer[i] = 0.45;
+    } else {
+      hudCache.ghost[i] = hpPct;
+    }
+    if (hudCache.ghostTimer[i] > 0) {
+      hudCache.ghostTimer[i] -= dt;
+      if (hudCache.ghostTimer[i] <= 0) hudCache.ghost[i] = hpPct;
+    }
+    $(`p${i}-hp-ghost`).style.width = hudCache.ghost[i] + '%';
+
+    // 護甲耐久
+    const armorEl = $(`p${i}-armor`);
+    for (const span of armorEl.children) {
+      const slot = span.dataset.slot;
+      if (!slot) continue;
+      const piece = f.loadout.pieces[slot];
+      const bar = span.firstElementChild;
+      if (piece && bar) {
+        const pct = clamp(piece.durability / piece.maxDurability, 0, 1) * 100;
+        bar.style.width = pct + '%';
+        span.style.opacity = pct <= 0 ? '0.2' : '1';
+      }
+    }
+
+    // 圈圈計分
+    const pips = $(`pips-${i}`);
+    const need = Math.ceil(m.bestOf / 2);
+    if (pips.children.length !== need) {
+      pips.innerHTML = Array.from({ length: need }, () => '<i></i>').join('');
+    }
+    for (let k = 0; k < need; k++) {
+      pips.children[k].classList.toggle('on', k < m.wins[i]);
+    }
+  }
+
+  const timer = $('timer');
+  timer.textContent = Math.ceil(m.timeLeft);
+  timer.classList.toggle('urgent', m.timeLeft <= 10 && m.state === ROUND_STATE.FIGHTING);
+  $('round-label').textContent = `第 ${m.roundNo} 回合`;
+
+  // 中央大字
+  const msgEl = $('center-msg');
+  if (m.state === ROUND_STATE.COUNTDOWN && m.stateTimer > 0) {
+    const n = Math.ceil(m.stateTimer);
+    msgEl.textContent = n > 0 ? n : '';
+    msgEl.style.color = '#fff';
+    msgEl.style.opacity = String(1 - (Math.ceil(m.stateTimer) - m.stateTimer) * 0.5);
+  } else if (m.messages.length) {
+    const msg = m.messages[m.messages.length - 1];
+    msgEl.textContent = msg.text;
+    msgEl.style.color = msg.color;
+    msgEl.style.opacity = String(clamp(1 - (msg.t / msg.duration) ** 3, 0, 1));
+  } else {
+    msgEl.textContent = '';
+  }
+
+  // 戰鬥紀錄
+  if (m.log.length !== lastLogLen) {
+    lastLogLen = m.log.length;
+    $('combat-log').innerHTML = m.log.map((l) => `<div>${escapeHtml(l.text)}</div>`).join('');
+  }
+
+  // NPC 思考面板
+  const ai = m.ais[1] || m.ais[0];
+  if (ai && app.showAiPanel) {
+    $('ai-intent').textContent = ai.debug.intent || '—';
+    $('ai-threat').textContent = ai.debug.threat.toFixed(2);
+    const pk = ai.debug.predicted;
+    $('ai-predict').textContent = pk
+      ? `${MOVE_LABELS[pk] || pk} ${Math.round((ai.debug.confidence || 0) * 100)}%` : '觀察中';
+    $('ai-blockrate').textContent = `${Math.round(ai.model.blockRate * 100)}%`;
+    $('ai-reaction').textContent = `${Math.round(ai.reactionTime * 1000)}ms`;
+  }
+
+  // 連線面板
+  if (app.mode === 'net' && app.session) {
+    const t = app.session.transport;
+    $('net-kind').textContent = TRANSPORTS.find((x) => x.key === app.transportKind)?.label || '—';
+    $('net-role').textContent = app.session.isHost ? '房主' : '挑戰者';
+    $('net-ping').textContent = `${app.session.pingMs} ms`;
+    $('net-io').textContent = `${t.stats.received} / ${t.stats.sent}`;
+  }
+
+  // 結算
+  if (m.matchOver && app.running) {
+    showResult();
+  }
+}
+
+const MOVE_LABELS = {
+  slashR: '右橫斬', slashL: '左橫斬', overhead: '上段劈', thrust: '突刺', bash: '盾擊',
+};
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function showResult() {
+  const m = app.match;
+  app.running = false;
+  const meIdx = app.session && !app.session.isHost ? 1 : 0;
+  const won = m.finalWinner === meIdx;
+  const title = $('result-title');
+  if (app.mode === 'demo') {
+    title.textContent = `${m.fighters[m.finalWinner].name} 獲勝`;
+    title.className = '';
+  } else {
+    title.textContent = won ? '勝利' : '敗北';
+    title.className = won ? 'win' : 'lose';
+  }
+  const rows = [];
+  for (let i = 0; i < 2; i++) {
+    const f = m.fighters[i];
+    const s = f.stats;
+    rows.push(`<div class="result-row"><span>${escapeHtml(f.name)}</span><b>${m.wins[i]} 勝</b></div>`);
+    rows.push(`<div class="result-row"><span>　命中 / 爆頭</span><b>${s.hits} / ${s.headshots}</b></div>`);
+    rows.push(`<div class="result-row"><span>　格擋 / 招架</span><b>${s.blocked} / ${s.parries}</b></div>`);
+    rows.push(`<div class="result-row"><span>　造成傷害</span><b>${Math.round(s.damageDealt)}</b></div>`);
+  }
+  $('result-box').innerHTML = rows.join('');
+  showPage('result');
+}
+
+// ---------------------------------------------------------------------------
+// 主迴圈
+// ---------------------------------------------------------------------------
+
+function loop(now) {
+  app.rafId = requestAnimationFrame(loop);
+  const rawDt = (now - app.lastTime) / 1000;
+  app.lastTime = now;
+  // 分頁切回來時 dt 會爆掉，夾住避免物理穿模
+  const dt = clamp(rawDt, 0, 1 / 20);
+
+  if (!app.match) return;
+
+  if (app.attract) {
+    // 主選單背景的 NPC 對打
+    app.match.update(dt);
+    app.match.render(renderer);
+    return;
+  }
+
+  if (app.running && !app.paused) {
+    const input = gatherInput();
+    if (app.session) {
+      app.session.update(input, dt);
+    } else {
+      app.match.setInput(0, input);
+      app.match.update(dt);
+    }
+    updateHud(dt);
+  }
+
+  app.match.render(renderer);
+}
+
+// 讓瀏覽器主控台與自動化測試能檢查內部狀態
+window.__app = app;
+
+// 開場先跑一場 NPC 對打當選單背景
+startDemo(true);
+showPage('home');
+
+</script>
