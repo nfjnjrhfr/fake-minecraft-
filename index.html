@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f1a">
+<meta name="description" content="藍牙對戰的 3D 方塊劍鬥遊戲：完整肢體骨架、全套裝備，附超智能 NPC 單機訓練。">
+<title>方塊劍鬥 · Blocky Blade Duel</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>⚔️</text></svg>">
+</head>
+<body>
+
+<canvas id="view"></canvas>
+
+<!-- ===================== 遊戲中 HUD ===================== -->
+<div id="hud" class="hidden">
+  <div class="hud-top">
+    <div class="fighter-bar left">
+      <div class="fb-head">
+        <span class="fb-name" id="p0-name">玩家</span>
+        <span class="fb-gear" id="p0-gear"></span>
+      </div>
+      <div class="bar hp"><i id="p0-hp"></i><b id="p0-hp-ghost"></b></div>
+      <div class="bar sp"><i id="p0-sp"></i></div>
+      <div class="fb-armor" id="p0-armor"></div>
+    </div>
+
+    <div class="round-box">
+      <div class="round-pips" id="pips-0"></div>
+      <div class="round-timer" id="timer">99</div>
+      <div class="round-pips" id="pips-1"></div>
+      <div class="round-label" id="round-label">第 1 回合</div>
+    </div>
+
+    <div class="fighter-bar right">
+      <div class="fb-head">
+        <span class="fb-gear" id="p1-gear"></span>
+        <span class="fb-name" id="p1-name">對手</span>
+      </div>
+      <div class="bar hp"><i id="p1-hp"></i><b id="p1-hp-ghost"></b></div>
+      <div class="bar sp"><i id="p1-sp"></i></div>
+      <div class="fb-armor" id="p1-armor"></div>
+    </div>
+  </div>
+
+  <div class="center-msg" id="center-msg"></div>
+
+  <div class="hud-left">
+    <div class="combat-log" id="combat-log"></div>
+  </div>
+
+  <div class="hud-right">
+    <div class="ai-panel hidden" id="ai-panel">
+      <div class="ai-title">NPC 思考</div>
+      <div class="ai-row"><span>意圖</span><b id="ai-intent">—</b></div>
+      <div class="ai-row"><span>威脅</span><b id="ai-threat">0</b></div>
+      <div class="ai-row"><span>預判你下一招</span><b id="ai-predict">—</b></div>
+      <div class="ai-row"><span>你的格擋率</span><b id="ai-blockrate">—</b></div>
+      <div class="ai-row"><span>反應時間</span><b id="ai-reaction">—</b></div>
+    </div>
+    <div class="net-panel hidden" id="net-panel">
+      <div class="ai-title">連線</div>
+      <div class="ai-row"><span>管道</span><b id="net-kind">—</b></div>
+      <div class="ai-row"><span>身分</span><b id="net-role">—</b></div>
+      <div class="ai-row"><span>延遲</span><b id="net-ping">—</b></div>
+      <div class="ai-row"><span>收/送</span><b id="net-io">—</b></div>
+    </div>
+  </div>
+
+  <!-- 觸控操作 -->
+  <div class="touch-layer" id="touch-layer">
+    <div class="stick" id="stick"><i id="stick-knob"></i></div>
+    <div class="touch-buttons">
+      <button class="tb tb-block" data-act="block">擋</button>
+      <button class="tb tb-dodge" data-act="dodge">滾</button>
+      <button class="tb tb-thrust" data-act="thrust">刺</button>
+      <button class="tb tb-slash" data-act="slashR">斬</button>
+      <button class="tb tb-heavy" data-act="overhead">劈</button>
+      <button class="tb tb-alt" data-act="slashL">反</button>
+    </div>
+  </div>
+
+  <button class="icon-btn pause-btn" id="pause-btn" title="暫停">⏸</button>
+</div>
+
+<!-- ===================== 選單 ===================== -->
+<div id="menu">
+  <div class="menu-inner">
+
+    <!-- 標題頁 -->
+    <section class="page active" data-page="home">
+      <h1 class="logo">⚔ 方塊劍鬥</h1>
+      <p class="tagline">完整肢體骨架 · 全套裝備 · 藍牙對戰 · 超智能 NPC</p>
+      <div class="menu-grid">
+        <button class="big-btn primary" data-go="solo">
+          <span class="bb-icon">🤖</span>
+          <span class="bb-title">單機訓練</span>
+          <span class="bb-sub">跟會學你打法的超智能 NPC 對戰</span>
+        </button>
+        <button class="big-btn" data-go="versus">
+          <span class="bb-icon">📶</span>
+          <span class="bb-title">藍牙 / 連線對戰</span>
+          <span class="bb-sub">與另一台裝置真人對決</span>
+        </button>
+        <button class="big-btn" data-go="loadout">
+          <span class="bb-icon">🛡</span>
+          <span class="bb-title">裝備工坊</span>
+          <span class="bb-sub">頭盔到靴子，逐件自訂</span>
+        </button>
+        <button class="big-btn" data-go="help">
+          <span class="bb-icon">🎮</span>
+          <span class="bb-title">操作說明</span>
+          <span class="bb-sub">鍵盤、滑鼠與觸控</span>
+        </button>
+      </div>
+      <button class="link-btn" data-go="demo">觀看 NPC 對打 ▸</button>
+    </section>
+
+    <!-- 單機 -->
+    <section class="page" data-page="solo">
+      <h2>單機訓練</h2>
+      <div class="field">
+        <label>NPC 強度</label>
+        <div class="chips" id="difficulty-chips"></div>
+        <p class="hint" id="difficulty-hint"></p>
+      </div>
+      <div class="field">
+        <label>NPC 打法性格</label>
+        <div class="chips" id="style-chips"></div>
+      </div>
+      <div class="field">
+        <label>NPC 配裝</label>
+        <div class="chips" id="enemy-preset-chips"></div>
+      </div>
+      <div class="field">
+        <label>賽制</label>
+        <div class="chips" id="bestof-chips"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="show-ai-panel" checked> 顯示 NPC 思考面板</label>
+      <div class="row-btns">
+        <button class="btn ghost" data-go="home">返回</button>
+        <button class="btn primary" id="start-solo">開始對戰</button>
+      </div>
+    </section>
+
+    <!-- 連線 -->
+    <section class="page" data-page="versus">
+      <h2>藍牙 / 連線對戰</h2>
+      <div class="field">
+        <label>連線方式</label>
+        <div class="chips" id="transport-chips"></div>
+        <p class="hint" id="transport-hint"></p>
+      </div>
+
+      <div class="field" id="role-field">
+        <label>身分</label>
+        <div class="chips" id="role-chips"></div>
+      </div>
+
+      <div id="webrtc-box" class="hidden">
+        <div class="field">
+          <label id="code-label">1. 產生邀請碼，傳給對方</label>
+          <textarea id="local-code" readonly placeholder="按下方按鈕產生"></textarea>
+          <button class="btn small" id="copy-code">複製</button>
+          <button class="btn small" id="gen-code">產生邀請碼</button>
+        </div>
+        <div class="field">
+          <label id="remote-label">2. 貼上對方給你的代碼</label>
+          <textarea id="remote-code" placeholder="貼在這裡"></textarea>
+          <button class="btn small" id="apply-code">送出</button>
+        </div>
+      </div>
+
+      <div id="channel-box" class="hidden">
+        <div class="field">
+          <label>房間名稱（兩邊要一樣）</label>
+          <input type="text" id="room-name" value="sword-duel">
+          <p class="hint">同一台裝置開兩個分頁／視窗，一邊當房主一邊當挑戰者。</p>
+        </div>
+      </div>
+
+      <div class="conn-status" id="conn-status">尚未連線</div>
+
+      <div class="row-btns">
+        <button class="btn ghost" data-go="home">返回</button>
+        <button class="btn" id="connect-btn">連線</button>
+        <button class="btn primary hidden" id="start-net">進入對戰</button>
+      </div>
+    </section>
+
+    <!-- 裝備 -->
+    <section class="page wide" data-page="loadout">
+      <h2>裝備工坊</h2>
+      <div class="loadout-wrap">
+        <div class="loadout-col">
+          <div class="field">
+            <label>快速套裝</label>
+            <div class="chips" id="preset-chips"></div>
+          </div>
+          <div class="field">
+            <label>你的名字</label>
+            <input type="text" id="player-name" maxlength="12" value="玩家">
+          </div>
+          <div class="field">
+            <label>武器</label>
+            <div class="chips" id="weapon-chips"></div>
+          </div>
+          <div class="field">
+            <label>副手</label>
+            <div class="chips" id="offhand-chips"></div>
+          </div>
+          <div class="field">
+            <label>顏色</label>
+            <div class="color-row" id="color-row"></div>
+          </div>
+        </div>
+        <div class="loadout-col">
+          <div class="field">
+            <label>護甲（逐件選材質）</label>
+            <div class="armor-grid" id="armor-grid"></div>
+          </div>
+          <div class="stat-box" id="stat-box"></div>
+        </div>
+      </div>
+      <div class="row-btns">
+        <button class="btn ghost" data-go="home">返回</button>
+        <button class="btn primary" data-go="home">完成</button>
+      </div>
+    </section>
+
+    <!-- 說明 -->
+    <section class="page" data-page="help">
+      <h2>操作說明</h2>
+      <div class="help-grid">
+        <div>
+          <h3>鍵盤 / 滑鼠</h3>
+          <ul class="keylist">
+            <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>移動（相對鏡頭）</span></li>
+            <li><kbd>滑鼠左鍵</kbd><kbd>J</kbd><span>右橫斬</span></li>
+            <li><kbd>Q</kbd><span>左橫斬（回掃，較快）</span></li>
+            <li><kbd>E</kbd><span>上段劈（重、慢、破防高）</span></li>
+            <li><kbd>F</kbd><span>突刺（最遠、最快）</span></li>
+            <li><kbd>滑鼠右鍵</kbd><kbd>K</kbd><span>格擋（按住）</span></li>
+            <li><kbd>R</kbd><span>盾擊（破對手格擋）</span></li>
+            <li><kbd>Shift</kbd><span>翻滾（有無敵時間）</span></li>
+            <li><kbd>空白</kbd><span>跳躍</span></li>
+            <li><kbd>Esc</kbd><span>暫停 / 返回選單</span></li>
+          </ul>
+        </div>
+        <div>
+          <h3>戰鬥要訣</h3>
+          <ul class="tips">
+            <li><b>完美招架</b>：在對手砍中你的前 0.2 秒才舉盾，可以完全免傷並把他彈開，接著就是免費的反擊機會。</li>
+            <li><b>體力</b>：攻擊、格擋、翻滾都吃體力。體力被打光會直接破防，那一下會非常痛。</li>
+            <li><b>部位</b>：打頭傷害兩倍，四肢只有六成多。護甲是分部位計算的，沒戴頭盔就別把頭湊過去。</li>
+            <li><b>裝備耐久</b>：護甲被打會慢慢碎，碎掉之後那個部位就沒有保護了。</li>
+            <li><b>重量</b>：全套獄髓很耐打，但移動與出招都會變慢。輕裝靠翻滾與突刺一樣能贏。</li>
+            <li><b>假動作</b>：攻擊在蓄力階段可以取消（放開再按別的招），用來騙對方的格擋。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="row-btns">
+        <button class="btn primary" data-go="home">返回</button>
+      </div>
+    </section>
+
+    <!-- 暫停 -->
+    <section class="page" data-page="pause">
+      <h2>暫停</h2>
+      <div class="row-btns col">
+        <button class="btn primary" id="resume-btn">繼續</button>
+        <button class="btn" id="restart-btn">重新開始</button>
+        <button class="btn ghost" id="quit-btn">回到主選單</button>
+      </div>
+    </section>
+
+    <!-- 結算 -->
+    <section class="page" data-page="result">
+      <h2 id="result-title">勝利</h2>
+      <div class="result-box" id="result-box"></div>
+      <div class="row-btns">
+        <button class="btn" id="again-btn">再來一場</button>
+        <button class="btn ghost" id="result-home">回到主選單</button>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

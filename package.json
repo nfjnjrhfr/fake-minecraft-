@@ -1,0 +1,13 @@
+{
+  "name": "blocky-blade-duel",
+  "version": "1.0.0",
+  "description": "藍牙對戰的 3D 方塊劍鬥遊戲：完整肢體骨架、全套裝備，附會學習你打法的超智能 NPC。",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "node test/sim.test.mjs"
+  },
+  "keywords": ["game", "bluetooth", "web-bluetooth", "webrtc", "canvas", "3d", "fighting"],
+  "license": "MIT",
+  "private": true
+}
