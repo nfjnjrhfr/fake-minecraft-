@@ -28,6 +28,11 @@ LEAVE = "leave"      # {"room": str}
 LIST_ROOMS = "rooms"
 LIST_USERS = "users"  # {"room": str | None}
 QUIT = "quit"
+FRIEND_ADD = "friend_add"        # {"to": str}    送出好友邀請
+FRIEND_ACCEPT = "friend_accept"  # {"nick": str}  接受邀請
+FRIEND_DECLINE = "friend_decline"  # {"nick": str}
+FRIEND_REMOVE = "friend_remove"  # {"nick": str}  刪除好友
+LIST_FRIENDS = "friends"         # 查詢好友清單
 
 # --- 伺服器 -> 客戶端 -------------------------------------------------
 WELCOME = "welcome"  # {"nick": str, "room": str, "motd": str}
@@ -37,6 +42,8 @@ ROOM_LIST = "room_list"    # {"rooms": [{"name": str, "users": int}, ...]}
 USER_LIST = "user_list"    # {"room": str, "users": [str, ...]}
 HISTORY = "history"        # {"room": str, "messages": [message, ...]}
 BYE = "bye"                # {"text": str}
+FRIEND_LIST = "friend_list"    # {"friends": [{"nick", "online"}], "incoming": [...], "outgoing": [...]}
+FRIEND_EVENT = "friend_event"  # {"event": "request|accepted|declined|removed|online|offline", "nick": str}
 # CHAT / PRIVATE 兩種型別雙向共用，伺服器轉發時會補上 sender 與 ts。
 
 

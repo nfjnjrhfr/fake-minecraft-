@@ -97,8 +97,9 @@ class WebClient:
 class WebChatApp:
     """把 ChatServer 核心包成網頁應用。"""
 
-    def __init__(self) -> None:
-        self.core = ChatServer()  # 只用它的房間邏輯，不呼叫 start()
+    def __init__(self, friends_file: str | None = None) -> None:
+        # 只用 ChatServer 的房間／好友邏輯，不呼叫 start()
+        self.core = ChatServer(friends_file=friends_file)
         self._sessions: dict[str, WebClient] = {}
         self._lock = threading.Lock()
         self._reaper = threading.Thread(target=self._reap_loop, daemon=True,
@@ -291,8 +292,9 @@ class ChatRequestHandler(BaseHTTPRequestHandler):
         log.debug("%s %s", self.address_string(), fmt % args)
 
 
-def make_server(host: str, port: int) -> tuple[ThreadingHTTPServer, WebChatApp]:
-    app = WebChatApp()
+def make_server(host: str, port: int,
+                friends_file: str | None = None) -> tuple[ThreadingHTTPServer, WebChatApp]:
+    app = WebChatApp(friends_file)
     handler = type("BoundHandler", (ChatRequestHandler,), {"app": app})
     httpd = ThreadingHTTPServer((host, port), handler)
     httpd.daemon_threads = True
@@ -304,6 +306,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", default="0.0.0.0", help="監聽位址（預設 %(default)s）")
     parser.add_argument("--port", type=int, default=8000,
                         help="監聽埠號（預設 %(default)s）")
+    parser.add_argument("--friends-file", default="chatapp_friends.json",
+                        help="好友關係存檔（預設 %(default)s；傳空字串則不存檔）")
     parser.add_argument("--verbose", "-v", action="store_true", help="顯示除錯訊息")
     args = parser.parse_args(argv)
 
@@ -312,7 +316,8 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s [%(levelname)s] %(message)s",
         datefmt="%H:%M:%S",
     )
-    httpd, _ = make_server(args.host, args.port)
+    httpd, _ = make_server(args.host, args.port,
+                           friends_file=args.friends_file or None)
     log.info("網頁聊天室啟動：http://%s:%s/", *httpd.server_address[:2])
     try:
         httpd.serve_forever()

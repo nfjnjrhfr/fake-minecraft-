@@ -1,3 +1,5 @@
 __pycache__/
 *.py[cod]
 .venv/
+chatapp_friends.json
+chatapp_friends.tmp

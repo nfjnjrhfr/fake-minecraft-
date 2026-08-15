@@ -28,6 +28,11 @@ HELP_TEXT = """\
   /users [房間]         列出房間內的成員
   /msg <暱稱> <訊息>    傳私訊（別名：/w、/tell）
   /me <動作>            動作訊息，例如 /me 在喝咖啡
+  /friend <暱稱>        送出好友邀請
+  /friends              查看好友清單與邀請
+  /faccept <暱稱>       接受好友邀請
+  /fdecline <暱稱>      拒絕好友邀請
+  /fremove <暱稱>       刪除好友
   /nick                 顯示自己的暱稱
   /help                 顯示這份說明
   /quit                 離開聊天室
@@ -171,6 +176,36 @@ class ChatClient:
                     self.render(msg)
                 self._print(self.c.dim("--- 以上為歷史紀錄 ---"))
 
+        elif mtype == protocol.FRIEND_LIST:
+            friends = message.get("friends", [])
+            incoming = message.get("incoming", [])
+            outgoing = message.get("outgoing", [])
+            self._print(self.c.bold("好友清單："))
+            if not friends:
+                self._print(self.c.dim("  （還沒有好友，用 /friend <暱稱> 送出邀請）"))
+            for f in friends:
+                mark = self.c.green("●") if f.get("online") else self.c.dim("○")
+                self._print(f"  {mark} {f.get('nick')}")
+            if incoming:
+                self._print(self.c.yellow(
+                    f"  待回應的邀請：{', '.join(incoming)}（/faccept 或 /fdecline）"))
+            if outgoing:
+                self._print(self.c.dim(f"  已送出邀請：{', '.join(outgoing)}"))
+
+        elif mtype == protocol.FRIEND_EVENT:
+            event, nick = message.get("event"), message.get("nick", "?")
+            texts = {
+                "request": f"「{nick}」想加你為好友（/faccept {nick} 接受）",
+                "accepted": f"「{nick}」接受了你的好友邀請！",
+                "declined": f"「{nick}」婉拒了你的好友邀請",
+                "removed": f"「{nick}」將你從好友移除了",
+                "online": f"好友「{nick}」上線了",
+                "offline": f"好友「{nick}」下線了",
+            }
+            text = texts.get(str(event))
+            if text:
+                self._print(f"{stamp} {self.c.yellow('* ' + text)}")
+
         elif mtype == protocol.BYE:
             self._print(self.c.dim(str(message.get("text", "再見！"))))
 
@@ -235,6 +270,33 @@ class ChatClient:
             else:
                 self.send({"type": protocol.CHAT, "room": self.current_room,
                            "text": f"* {self.nick} {rest}"})
+
+        elif command in ("friend", "fadd"):
+            if not rest:
+                self._print(self.c.red("用法：/friend <暱稱>"))
+            else:
+                self.send({"type": protocol.FRIEND_ADD, "to": rest.split()[0]})
+
+        elif command == "friends":
+            self.send({"type": protocol.LIST_FRIENDS})
+
+        elif command == "faccept":
+            if not rest:
+                self._print(self.c.red("用法：/faccept <暱稱>"))
+            else:
+                self.send({"type": protocol.FRIEND_ACCEPT, "nick": rest.split()[0]})
+
+        elif command == "fdecline":
+            if not rest:
+                self._print(self.c.red("用法：/fdecline <暱稱>"))
+            else:
+                self.send({"type": protocol.FRIEND_DECLINE, "nick": rest.split()[0]})
+
+        elif command == "fremove":
+            if not rest:
+                self._print(self.c.red("用法：/fremove <暱稱>"))
+            else:
+                self.send({"type": protocol.FRIEND_REMOVE, "nick": rest.split()[0]})
 
         elif command == "nick":
             self._print(self.c.dim(f"你的暱稱是 {self.nick}，目前房間「{self.current_room}」"))

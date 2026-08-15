@@ -127,6 +127,48 @@
   }
   #users-panel li:hover { background: var(--bubble); }
   #users-panel li .hint { color: var(--muted); font-size: 12px; }
+  /* ---------- 好友面板 ---------- */
+  header .btn-badge { position: relative; }
+  header .btn-badge .dot {
+    position: absolute; top: -3px; right: -3px; width: 9px; height: 9px;
+    border-radius: 50%; background: var(--error); display: none;
+  }
+  header .btn-badge.unread .dot { display: block; }
+
+  #friends-panel {
+    position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; z-index: 10;
+  }
+  #friends-panel.open { display: block; }
+  #friends-panel .sheet {
+    position: absolute; right: 0; top: 0; bottom: 0; width: min(320px, 88%);
+    background: var(--panel); border-left: 1px solid var(--line); padding: 16px;
+    overflow-y: auto;
+  }
+  #friends-panel h2 { font-size: 16px; margin-bottom: 12px; }
+  #friends-panel h3 { font-size: 13px; color: var(--muted); margin: 16px 0 6px; }
+  .friend-add-row { display: flex; gap: 6px; }
+  .friend-add-row input {
+    flex: 1; min-width: 0; padding: 9px 12px; font-size: 14px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); outline: none;
+  }
+  .friend-add-row button, .frow button {
+    border: 0; border-radius: 8px; padding: 8px 12px; font-size: 13px;
+    background: var(--accent); color: var(--accent-ink); cursor: pointer; white-space: nowrap;
+  }
+  .frow {
+    display: flex; align-items: center; gap: 8px; padding: 8px 6px;
+    border-radius: 8px; font-size: 14px;
+  }
+  .frow:hover { background: var(--bubble); }
+  .frow .fname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .frow .status-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #22c55e; flex: none;
+  }
+  .frow .status-dot.off { background: var(--muted); opacity: .5; }
+  .frow button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  .frow button.danger { background: transparent; color: var(--error); border: 1px solid var(--line); }
+  .fempty { color: var(--muted); font-size: 13px; padding: 4px 6px; }
+
   #conn-status {
     position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
     background: var(--error); color: #fff; font-size: 12px; padding: 4px 14px;
@@ -153,6 +195,7 @@
   <header>
     <div class="room-name" id="room-title">lobby</div>
     <span class="me" id="me-label"></span>
+    <button id="friends-btn" class="btn-badge">好友<span class="dot"></span></button>
     <button id="users-btn">成員</button>
     <button id="quit-btn">離開</button>
   </header>
@@ -171,6 +214,22 @@
   </div>
 </div>
 
+<div id="friends-panel">
+  <div class="sheet">
+    <h2>👥 好友</h2>
+    <div class="friend-add-row">
+      <input id="friend-add-input" placeholder="輸入暱稱加好友" maxlength="20" autocomplete="off">
+      <button id="friend-add-btn">送出邀請</button>
+    </div>
+    <h3 id="fi-title">交友邀請</h3>
+    <div id="friend-incoming"></div>
+    <h3>我的好友</h3>
+    <div id="friend-list"></div>
+    <h3 id="fo-title">已送出的邀請</h3>
+    <div id="friend-outgoing"></div>
+  </div>
+</div>
+
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
@@ -180,6 +239,8 @@ const state = {
   currentRoom: "lobby",
   rooms: new Map(),      // name -> {messages: [節點資料], unread: bool}
   users: [],             // 目前房間成員
+  friends: {friends: [], incoming: [], outgoing: []},
+  friendSet: new Set(),  // 好友暱稱（快速查詢用）
   es: null,
 };
 
@@ -187,6 +248,7 @@ const HELP = [
   "可用指令：",
   "/join 房間名 — 加入房間", "/leave — 離開目前房間",
   "/msg 暱稱 訊息 — 傳私訊（或點「成員」名單）",
+  "/friend 暱稱 — 加好友（或用右上角「好友」面板）",
   "/rooms — 房間列表", "/quit — 離開聊天室",
 ].join("\n");
 
@@ -271,10 +333,33 @@ function handle(m) {
         text: "房間列表：\n" + (lines.join("\n") || "（沒有房間）")});
       break;
     }
+    case "friend_list":
+      state.friends = {friends: m.friends, incoming: m.incoming, outgoing: m.outgoing};
+      state.friendSet = new Set(m.friends.map(f => f.nick));
+      renderFriends();
+      if ($("users-panel").classList.contains("open")) renderUsers();
+      break;
+    case "friend_event":
+      friendEvent(m);
+      break;
     case "bye":
       leaveToLogin(m.text || "已離開聊天室");
       break;
   }
+}
+
+function friendEvent(m) {
+  const texts = {
+    request: `「${m.nick}」想加你為好友，打開右上角「好友」面板回應`,
+    accepted: `「${m.nick}」接受了你的好友邀請，你們成為好友了！`,
+    declined: `「${m.nick}」婉拒了你的好友邀請`,
+    removed: `「${m.nick}」將你從好友移除了`,
+    online: `你的好友「${m.nick}」上線了`,
+    offline: `你的好友「${m.nick}」下線了`,
+  };
+  const text = texts[m.event];
+  if (text) pushMsg(state.currentRoom, {kind: "system", text, ts: m.ts});
+  // friend_list 會由伺服器跟著推過來，這裡不用再要
 }
 
 // ---------- 送出 ----------
@@ -317,6 +402,10 @@ function command(line) {
     }
     case "rooms": api({type: "rooms"}); break;
     case "users": api({type: "users", room: state.currentRoom}); break;
+    case "friend": case "fadd":
+      if (arg) api({type: "friend_add", to: arg.split(" ")[0]});
+      else pushMsg(state.currentRoom, {kind: "error", text: "用法：/friend 暱稱"});
+      break;
     case "quit": quit(); break;
     case "help": pushMsg(state.currentRoom, {kind: "system", text: HELP}); break;
     default:
@@ -451,12 +540,22 @@ function renderUsers() {
   ul.innerHTML = "";
   for (const u of state.users) {
     const li = document.createElement("li");
-    li.textContent = u === state.nick ? `${u}（我）` : u;
+    const isFriend = state.friendSet.has(u);
+    li.textContent = (u === state.nick ? `${u}（我）` : u) + (isFriend ? " ⭐" : "");
     if (u !== state.nick) {
       const hint = document.createElement("div");
       hint.className = "hint";
-      hint.textContent = "點一下傳私訊";
+      hint.textContent = isFriend ? "好友・點一下傳私訊" : "點一下傳私訊";
       li.appendChild(hint);
+      if (!isFriend) {
+        const add = fbtn("＋好友", "ghost", e => {
+          e.stopPropagation();
+          api({type: "friend_add", to: u});
+          $("users-panel").classList.remove("open");
+        });
+        add.style.cssText = "float:right;font-size:12px;padding:4px 8px;border-radius:6px";
+        li.prepend(add);
+      }
       li.onclick = () => {
         $("users-panel").classList.remove("open");
         $("text-input").value = `/msg ${u} `;
@@ -464,6 +563,92 @@ function renderUsers() {
       };
     }
     ul.appendChild(li);
+  }
+}
+
+// ---------- 好友 ----------
+$("friends-btn").onclick = () => {
+  api({type: "friends"});
+  $("friends-panel").classList.add("open");
+};
+$("friends-panel").onclick = e => {
+  if (e.target === $("friends-panel")) $("friends-panel").classList.remove("open");
+};
+$("friend-add-btn").onclick = () => {
+  const nick = $("friend-add-input").value.trim();
+  if (!nick) return;
+  $("friend-add-input").value = "";
+  api({type: "friend_add", to: nick});
+};
+$("friend-add-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); $("friend-add-btn").click(); }
+});
+
+function frow(...children) {
+  const div = document.createElement("div");
+  div.className = "frow";
+  div.append(...children);
+  return div;
+}
+function fbtn(label, cls, onclick) {
+  const b = document.createElement("button");
+  b.textContent = label;
+  if (cls) b.className = cls;
+  b.onclick = onclick;
+  return b;
+}
+function fname(text) {
+  const s = document.createElement("span");
+  s.className = "fname";
+  s.textContent = text;
+  return s;
+}
+
+function renderFriends() {
+  const {friends, incoming, outgoing} = state.friends;
+
+  // 右上角紅點：有待處理邀請時亮起
+  $("friends-btn").classList.toggle("unread", incoming.length > 0);
+  $("fi-title").textContent = `交友邀請（${incoming.length}）`;
+
+  const inbox = $("friend-incoming");
+  inbox.innerHTML = "";
+  if (!incoming.length) inbox.innerHTML = '<div class="fempty">目前沒有邀請</div>';
+  for (const nick of incoming) {
+    inbox.appendChild(frow(
+      fname(nick),
+      fbtn("接受", "", () => api({type: "friend_accept", nick})),
+      fbtn("拒絕", "ghost", () => api({type: "friend_decline", nick})),
+    ));
+  }
+
+  const list = $("friend-list");
+  list.innerHTML = "";
+  if (!friends.length) list.innerHTML = '<div class="fempty">還沒有好友，輸入暱稱送出邀請吧</div>';
+  for (const f of friends) {
+    const dot = document.createElement("span");
+    dot.className = "status-dot" + (f.online ? "" : " off");
+    dot.title = f.online ? "在線上" : "離線";
+    list.appendChild(frow(
+      dot,
+      fname(f.nick),
+      fbtn("私訊", "", () => {
+        $("friends-panel").classList.remove("open");
+        $("text-input").value = `/msg ${f.nick} `;
+        $("text-input").focus();
+      }),
+      fbtn("移除", "danger", () => {
+        if (confirm(`確定要把「${f.nick}」從好友移除嗎？`))
+          api({type: "friend_remove", nick: f.nick});
+      }),
+    ));
+  }
+
+  $("fo-title").style.display = outgoing.length ? "" : "none";
+  const out = $("friend-outgoing");
+  out.innerHTML = "";
+  for (const nick of outgoing) {
+    out.appendChild(frow(fname(nick + "（等待回應）")));
   }
 }
 
@@ -479,6 +664,10 @@ function leaveToLogin(text) {
   state.token = null;
   state.rooms = new Map();
   state.currentRoom = "lobby";
+  state.friends = {friends: [], incoming: [], outgoing: []};
+  state.friendSet = new Set();
+  $("friends-btn").classList.remove("unread");
+  $("friends-panel").classList.remove("open");
   $("chat-view").classList.remove("active");
   $("login-view").style.display = "flex";
   $("login-error").textContent = text || "";

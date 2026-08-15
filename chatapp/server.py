@@ -13,12 +13,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import re
 import socket
 import threading
 import time
 from collections import deque
+from pathlib import Path
 from typing import Any, Iterable
 
 from . import protocol
@@ -93,12 +95,140 @@ class Room:
         self.history: deque[dict[str, Any]] = deque(maxlen=HISTORY_SIZE)
 
 
+class FriendStore:
+    """好友關係與待處理邀請。
+
+    以「小寫暱稱」為鍵（與暱稱唯一性檢查一致），另存原始大小寫供顯示。
+    指定 ``path`` 時每次變動都會存成 JSON，重啟後好友關係不會消失。
+    """
+
+    def __init__(self, path: str | Path | None = None) -> None:
+        self._path = Path(path) if path else None
+        self._lock = threading.Lock()
+        self._friends: dict[str, set[str]] = {}
+        self._pending: dict[str, set[str]] = {}  # 收件者 -> 邀請者們
+        self._names: dict[str, str] = {}         # 小寫 -> 顯示名稱
+        self._load()
+
+    # -- 查詢 -----------------------------------------------------------
+    def display(self, nick_lower: str) -> str:
+        with self._lock:
+            return self._names.get(nick_lower, nick_lower)
+
+    def friends_of(self, nick: str) -> list[str]:
+        with self._lock:
+            return sorted(self._friends.get(nick.lower(), set()))
+
+    def incoming_of(self, nick: str) -> list[str]:
+        with self._lock:
+            return sorted(self._pending.get(nick.lower(), set()))
+
+    def outgoing_of(self, nick: str) -> list[str]:
+        me = nick.lower()
+        with self._lock:
+            return sorted(target for target, requesters in self._pending.items()
+                          if me in requesters)
+
+    def are_friends(self, a: str, b: str) -> bool:
+        with self._lock:
+            return b.lower() in self._friends.get(a.lower(), set())
+
+    # -- 變動 -----------------------------------------------------------
+    def remember(self, nick: str) -> None:
+        with self._lock:
+            self._names[nick.lower()] = nick
+            self._save()
+
+    def request(self, requester: str, target: str) -> str:
+        """送出邀請。回傳 sent / friends（互相邀請直接成為好友）/
+        already_friends / duplicate。"""
+        rl, tl = requester.lower(), target.lower()
+        with self._lock:
+            self._names.setdefault(rl, requester)
+            self._names.setdefault(tl, target)
+            if tl in self._friends.get(rl, set()):
+                return "already_friends"
+            if rl in self._pending.get(tl, set()):
+                return "duplicate"
+            if tl in self._pending.get(rl, set()):
+                # 對方早就邀請過我 → 視為互相同意
+                self._pending[rl].discard(tl)
+                self._make_friends(rl, tl)
+                self._save()
+                return "friends"
+            self._pending.setdefault(tl, set()).add(rl)
+            self._save()
+            return "sent"
+
+    def accept(self, nick: str, requester: str) -> bool:
+        nl, rl = nick.lower(), requester.lower()
+        with self._lock:
+            if rl not in self._pending.get(nl, set()):
+                return False
+            self._pending[nl].discard(rl)
+            self._make_friends(nl, rl)
+            self._save()
+            return True
+
+    def decline(self, nick: str, requester: str) -> bool:
+        nl, rl = nick.lower(), requester.lower()
+        with self._lock:
+            if rl not in self._pending.get(nl, set()):
+                return False
+            self._pending[nl].discard(rl)
+            self._save()
+            return True
+
+    def remove(self, a: str, b: str) -> bool:
+        al, bl = a.lower(), b.lower()
+        with self._lock:
+            if bl not in self._friends.get(al, set()):
+                return False
+            self._friends[al].discard(bl)
+            self._friends.get(bl, set()).discard(al)
+            self._save()
+            return True
+
+    def _make_friends(self, a: str, b: str) -> None:
+        self._friends.setdefault(a, set()).add(b)
+        self._friends.setdefault(b, set()).add(a)
+
+    # -- 存檔 -----------------------------------------------------------
+    def _load(self) -> None:
+        if self._path is None or not self._path.exists():
+            return
+        try:
+            data = json.loads(self._path.read_text("utf-8"))
+            self._friends = {k: set(v) for k, v in data.get("friends", {}).items()}
+            self._pending = {k: set(v) for k, v in data.get("pending", {}).items()}
+            self._names = dict(data.get("names", {}))
+        except (OSError, json.JSONDecodeError, TypeError) as exc:
+            log.warning("讀取好友檔失敗（%s），從空白開始", exc)
+
+    def _save(self) -> None:
+        if self._path is None:
+            return
+        data = {
+            "friends": {k: sorted(v) for k, v in self._friends.items() if v},
+            "pending": {k: sorted(v) for k, v in self._pending.items() if v},
+            "names": self._names,
+        }
+        try:
+            tmp = self._path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), "utf-8")
+            tmp.replace(self._path)
+        except OSError as exc:
+            log.warning("寫入好友檔失敗：%s", exc)
+
+
 class ChatServer:
     def __init__(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT,
-                 motd: str = "歡迎來到聊天室！輸入 /help 看指令。") -> None:
+                 motd: str = "歡迎來到聊天室！輸入 /help 看指令。",
+                 friends_file: str | Path | None = None) -> None:
         self.host = host
         self.port = port
         self.motd = motd
+        self.friends = FriendStore(friends_file)
         self._lock = threading.RLock()
         self._clients: set[Client] = set()
         self._nicks: dict[str, Client] = {}   # 小寫暱稱 -> client
@@ -214,6 +344,8 @@ class ChatServer:
                 "text": f"{client.name} 離開了聊天室",
                 "ts": _now(),
             })
+        if client.nick:
+            self._notify_friends(client, "offline")
         self._prune_empty_rooms()
         client.close()
         log.info("連線結束 %s", client.name)
@@ -241,6 +373,11 @@ class ChatServer:
             protocol.LEAVE: self._handle_leave,
             protocol.LIST_ROOMS: self._handle_list_rooms,
             protocol.LIST_USERS: self._handle_list_users,
+            protocol.FRIEND_ADD: self._handle_friend_add,
+            protocol.FRIEND_ACCEPT: self._handle_friend_accept,
+            protocol.FRIEND_DECLINE: self._handle_friend_decline,
+            protocol.FRIEND_REMOVE: self._handle_friend_remove,
+            protocol.LIST_FRIENDS: self._handle_list_friends,
         }
         handler = handlers.get(mtype)
         if handler is None:
@@ -266,6 +403,7 @@ class ChatServer:
                 return
             client.nick = nick
             self._nicks[nick.lower()] = client
+        self.friends.remember(nick)
         client.send({
             "type": protocol.WELCOME,
             "nick": nick,
@@ -274,6 +412,11 @@ class ChatServer:
             "ts": _now(),
         })
         self._join_room(client, DEFAULT_ROOM)
+        self._send_friend_list(client)
+        incoming = self.friends.incoming_of(nick)
+        if incoming:
+            client.system(f"你有 {len(incoming)} 則好友邀請等待處理")
+        self._notify_friends(client, "online")
 
     def _handle_chat(self, client: Client, message: dict[str, Any]) -> None:
         text = self._clean_text(client, message.get("text"))
@@ -388,6 +531,96 @@ class ChatServer:
                      "users": users, "ts": _now()})
 
     # ------------------------------------------------------------------
+    # 好友
+    # ------------------------------------------------------------------
+    def _handle_friend_add(self, client: Client, message: dict[str, Any]) -> None:
+        target = str(message.get("to", "")).strip()
+        assert client.nick is not None
+        if not NICK_RE.match(target):
+            client.error("暱稱不合法")
+            return
+        if target.lower() == client.nick.lower():
+            client.error("不能加自己為好友")
+            return
+        result = self.friends.request(client.nick, target)
+        display = self.friends.display(target.lower())
+        if result == "already_friends":
+            client.error(f"你和「{display}」已經是好友了")
+        elif result == "duplicate":
+            client.system(f"已經邀請過「{display}」了，等對方回應")
+        elif result == "friends":
+            client.system(f"「{display}」也邀請了你，你們直接成為好友！")
+            self._send_friend_list(client)
+            self._friend_event(target, "accepted", client.nick)
+        else:  # sent
+            online = self._friend_event(target, "request", client.nick)
+            note = "" if online else "（對方目前不在線上，登入後會看到邀請）"
+            client.system(f"已送出好友邀請給「{display}」{note}")
+            self._send_friend_list(client)
+
+    def _handle_friend_accept(self, client: Client, message: dict[str, Any]) -> None:
+        requester = str(message.get("nick", "")).strip()
+        assert client.nick is not None
+        if not self.friends.accept(client.nick, requester):
+            client.error(f"沒有來自「{requester}」的好友邀請")
+            return
+        display = self.friends.display(requester.lower())
+        client.system(f"你和「{display}」成為好友了！")
+        self._send_friend_list(client)
+        self._friend_event(requester, "accepted", client.nick)
+
+    def _handle_friend_decline(self, client: Client, message: dict[str, Any]) -> None:
+        requester = str(message.get("nick", "")).strip()
+        assert client.nick is not None
+        if not self.friends.decline(client.nick, requester):
+            client.error(f"沒有來自「{requester}」的好友邀請")
+            return
+        client.system(f"已拒絕「{self.friends.display(requester.lower())}」的邀請")
+        self._send_friend_list(client)
+        self._friend_event(requester, "declined", client.nick)
+
+    def _handle_friend_remove(self, client: Client, message: dict[str, Any]) -> None:
+        target = str(message.get("nick", "")).strip()
+        assert client.nick is not None
+        if not self.friends.remove(client.nick, target):
+            client.error(f"「{target}」不在你的好友名單裡")
+            return
+        client.system(f"已將「{self.friends.display(target.lower())}」從好友移除")
+        self._send_friend_list(client)
+        self._friend_event(target, "removed", client.nick)
+
+    def _handle_list_friends(self, client: Client, message: dict[str, Any]) -> None:
+        self._send_friend_list(client)
+
+    def _send_friend_list(self, client: Client) -> None:
+        assert client.nick is not None
+        with self._lock:
+            online = set(self._nicks)
+        friends = [{"nick": self.friends.display(f), "online": f in online}
+                   for f in self.friends.friends_of(client.nick)]
+        incoming = [self.friends.display(n) for n in self.friends.incoming_of(client.nick)]
+        outgoing = [self.friends.display(n) for n in self.friends.outgoing_of(client.nick)]
+        client.send({"type": protocol.FRIEND_LIST, "friends": friends,
+                     "incoming": incoming, "outgoing": outgoing, "ts": _now()})
+
+    def _friend_event(self, target_nick: str, event: str, from_nick: str) -> bool:
+        """通知 target（若在線上）好友相關事件；回傳對方是否在線。"""
+        with self._lock:
+            target = self._nicks.get(target_nick.lower())
+        if target is None:
+            return False
+        target.send({"type": protocol.FRIEND_EVENT, "event": event,
+                     "nick": from_nick, "ts": _now()})
+        self._send_friend_list(target)
+        return True
+
+    def _notify_friends(self, client: Client, event: str) -> None:
+        """向所有在線好友推播上線／下線。"""
+        assert client.nick is not None
+        for friend in self.friends.friends_of(client.nick):
+            self._friend_event(friend, event, client.nick)
+
+    # ------------------------------------------------------------------
     # 工具
     # ------------------------------------------------------------------
     def _clean_text(self, client: Client, raw: Any) -> str | None:
@@ -423,6 +656,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", default=DEFAULT_HOST, help="監聽位址（預設 %(default)s）")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT,
                         help="監聽埠號（預設 %(default)s）")
+    parser.add_argument("--friends-file", default="chatapp_friends.json",
+                        help="好友關係存檔（預設 %(default)s；傳空字串則不存檔）")
     parser.add_argument("--verbose", "-v", action="store_true", help="顯示除錯訊息")
     args = parser.parse_args(argv)
 
@@ -431,7 +666,8 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s [%(levelname)s] %(message)s",
         datefmt="%H:%M:%S",
     )
-    ChatServer(args.host, args.port).serve_forever()
+    ChatServer(args.host, args.port,
+               friends_file=args.friends_file or None).serve_forever()
     return 0
 
 
