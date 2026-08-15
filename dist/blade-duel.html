@@ -1,6 +1,45 @@
 <meta charset="utf-8">
 <title>方塊劍鬥</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.style.background = '#070a12';
+  if (document.body) document.body.style.background = '#070a12';
+  else addEventListener('DOMContentLoaded', function () {
+    document.body.style.background = '#070a12';
+  });
+
+  var shown = false;
+  function showFatal(msg) {
+    if (shown) return; shown = true;
+    var box = document.createElement('div');
+    box.style.cssText = 'position:fixed;inset:12px;z-index:99999;background:#12080a;'
+      + 'color:#ffd7d7;border:1px solid #a33;border-radius:12px;padding:18px;'
+      + 'font:14px/1.7 system-ui,sans-serif;overflow:auto;white-space:pre-wrap;word-break:break-all';
+    box.textContent = '遊戲啟動失敗。\n\n通常代表這個瀏覽器版本太舊，跑不動遊戲用到的語法。'
+      + '請改用最新版的 Chrome / Edge / Safari 再開一次這個連結。\n\n技術資訊（回報用）：\n' + msg
+      + '\n\nUA: ' + navigator.userAgent;
+    function mount(){ document.body.appendChild(box); }
+    if (document.body) mount(); else addEventListener('DOMContentLoaded', mount);
+  }
+  addEventListener('error', function (e) {
+    showFatal((e.message || '未知錯誤') + (e.filename ? '\n' + e.filename + ':' + e.lineno : ''));
+  }, true);
+  addEventListener('unhandledrejection', function (e) {
+    var r = e.reason || {};
+    showFatal((r.message || String(r)));
+  });
+  // 3 秒後遊戲還沒掛出「已啟動」的旗標，代表 module 連跑都沒跑
+  //（例如 module 語法不支援時，有些引擎連 error 事件都不會發）
+  setTimeout(function () {
+    if (!window.__bladeDuelBooted) {
+      showFatal('主程式沒有啟動（3 秒內無回應）。這個瀏覽器可能不支援 ES module，'
+        + '或安裝了會攔截腳本的擴充功能。');
+    }
+  }, 3000);
+})();
+</script>
 <style>
 /* 方塊劍鬥 UI。深色、遊戲感、手機也能玩。 */
 
@@ -5549,6 +5588,10 @@ function sessionInfo(session) {
 
 
 const $ = (id) => document.getElementById(id);
+
+/** structuredClone 的安全版：iOS 15.4 之前沒有這個 API，配裝是純 JSON 所以退回 JSON 拷貝即可。 */
+const deepClone = (o) => (typeof structuredClone === 'function'
+  ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
 const canvas = $('view');
 const renderer = new Renderer(canvas);
 
@@ -5574,7 +5617,7 @@ const app = {
     bestOf: 3,
     playerName: '玩家',
   },
-  loadout: structuredClone(LOADOUT_PRESETS.knight),
+  loadout: deepClone(LOADOUT_PRESETS.knight),
 };
 
 // 讀回上次的設定
@@ -5829,7 +5872,7 @@ buildChips($('preset-chips'),
   Object.entries(LOADOUT_PRESETS).map(([key, p]) => ({ key, label: p.name })),
   () => null,
   (k) => {
-    app.loadout = structuredClone(LOADOUT_PRESETS[k]);
+    app.loadout = deepClone(LOADOUT_PRESETS[k]);
     renderLoadoutEditor();
     save();
   });
@@ -6452,6 +6495,8 @@ function loop(now) {
 
 // 讓瀏覽器主控台與自動化測試能檢查內部狀態
 window.__app = app;
+// 告訴開機保險絲：主程式活著，不用顯示故障畫面
+window.__bladeDuelBooted = true;
 
 // 開場先跑一場 NPC 對打當選單背景
 startDemo(true);

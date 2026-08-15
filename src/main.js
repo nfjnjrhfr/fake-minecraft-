@@ -16,6 +16,10 @@ import { NetSession } from './net/netgame.js';
 import { clamp } from './core/math.js';
 
 const $ = (id) => document.getElementById(id);
+
+/** structuredClone 的安全版：iOS 15.4 之前沒有這個 API，配裝是純 JSON 所以退回 JSON 拷貝即可。 */
+const deepClone = (o) => (typeof structuredClone === 'function'
+  ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
 const canvas = $('view');
 const renderer = new Renderer(canvas);
 
@@ -41,7 +45,7 @@ const app = {
     bestOf: 3,
     playerName: '玩家',
   },
-  loadout: structuredClone(LOADOUT_PRESETS.knight),
+  loadout: deepClone(LOADOUT_PRESETS.knight),
 };
 
 // 讀回上次的設定
@@ -296,7 +300,7 @@ buildChips($('preset-chips'),
   Object.entries(LOADOUT_PRESETS).map(([key, p]) => ({ key, label: p.name })),
   () => null,
   (k) => {
-    app.loadout = structuredClone(LOADOUT_PRESETS[k]);
+    app.loadout = deepClone(LOADOUT_PRESETS[k]);
     renderLoadoutEditor();
     save();
   });
@@ -919,6 +923,8 @@ function loop(now) {
 
 // 讓瀏覽器主控台與自動化測試能檢查內部狀態
 window.__app = app;
+// 告訴開機保險絲：主程式活著，不用顯示故障畫面
+window.__bladeDuelBooted = true;
 
 // 開場先跑一場 NPC 對打當選單背景
 startDemo(true);
