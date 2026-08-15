@@ -1,0 +1,10 @@
+# Render.com 一鍵部署設定
+# 在 Render 儀表板選「New +」→「Blueprint」，指向這個 repo 即可。
+services:
+  - type: web
+    name: chatapp
+    runtime: python
+    plan: free
+    buildCommand: "echo 'no dependencies to install'"
+    startCommand: "python -m chatapp web --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /healthz

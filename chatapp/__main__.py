@@ -8,10 +8,12 @@ USAGE = """\
 用法：python -m chatapp <指令> [選項]
 
 指令：
-  server    啟動聊天伺服器
-  client    連線到聊天伺服器
+  server    啟動聊天伺服器（終端機版）
+  client    連線到聊天伺服器（終端機版）
+  web       啟動網頁版聊天室（瀏覽器打開就能用）
 
 範例：
+  python -m chatapp web --port 8000
   python -m chatapp server --port 5000
   python -m chatapp client --port 5000 --nick amy
 
@@ -32,6 +34,9 @@ def main(argv: list[str] | None = None) -> int:
     if command == "client":
         from .client import main as client_main
         return client_main(rest)
+    if command == "web":
+        from .web import main as web_main
+        return web_main(rest)
 
     print(f"沒有這個指令：{command}\n", file=sys.stderr)
     print(USAGE, file=sys.stderr)

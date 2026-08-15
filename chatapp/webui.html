@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>聊天室</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --ink: #1c1e21; --muted: #7a828e;
+    --line: #e3e6ea; --accent: #2563eb; --accent-ink: #ffffff;
+    --bubble: #e9edf2; --bubble-own: #2563eb; --bubble-own-ink: #ffffff;
+    --private: #7c3aed; --private-bg: #f3eeff; --error: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101216; --panel: #1a1d23; --ink: #e8eaed; --muted: #8b929c;
+      --line: #2a2e36; --accent: #3b82f6; --accent-ink: #ffffff;
+      --bubble: #262b33; --bubble-own: #2563eb; --bubble-own-ink: #ffffff;
+      --private: #a78bfa; --private-bg: #2a2340; --error: #f87171;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    font: 15px/1.5 system-ui, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg); color: var(--ink);
+  }
+
+  /* ---------- 登入畫面 ---------- */
+  #login-view {
+    height: 100%; display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .login-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 32px 28px; width: 100%; max-width: 360px; text-align: center;
+    box-shadow: 0 8px 30px rgba(0,0,0,.08);
+  }
+  .login-card h1 { font-size: 22px; margin-bottom: 4px; }
+  .login-card p { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .login-card input {
+    width: 100%; padding: 12px 14px; font-size: 16px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); outline: none;
+  }
+  .login-card input:focus { border-color: var(--accent); }
+  .login-card button {
+    width: 100%; margin-top: 12px; padding: 12px; font-size: 16px; border: 0;
+    border-radius: 10px; background: var(--accent); color: var(--accent-ink); cursor: pointer;
+  }
+  .login-card button:disabled { opacity: .6; }
+  #login-error { color: var(--error); font-size: 13px; margin-top: 10px; min-height: 1.2em; }
+
+  /* ---------- 聊天畫面 ---------- */
+  #chat-view { display: none; height: 100%; flex-direction: column; }
+  #chat-view.active { display: flex; }
+
+  header {
+    display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  header .room-name { font-weight: 700; font-size: 16px; flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header .me { color: var(--muted); font-size: 13px; }
+  header button {
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    border-radius: 8px; padding: 6px 10px; font-size: 13px; cursor: pointer;
+  }
+
+  #tabs {
+    display: flex; gap: 6px; padding: 8px 12px; overflow-x: auto;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  #tabs button {
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+    border-radius: 999px; padding: 4px 14px; font-size: 13px; cursor: pointer;
+    white-space: nowrap; position: relative;
+  }
+  #tabs button.current { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  #tabs button .badge {
+    position: absolute; top: -4px; right: -4px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--error); display: none;
+  }
+  #tabs button.unread .badge { display: block; }
+  #tabs .add-room { font-weight: 700; }
+
+  #messages { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 78%; display: flex; flex-direction: column; }
+  .msg .sender { font-size: 12px; color: var(--muted); margin: 0 6px 2px; }
+  .msg .bubble {
+    padding: 8px 12px; border-radius: 14px; background: var(--bubble);
+    word-break: break-word; white-space: pre-wrap;
+  }
+  .msg .time { font-size: 11px; color: var(--muted); margin: 2px 6px 0; }
+  .msg.own { align-self: flex-end; align-items: flex-end; }
+  .msg.own .bubble { background: var(--bubble-own); color: var(--bubble-own-ink); }
+  .msg.private .bubble { background: var(--private-bg); border: 1px dashed var(--private); }
+  .msg.private .sender { color: var(--private); }
+  .sysline { align-self: center; font-size: 12px; color: var(--muted); text-align: center; }
+  .sysline.err { color: var(--error); }
+
+  #composer {
+    display: flex; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    background: var(--panel); border-top: 1px solid var(--line);
+  }
+  #composer input {
+    flex: 1; padding: 11px 14px; font-size: 16px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); outline: none;
+  }
+  #composer input:focus { border-color: var(--accent); }
+  #composer button {
+    border: 0; border-radius: 999px; padding: 0 20px; font-size: 15px;
+    background: var(--accent); color: var(--accent-ink); cursor: pointer;
+  }
+
+  /* ---------- 成員側欄 ---------- */
+  #users-panel {
+    position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; z-index: 10;
+  }
+  #users-panel.open { display: block; }
+  #users-panel .sheet {
+    position: absolute; right: 0; top: 0; bottom: 0; width: min(280px, 80%);
+    background: var(--panel); border-left: 1px solid var(--line); padding: 16px;
+    overflow-y: auto;
+  }
+  #users-panel h2 { font-size: 15px; margin-bottom: 10px; }
+  #users-panel li {
+    list-style: none; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 14px;
+  }
+  #users-panel li:hover { background: var(--bubble); }
+  #users-panel li .hint { color: var(--muted); font-size: 12px; }
+  #conn-status {
+    position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
+    background: var(--error); color: #fff; font-size: 12px; padding: 4px 14px;
+    border-radius: 999px; display: none; z-index: 20;
+  }
+  #conn-status.show { display: block; }
+</style>
+</head>
+<body>
+
+<div id="conn-status">連線中斷，重新連線中…</div>
+
+<div id="login-view">
+  <form class="login-card" id="login-form">
+    <h1>💬 聊天室</h1>
+    <p>輸入暱稱即可加入，不用註冊</p>
+    <input id="nick-input" placeholder="你的暱稱" maxlength="20" autocomplete="off" autofocus>
+    <button id="login-btn" type="submit">進入聊天室</button>
+    <div id="login-error"></div>
+  </form>
+</div>
+
+<div id="chat-view">
+  <header>
+    <div class="room-name" id="room-title">lobby</div>
+    <span class="me" id="me-label"></span>
+    <button id="users-btn">成員</button>
+    <button id="quit-btn">離開</button>
+  </header>
+  <nav id="tabs"></nav>
+  <main id="messages"></main>
+  <form id="composer">
+    <input id="text-input" placeholder="輸入訊息…（/help 看指令）" autocomplete="off">
+    <button type="submit">送出</button>
+  </form>
+</div>
+
+<div id="users-panel">
+  <div class="sheet">
+    <h2 id="users-title">成員</h2>
+    <ul id="users-list"></ul>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+
+const state = {
+  token: null, nick: null,
+  currentRoom: "lobby",
+  rooms: new Map(),      // name -> {messages: [節點資料], unread: bool}
+  users: [],             // 目前房間成員
+  es: null,
+};
+
+const HELP = [
+  "可用指令：",
+  "/join 房間名 — 加入房間", "/leave — 離開目前房間",
+  "/msg 暱稱 訊息 — 傳私訊（或點「成員」名單）",
+  "/rooms — 房間列表", "/quit — 離開聊天室",
+].join("\n");
+
+// ---------- 登入 ----------
+$("login-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const nick = $("nick-input").value.trim();
+  if (!nick) return;
+  $("login-btn").disabled = true;
+  $("login-error").textContent = "";
+  try {
+    const res = await fetch("/api/login", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({nick}),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "登入失敗");
+    state.token = data.token;
+    state.nick = data.nick;
+    state.currentRoom = data.room || "lobby";
+    ensureRoom(state.currentRoom);
+    $("me-label").textContent = state.nick;
+    $("login-view").style.display = "none";
+    $("chat-view").classList.add("active");
+    openEvents();
+    renderTabs(); renderMessages();
+    $("text-input").focus();
+    api({type: "rooms"});
+  } catch (err) {
+    $("login-error").textContent = err.message;
+  } finally {
+    $("login-btn").disabled = false;
+  }
+});
+
+// ---------- SSE ----------
+function openEvents() {
+  if (state.es) state.es.close();
+  const es = new EventSource("/events?token=" + encodeURIComponent(state.token));
+  state.es = es;
+  es.onopen = () => $("conn-status").classList.remove("show");
+  es.onerror = () => $("conn-status").classList.add("show"); // EventSource 會自動重連
+  es.onmessage = e => handle(JSON.parse(e.data));
+}
+
+function handle(m) {
+  switch (m.type) {
+    case "chat": {
+      ensureRoom(m.room);
+      pushMsg(m.room, {kind: "chat", sender: m.sender, text: m.text, ts: m.ts});
+      break;
+    }
+    case "private": {
+      const room = state.currentRoom;
+      pushMsg(room, {kind: "private", sender: m.sender, to: m.to, text: m.text, ts: m.ts});
+      break;
+    }
+    case "system": {
+      const room = m.room || state.currentRoom;
+      ensureRoom(room);
+      pushMsg(room, {kind: "system", text: m.text, ts: m.ts});
+      if (m.room === state.currentRoom) api({type: "users", room: m.room});
+      break;
+    }
+    case "error":
+      pushMsg(state.currentRoom, {kind: "error", text: m.text, ts: m.ts});
+      break;
+    case "history": {
+      ensureRoom(m.room);
+      const roomState = state.rooms.get(m.room);
+      for (const h of m.messages)
+        roomState.messages.push({kind: "chat", sender: h.sender, text: h.text, ts: h.ts});
+      if (m.room === state.currentRoom) renderMessages();
+      break;
+    }
+    case "user_list":
+      if (m.room === state.currentRoom) { state.users = m.users; renderUsers(); }
+      break;
+    case "room_list": {
+      const lines = m.rooms.map(r => `${r.name}（${r.users} 人）`);
+      pushMsg(state.currentRoom, {kind: "system",
+        text: "房間列表：\n" + (lines.join("\n") || "（沒有房間）")});
+      break;
+    }
+    case "bye":
+      leaveToLogin(m.text || "已離開聊天室");
+      break;
+  }
+}
+
+// ---------- 送出 ----------
+$("composer").addEventListener("submit", e => {
+  e.preventDefault();
+  const input = $("text-input");
+  const line = input.value.trim();
+  if (!line) return;
+  input.value = "";
+  if (line.startsWith("/")) return command(line);
+  api({type: "chat", room: state.currentRoom, text: line});
+});
+
+function command(line) {
+  const [cmd, ...rest] = line.slice(1).split(" ");
+  const arg = rest.join(" ").trim();
+  switch (cmd.toLowerCase()) {
+    case "join":
+      if (arg) joinRoom(arg.split(" ")[0]);
+      break;
+    case "leave": {
+      const room = state.currentRoom;
+      if (room === "lobby" && state.rooms.size === 1) {
+        pushMsg(room, {kind: "error", text: "已經在大廳了，要離開請按右上角「離開」"});
+        break;
+      }
+      api({type: "leave", room});
+      state.rooms.delete(room);
+      state.currentRoom = state.rooms.keys().next().value || "lobby";
+      ensureRoom(state.currentRoom);
+      renderTabs(); renderMessages();
+      api({type: "users", room: state.currentRoom});
+      break;
+    }
+    case "msg": case "w": case "tell": {
+      const sp = arg.indexOf(" ");
+      if (sp > 0) api({type: "private", to: arg.slice(0, sp), text: arg.slice(sp + 1)});
+      else pushMsg(state.currentRoom, {kind: "error", text: "用法：/msg 暱稱 訊息"});
+      break;
+    }
+    case "rooms": api({type: "rooms"}); break;
+    case "users": api({type: "users", room: state.currentRoom}); break;
+    case "quit": quit(); break;
+    case "help": pushMsg(state.currentRoom, {kind: "system", text: HELP}); break;
+    default:
+      pushMsg(state.currentRoom, {kind: "error", text: `沒有這個指令：/${cmd}（/help 看指令）`});
+  }
+}
+
+async function api(message) {
+  try {
+    const res = await fetch("/api/send", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({token: state.token, message}),
+    });
+    if (res.status === 401) leaveToLogin("會話已過期，請重新登入");
+  } catch (err) {
+    $("conn-status").classList.add("show");
+  }
+}
+
+// ---------- 房間 ----------
+function ensureRoom(name) {
+  if (!state.rooms.has(name)) {
+    state.rooms.set(name, {messages: [], unread: false});
+    renderTabs();
+  }
+}
+
+function joinRoom(name) {
+  ensureRoom(name);
+  api({type: "join", room: name});
+  switchRoom(name);
+}
+
+function switchRoom(name) {
+  state.currentRoom = name;
+  state.rooms.get(name).unread = false;
+  state.users = [];
+  renderTabs(); renderMessages();
+  api({type: "users", room: name});
+}
+
+// ---------- 畫面 ----------
+function renderTabs() {
+  const tabs = $("tabs");
+  tabs.innerHTML = "";
+  for (const [name, r] of state.rooms) {
+    const b = document.createElement("button");
+    b.textContent = name;
+    b.className = (name === state.currentRoom ? "current" : "") + (r.unread ? " unread" : "");
+    const dot = document.createElement("span");
+    dot.className = "badge";
+    b.appendChild(dot);
+    b.onclick = () => switchRoom(name);
+    tabs.appendChild(b);
+  }
+  const add = document.createElement("button");
+  add.textContent = "＋";
+  add.className = "add-room";
+  add.title = "加入房間";
+  add.onclick = () => {
+    const name = prompt("輸入要加入的房間名稱：");
+    if (name && name.trim()) joinRoom(name.trim());
+  };
+  tabs.appendChild(add);
+  $("room-title").textContent = state.currentRoom;
+}
+
+function pushMsg(room, item) {
+  ensureRoom(room);
+  const r = state.rooms.get(room);
+  r.messages.push(item);
+  if (r.messages.length > 300) r.messages.shift();
+  if (room === state.currentRoom) appendNode(item);
+  else { r.unread = true; renderTabs(); }
+}
+
+function renderMessages() {
+  const box = $("messages");
+  box.innerHTML = "";
+  for (const item of state.rooms.get(state.currentRoom).messages) appendNode(item, false);
+  box.scrollTop = box.scrollHeight;
+}
+
+function appendNode(item, scroll = true) {
+  const box = $("messages");
+  const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  let node;
+  if (item.kind === "system" || item.kind === "error") {
+    node = document.createElement("div");
+    node.className = "sysline" + (item.kind === "error" ? " err" : "");
+    node.textContent = item.text;
+  } else {
+    const own = item.sender === state.nick;
+    node = document.createElement("div");
+    node.className = "msg" + (own ? " own" : "") + (item.kind === "private" ? " private" : "");
+    const sender = document.createElement("div");
+    sender.className = "sender";
+    sender.textContent = item.kind === "private"
+      ? (own ? `私訊給 ${item.to}` : `${item.sender} 的私訊`)
+      : (own ? "" : item.sender);
+    if (sender.textContent) node.appendChild(sender);
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = item.text;
+    node.appendChild(bubble);
+    const t = document.createElement("div");
+    t.className = "time";
+    t.textContent = fmtTime(item.ts);
+    node.appendChild(t);
+  }
+  box.appendChild(node);
+  if (scroll && nearBottom) box.scrollTop = box.scrollHeight;
+}
+
+function fmtTime(ts) {
+  const d = ts ? new Date(ts * 1000) : new Date();
+  return d.toTimeString().slice(0, 5);
+}
+
+// ---------- 成員 ----------
+$("users-btn").onclick = () => {
+  api({type: "users", room: state.currentRoom});
+  $("users-panel").classList.add("open");
+};
+$("users-panel").onclick = e => {
+  if (e.target === $("users-panel")) $("users-panel").classList.remove("open");
+};
+
+function renderUsers() {
+  $("users-title").textContent = `「${state.currentRoom}」的成員（${state.users.length}）`;
+  const ul = $("users-list");
+  ul.innerHTML = "";
+  for (const u of state.users) {
+    const li = document.createElement("li");
+    li.textContent = u === state.nick ? `${u}（我）` : u;
+    if (u !== state.nick) {
+      const hint = document.createElement("div");
+      hint.className = "hint";
+      hint.textContent = "點一下傳私訊";
+      li.appendChild(hint);
+      li.onclick = () => {
+        $("users-panel").classList.remove("open");
+        $("text-input").value = `/msg ${u} `;
+        $("text-input").focus();
+      };
+    }
+    ul.appendChild(li);
+  }
+}
+
+// ---------- 離開 ----------
+$("quit-btn").onclick = quit;
+function quit() {
+  api({type: "quit"});
+  leaveToLogin("你已離開聊天室");
+}
+
+function leaveToLogin(text) {
+  if (state.es) { state.es.close(); state.es = null; }
+  state.token = null;
+  state.rooms = new Map();
+  state.currentRoom = "lobby";
+  $("chat-view").classList.remove("active");
+  $("login-view").style.display = "flex";
+  $("login-error").textContent = text || "";
+  $("conn-status").classList.remove("show");
+}
+
+window.addEventListener("beforeunload", () => {
+  if (state.token) navigator.sendBeacon("/api/send",
+    JSON.stringify({token: state.token, message: {type: "quit"}}));
+});
+</script>
+</body>
+</html>

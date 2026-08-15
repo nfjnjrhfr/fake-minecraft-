@@ -1,7 +1,30 @@
 # chatapp — Python 多人通訊系統
 
 一套用 **Python 標準函式庫** 寫成的即時聊天系統，不需要安裝任何套件。
-包含伺服器、客戶端與傳輸協定三個部分，支援多人同時上線、多個聊天室與一對一私訊。
+支援多人同時上線、多個聊天室與一對一私訊，有兩種使用方式：
+
+- **網頁版**：瀏覽器打開就能聊，手機也能用，聊天的人不用裝任何東西
+- **終端機版**：經典的 TCP socket 伺服器 + 命令列客戶端
+
+## 網頁版（推薦）
+
+```bash
+python3 -m chatapp web --port 8000
+```
+
+然後用瀏覽器打開 http://localhost:8000/ ，輸入暱稱就能聊。
+同一個網路的朋友用 `http://你的IP:8000/` 也能加入。
+
+### 部署到網路上（朋友點連結就能聊）
+
+這個 repo 附了 [Render](https://render.com) 的部署設定（`render.yaml`）：
+
+1. 到 render.com 註冊（免費），選 **New + → Blueprint**
+2. 連結這個 GitHub repo，按下部署
+3. 完成後會得到一個 `https://xxxx.onrender.com` 的網址，丟給朋友就能一起聊
+
+也附了 `Procfile`，Railway、Fly.io 等平台同樣可以直接跑。
+免費方案閒置會休眠、重啟後聊天記錄會清空（訊息只存在記憶體）——當玩具或小圈子聊天很夠用。
 
 ## 功能
 
@@ -14,7 +37,7 @@
 - 終端機客戶端，含彩色顯示與斜線指令
 - 完整錯誤處理：格式錯誤的訊息只回一則錯誤，不會拖垮伺服器
 
-## 快速開始
+## 終端機版
 
 需要 Python 3.9 以上（開發環境為 3.11）。
 
@@ -54,12 +77,17 @@ python3 -m chatapp client --port 5000 --nick 小明
 ```
 chatapp/
   protocol.py   傳輸協定：編碼、解碼、串流切行
-  server.py     聊天伺服器：連線管理、房間、廣播
+  server.py     聊天伺服器核心：連線管理、房間、廣播
   client.py     終端機客戶端：接收執行緒 + 輸入迴圈
-  __main__.py   進入點：python -m chatapp <server|client>
+  web.py        網頁版：HTTP API + SSE，沿用 server.py 的核心邏輯
+  webui.html    網頁聊天介面（手機友善、深淺色自動切換）
+  __main__.py   進入點：python -m chatapp <web|server|client>
 tests/
   test_protocol.py   協定單元測試
   test_server.py     伺服器整合測試（真的開 socket 連線）
+  test_web.py        網頁版整合測試（真的走 HTTP + SSE）
+render.yaml     Render 一鍵部署設定
+Procfile        Railway / Fly.io 等平台的啟動指令
 ```
 
 ## 傳輸協定
@@ -89,8 +117,8 @@ TCP 不保證一次 `recv` 剛好對應一則訊息，所以 `protocol.LineReade
 python3 -m unittest discover -s tests -v
 ```
 
-共 35 個測試，涵蓋協定編解碼、串流切行、登入驗證、廣播隔離、私訊、
-房間管理、歷史紀錄、斷線清理與多人連線。
+共 47 個測試，涵蓋協定編解碼、串流切行、登入驗證、廣播隔離、私訊、
+房間管理、歷史紀錄、斷線清理、多人連線，以及網頁版的 HTTP API 與 SSE 串流。
 
 ## 實作備註
 
