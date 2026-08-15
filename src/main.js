@@ -395,11 +395,39 @@ renderLoadoutEditor();
 // 連線設定
 // ---------------------------------------------------------------------------
 
+// check() 回傳 { ok, detail }：不只說能不能用，還要說不能用的原因，
+// 否則使用者只會看到「不支援」卻不知道下一步該做什麼。
 const TRANSPORTS = [
-  { key: 'bluetooth', label: '藍牙 BLE', check: () => BluetoothTransport.available },
-  { key: 'webrtc', label: '同網路直連', check: () => WebRTCTransport.available },
-  { key: 'channel', label: '同機雙分頁', check: () => ChannelTransport.available },
+  {
+    key: 'bluetooth', label: '藍牙 BLE',
+    check: () => {
+      const a = BluetoothTransport.availability;
+      return { ok: a.ok, detail: a.detail, short: a.ok ? '可用' : BT_SHORT[a.reason] };
+    },
+  },
+  {
+    key: 'webrtc', label: '同網路直連',
+    check: () => ({
+      ok: WebRTCTransport.available,
+      short: WebRTCTransport.available ? '可用' : '此瀏覽器不支援',
+      detail: WebRTCTransport.available ? null : '這個瀏覽器沒有 WebRTC。',
+    }),
+  },
+  {
+    key: 'channel', label: '同機雙分頁',
+    check: () => ({
+      ok: ChannelTransport.available,
+      short: ChannelTransport.available ? '可用' : '此瀏覽器不支援',
+      detail: ChannelTransport.available ? null : '這個瀏覽器沒有 BroadcastChannel。',
+    }),
+  },
 ];
+
+const BT_SHORT = {
+  unsupported: '瀏覽器不支援',
+  insecure: '需要 HTTPS',
+  blocked: '被沙箱擋下',
+};
 
 const TRANSPORT_HINTS = {
   bluetooth:
@@ -416,11 +444,10 @@ const TRANSPORT_HINTS = {
 };
 
 buildChips($('transport-chips'),
-  TRANSPORTS.map((t) => ({
-    key: t.key,
-    label: t.label,
-    sub: t.check() ? '可用' : '此瀏覽器不支援',
-  })),
+  TRANSPORTS.map((t) => {
+    const s = t.check();
+    return { key: t.key, label: t.label, sub: s.short };
+  }),
   () => app.transportKind,
   (k) => { app.transportKind = k; updateTransportUI(); });
 
@@ -430,7 +457,14 @@ buildChips($('role-chips'),
   (k) => { app.netRole = k; updateTransportUI(); });
 
 function updateTransportUI() {
-  $('transport-hint').textContent = TRANSPORT_HINTS[app.transportKind];
+  const spec = TRANSPORTS.find((t) => t.key === app.transportKind);
+  const state = spec ? spec.check() : { ok: true };
+  // 不能用的話，先講為什麼不能用，再講這個管道本來是怎麼運作的
+  $('transport-hint').textContent = state.ok
+    ? TRANSPORT_HINTS[app.transportKind]
+    : `${state.detail}\n\n（${TRANSPORT_HINTS[app.transportKind]}）`;
+  $('transport-hint').classList.toggle('warn', !state.ok);
+  $('connect-btn').disabled = !state.ok && app.transportKind !== 'webrtc';
   $('webrtc-box').classList.toggle('hidden', app.transportKind !== 'webrtc');
   $('channel-box').classList.toggle('hidden', app.transportKind !== 'channel');
   $('connect-btn').classList.toggle('hidden', app.transportKind === 'webrtc');

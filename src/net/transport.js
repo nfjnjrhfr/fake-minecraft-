@@ -64,14 +64,54 @@ export class BluetoothTransport extends BaseTransport {
     this.flushing = false;
   }
 
+  /**
+   * 藍牙到底能不能用，以及不能用的話是卡在哪一關。
+   *
+   * 只檢查 navigator.bluetooth 存不存在是不夠的：頁面被嵌在 iframe 裡時
+   * API 物件照樣存在，但只要外層沒有用 allow="bluetooth" 授權，
+   * requestDevice() 就會丟 SecurityError。那種情況要先講清楚，
+   * 不能讓使用者按下去才看到看不懂的錯誤。
+   *
+   * @returns {{ ok: boolean, reason?: string, detail?: string }}
+   */
+  static get availability() {
+    if (typeof navigator === 'undefined' || !navigator.bluetooth) {
+      return {
+        ok: false, reason: 'unsupported',
+        detail: '這個瀏覽器沒有 Web Bluetooth。Safari 與 Firefox 都沒有實作，'
+              + '而 iPhone 上所有瀏覽器都是用 Safari 的引擎，所以 iOS 一律不能用。'
+              + '請改用電腦版 Chrome / Edge，或 Android 版 Chrome。',
+      };
+    }
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      return {
+        ok: false, reason: 'insecure',
+        detail: '藍牙只在安全來源下開放。請用 HTTPS 網址，或在本機跑 localhost。',
+      };
+    }
+    // Permissions Policy：被 iframe 包住而且沒被授權時，這裡會回 false
+    const policy = (typeof document !== 'undefined')
+      ? (document.permissionsPolicy || document.featurePolicy) : null;
+    if (policy?.allowsFeature && !policy.allowsFeature('bluetooth')) {
+      return {
+        ok: false, reason: 'blocked',
+        detail: '這個頁面被嵌在 iframe 裡，而外層沒有把藍牙權限授權下來'
+              + '（需要 allow="bluetooth"）。請把遊戲下載到本機執行，'
+              + '或改用「同網路直連」。',
+      };
+    }
+    return { ok: true };
+  }
+
   static get available() {
-    return typeof navigator !== 'undefined' && !!navigator.bluetooth;
+    return BluetoothTransport.availability.ok;
   }
 
   async connect(opts = {}) {
-    if (!BluetoothTransport.available) {
-      this.setStatus(STATUS.ERROR, '這個瀏覽器不支援 Web Bluetooth（請用 Chrome / Edge，且需 HTTPS）');
-      throw new Error('Web Bluetooth unavailable');
+    const avail = BluetoothTransport.availability;
+    if (!avail.ok) {
+      this.setStatus(STATUS.ERROR, avail.detail);
+      throw new Error(`Web Bluetooth unavailable: ${avail.reason}`);
     }
     this.setStatus(STATUS.SCANNING, '搜尋藍牙裝置中…');
     try {
@@ -82,7 +122,25 @@ export class BluetoothTransport extends BaseTransport {
         optionalServices: [NUS.service],
       });
     } catch (err) {
-      this.setStatus(STATUS.IDLE, '已取消選擇裝置');
+      // requestDevice 的失敗原因差很多，分開講才幫得上忙
+      switch (err.name) {
+        case 'NotFoundError':
+          // 使用者按取消，或是掃不到任何符合的裝置
+          this.setStatus(STATUS.IDLE,
+            '沒有選到裝置。請確認 BLE 中繼已經開機並在廣播'
+            + '（韌體在 tools/esp32-ble-relay）。');
+          break;
+        case 'SecurityError':
+          this.setStatus(STATUS.ERROR,
+            '瀏覽器擋下了藍牙存取，通常是頁面被嵌在沒有授權的 iframe 裡，'
+            + '或不是安全來源。請改在本機執行。');
+          break;
+        case 'NotSupportedError':
+          this.setStatus(STATUS.ERROR, '這台裝置的藍牙介面卡不支援，或藍牙沒有開啟。');
+          break;
+        default:
+          this.setStatus(STATUS.ERROR, `藍牙錯誤：${err.name} — ${err.message}`);
+      }
       throw err;
     }
 

@@ -635,3 +635,11 @@ kbd {
 .result-row b { font-variant-numeric: tabular-nums; }
 #result-title.win { color: #7bd88f; }
 #result-title.lose { color: var(--danger); }
+
+/* 連線管道不可用時的說明，要比一般提示更醒目 */
+.hint.warn {
+  color: #fca5a5;
+  white-space: pre-line;
+  border-left: 2px solid rgba(255,107,107,0.5);
+  padding-left: 10px;
+}
