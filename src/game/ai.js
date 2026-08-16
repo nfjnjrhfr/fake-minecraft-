@@ -13,13 +13,13 @@ import { clamp, lerp, wrapAngle, distXZ, makeRng } from '../core/math.js';
 import { MOVES, moveReach, moveDuration, PARRY_WINDOW, DODGE_DURATION } from './combat.js';
 import { CODE_BY_ATTACK, emptyInput, BASE_SPEED } from './fighter.js';
 
-/** 難度設定。reaction 是感知延遲（秒），越小越可怕。 */
+/** 難度設定。reaction 是感知延遲（秒），越小越可怕。bounty 是擊敗的掉落金幣：新手 10，每高一階 +10。 */
 export const DIFFICULTIES = {
-  rookie:   { name: '新手',   reaction: 0.42, noise: 0.55, predict: 0.15, aggression: 0.45, parrySkill: 0.10, mistake: 0.32, adapt: 0.2 },
-  normal:   { name: '普通',   reaction: 0.30, noise: 0.35, predict: 0.35, aggression: 0.55, parrySkill: 0.28, mistake: 0.18, adapt: 0.4 },
-  hard:     { name: '困難',   reaction: 0.21, noise: 0.22, predict: 0.55, aggression: 0.65, parrySkill: 0.48, mistake: 0.10, adapt: 0.6 },
-  master:   { name: '大師',   reaction: 0.15, noise: 0.12, predict: 0.75, aggression: 0.72, parrySkill: 0.68, mistake: 0.05, adapt: 0.8 },
-  singular: { name: '超智能', reaction: 0.10, noise: 0.05, predict: 0.95, aggression: 0.80, parrySkill: 0.88, mistake: 0.015, adapt: 1.0 },
+  rookie:   { name: '新手',   reaction: 0.42, noise: 0.55, predict: 0.15, aggression: 0.45, parrySkill: 0.10, mistake: 0.32, adapt: 0.2, bounty: 10 },
+  normal:   { name: '普通',   reaction: 0.30, noise: 0.35, predict: 0.35, aggression: 0.55, parrySkill: 0.28, mistake: 0.18, adapt: 0.4, bounty: 20 },
+  hard:     { name: '困難',   reaction: 0.21, noise: 0.22, predict: 0.55, aggression: 0.65, parrySkill: 0.48, mistake: 0.10, adapt: 0.6, bounty: 30 },
+  master:   { name: '大師',   reaction: 0.15, noise: 0.12, predict: 0.75, aggression: 0.72, parrySkill: 0.68, mistake: 0.05, adapt: 0.8, bounty: 40 },
+  singular: { name: '超智能', reaction: 0.10, noise: 0.05, predict: 0.95, aggression: 0.80, parrySkill: 0.88, mistake: 0.015, adapt: 1.0, bounty: 50 },
 };
 
 /** 打法性格，會影響效用權重；AI 落後時會自己換。 */

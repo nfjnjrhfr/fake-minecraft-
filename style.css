@@ -662,3 +662,19 @@ kbd {
   flex: 0 0 auto;
 }
 .step-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* 金幣餘額（主選單）與結算畫面的金幣列 */
+.coin-badge {
+  width: fit-content;
+  margin: -10px auto 18px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 213, 74, 0.35);
+  background: rgba(60, 45, 10, 0.45);
+  color: #ffd54a;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.coin-badge b { font-variant-numeric: tabular-nums; }
+.result-row.coin span, .result-row.coin b { color: #ffd54a; }

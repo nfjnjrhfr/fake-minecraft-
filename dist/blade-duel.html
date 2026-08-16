@@ -705,6 +705,22 @@ kbd {
   flex: 0 0 auto;
 }
 .step-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* 金幣餘額（主選單）與結算畫面的金幣列 */
+.coin-badge {
+  width: fit-content;
+  margin: -10px auto 18px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 213, 74, 0.35);
+  background: rgba(60, 45, 10, 0.45);
+  color: #ffd54a;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.coin-badge b { font-variant-numeric: tabular-nums; }
+.result-row.coin span, .result-row.coin b { color: #ffd54a; }
 </style>
 
 <canvas id="view"></canvas>
@@ -788,6 +804,7 @@ kbd {
     <section class="page active" data-page="home">
       <h1 class="logo">⚔ 方塊劍鬥</h1>
       <p class="tagline">完整肢體骨架 · 全套裝備 · 藍牙對戰 · 超智能 NPC</p>
+      <div class="coin-badge">💰 金幣 <b id="coin-count">0</b></div>
       <div class="menu-grid">
         <button class="big-btn primary" data-go="solo">
           <span class="bb-icon">🤖</span>
@@ -3791,13 +3808,13 @@ const ROUND_STATE = { WAITING: 0, COUNTDOWN: 1, FIGHTING: 2, OVER: 3 };
 
 
 
-/** 難度設定。reaction 是感知延遲（秒），越小越可怕。 */
+/** 難度設定。reaction 是感知延遲（秒），越小越可怕。bounty 是擊敗的掉落金幣：新手 10，每高一階 +10。 */
 const DIFFICULTIES = {
-  rookie:   { name: '新手',   reaction: 0.42, noise: 0.55, predict: 0.15, aggression: 0.45, parrySkill: 0.10, mistake: 0.32, adapt: 0.2 },
-  normal:   { name: '普通',   reaction: 0.30, noise: 0.35, predict: 0.35, aggression: 0.55, parrySkill: 0.28, mistake: 0.18, adapt: 0.4 },
-  hard:     { name: '困難',   reaction: 0.21, noise: 0.22, predict: 0.55, aggression: 0.65, parrySkill: 0.48, mistake: 0.10, adapt: 0.6 },
-  master:   { name: '大師',   reaction: 0.15, noise: 0.12, predict: 0.75, aggression: 0.72, parrySkill: 0.68, mistake: 0.05, adapt: 0.8 },
-  singular: { name: '超智能', reaction: 0.10, noise: 0.05, predict: 0.95, aggression: 0.80, parrySkill: 0.88, mistake: 0.015, adapt: 1.0 },
+  rookie:   { name: '新手',   reaction: 0.42, noise: 0.55, predict: 0.15, aggression: 0.45, parrySkill: 0.10, mistake: 0.32, adapt: 0.2, bounty: 10 },
+  normal:   { name: '普通',   reaction: 0.30, noise: 0.35, predict: 0.35, aggression: 0.55, parrySkill: 0.28, mistake: 0.18, adapt: 0.4, bounty: 20 },
+  hard:     { name: '困難',   reaction: 0.21, noise: 0.22, predict: 0.55, aggression: 0.65, parrySkill: 0.48, mistake: 0.10, adapt: 0.6, bounty: 30 },
+  master:   { name: '大師',   reaction: 0.15, noise: 0.12, predict: 0.75, aggression: 0.72, parrySkill: 0.68, mistake: 0.05, adapt: 0.8, bounty: 40 },
+  singular: { name: '超智能', reaction: 0.10, noise: 0.05, predict: 0.95, aggression: 0.80, parrySkill: 0.88, mistake: 0.015, adapt: 1.0, bounty: 50 },
 };
 
 /** 打法性格，會影響效用權重；AI 落後時會自己換。 */
@@ -4507,6 +4524,12 @@ class Match {
     this.winner = -1;
     this.matchOver = false;
 
+    // 賞金：單機模式打贏 NPC 掉金幣，金額由難度決定（新手 10，每高一階 +10）
+    this.bounty = this.mode === MATCH_MODE.SOLO
+      ? (DIFFICULTIES[opts.difficulty]?.bounty || 0) : 0;
+    this.coinsEarned = 0;
+    this.coinsBanked = false;   // 錢包只結算一次，由 UI 層設定
+
     // 表現層
     this.particles = [];
     this.floaters = [];
@@ -4716,6 +4739,13 @@ class Match {
     this.state = ROUND_STATE.OVER;
     this.stateTimer = 3.2;
 
+    // 玩家擊敗 NPC -> 從倒下的 NPC 身上掉金幣
+    if (winner === 0 && this.bounty > 0) {
+      this.coinsEarned += this.bounty;
+      this.spawnCoinDrop(b, this.bounty);
+      this.pushLog(`${b.name} 掉落了 ${this.bounty} 金幣`);
+    }
+
     if (winner < 0) this.pushMessage('平手', '#cbd5e1', 2.2);
     else this.pushMessage(`${this.fighters[winner].name} 獲勝`, winner === 0 ? '#7bd88f' : '#ff6b6b', 2.2);
 
@@ -4725,6 +4755,30 @@ class Match {
       this.finalWinner = this.wins[0] >= needed ? 0 : 1;
       this.stateTimer = 99;
     }
+  }
+
+  /** 金幣從倒下的角色身上噴出來：一枚 10 元，越高階噴越多枚。 */
+  spawnCoinDrop(fromFighter, amount) {
+    const coins = Math.max(1, Math.round(amount / 10));
+    for (let i = 0; i < coins * 3; i++) {
+      const th = this.rng() * Math.PI * 2;
+      const sp = 1.2 + this.rng() * 2.4;
+      this.particles.push({
+        x: fromFighter.x, y: 1.0 + this.rng() * 0.4, z: fromFighter.z,
+        vx: Math.cos(th) * sp,
+        vy: 3.2 + this.rng() * 2.6,
+        vz: Math.sin(th) * sp,
+        life: 1.3 + this.rng() * 0.7,
+        age: 0,
+        r: 0.05 + this.rng() * 0.03,
+        color: this.rng() < 0.7 ? '#ffd54a' : '#ffedb0',
+      });
+    }
+    this.floaters.push({
+      x: fromFighter.x, y: 1.9, z: fromFighter.z,
+      text: `+${amount} 金幣`, color: '#ffd54a',
+      age: 0, life: 1.8, size: 30,
+    });
   }
 
   updateEffects(dt) {
@@ -5686,6 +5740,7 @@ const app = {
     playerName: '玩家',
   },
   loadout: deepClone(LOADOUT_PRESETS.knight),
+  wallet: { coins: 0 },
 };
 
 // 讀回上次的設定
@@ -5693,12 +5748,13 @@ try {
   const saved = JSON.parse(localStorage.getItem('blade-duel') || 'null');
   if (saved?.loadout) Object.assign(app.loadout, saved.loadout);
   if (saved?.settings) Object.assign(app.settings, saved.settings);
+  if (Number.isFinite(saved?.wallet?.coins)) app.wallet.coins = Math.max(0, saved.wallet.coins);
 } catch { /* 存檔壞了就用預設 */ }
 
 function save() {
   try {
     localStorage.setItem('blade-duel', JSON.stringify({
-      loadout: app.loadout, settings: app.settings,
+      loadout: app.loadout, settings: app.settings, wallet: app.wallet,
     }));
   } catch { /* 無痕模式等情況，存不了就算了 */ }
 }
@@ -5848,12 +5904,28 @@ function gatherInput() {
 const menu = $('menu');
 const hud = $('hud');
 
+function updateCoinBadge() {
+  const el = $('coin-count');
+  if (el) el.textContent = app.wallet.coins;
+}
+
+/** 把這一場掉的金幣結進錢包（只結一次）。 */
+function bankCoins() {
+  const m = app.match;
+  if (!m || m.coinsBanked || !m.coinsEarned) return;
+  m.coinsBanked = true;
+  app.wallet.coins += m.coinsEarned;
+  save();
+  updateCoinBadge();
+}
+
 function showPage(name) {
   for (const p of document.querySelectorAll('.page')) {
     p.classList.toggle('active', p.dataset.page === name);
   }
   menu.classList.remove('hidden');
   menu.scrollTop = 0;
+  updateCoinBadge();
 }
 
 function hideMenu() {
@@ -5888,7 +5960,7 @@ function buildChips(container, items, getSelected, onSelect) {
 // --- 單機設定 ---
 buildChips($('difficulty-chips'),
   Object.entries(DIFFICULTIES).map(([key, d]) => ({
-    key, label: d.name, sub: `反應 ${Math.round(d.reaction * 1000)}ms`,
+    key, label: d.name, sub: `反應 ${Math.round(d.reaction * 1000)}ms · 掉 ${d.bounty} 金幣`,
   })),
   () => app.settings.difficulty,
   (k) => { app.settings.difficulty = k; updateDifficultyHint(); save(); });
@@ -6341,6 +6413,7 @@ $('again-btn').addEventListener('click', () => {
 });
 
 function quitToMenu() {
+  bankCoins();   // 中途退場也把已經掉落的金幣帶走
   app.running = false;
   app.paused = false;
   hud.classList.add('hidden');
@@ -6503,6 +6576,7 @@ function escapeHtml(s) {
 
 function showResult() {
   const m = app.match;
+  bankCoins();
   app.running = false;
   const meIdx = app.session && !app.session.isHost ? 1 : 0;
   const won = m.finalWinner === meIdx;
@@ -6522,6 +6596,10 @@ function showResult() {
     rows.push(`<div class="result-row"><span>　命中 / 爆頭</span><b>${s.hits} / ${s.headshots}</b></div>`);
     rows.push(`<div class="result-row"><span>　格擋 / 招架</span><b>${s.blocked} / ${s.parries}</b></div>`);
     rows.push(`<div class="result-row"><span>　造成傷害</span><b>${Math.round(s.damageDealt)}</b></div>`);
+  }
+  if (m.coinsEarned > 0) {
+    rows.push(`<div class="result-row coin"><span>💰 本場獲得</span><b>+${m.coinsEarned} 金幣</b></div>`);
+    rows.push(`<div class="result-row coin"><span>💰 目前持有</span><b>${app.wallet.coins} 金幣</b></div>`);
   }
   $('result-box').innerHTML = rows.join('');
   showPage('result');

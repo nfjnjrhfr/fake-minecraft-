@@ -2,7 +2,7 @@
 // 不直接碰 DOM，畫面由 renderer 負責，UI 由 main.js 讀 match 的狀態。
 
 import { Fighter, checkAttackHit, emptyInput, ARENA_RADIUS } from './fighter.js';
-import { FighterAI } from './ai.js';
+import { FighterAI, DIFFICULTIES } from './ai.js';
 import { drawRig, BODY_HEIGHT } from './rig.js';
 import { clamp, lerp, lerpAngle, distXZ, makeRng } from '../core/math.js';
 import { ROUND_STATE } from '../net/protocol.js';
@@ -50,6 +50,12 @@ export class Match {
     this.timeLeft = this.roundTime;
     this.winner = -1;
     this.matchOver = false;
+
+    // 賞金：單機模式打贏 NPC 掉金幣，金額由難度決定（新手 10，每高一階 +10）
+    this.bounty = this.mode === MATCH_MODE.SOLO
+      ? (DIFFICULTIES[opts.difficulty]?.bounty || 0) : 0;
+    this.coinsEarned = 0;
+    this.coinsBanked = false;   // 錢包只結算一次，由 UI 層設定
 
     // 表現層
     this.particles = [];
@@ -260,6 +266,13 @@ export class Match {
     this.state = ROUND_STATE.OVER;
     this.stateTimer = 3.2;
 
+    // 玩家擊敗 NPC -> 從倒下的 NPC 身上掉金幣
+    if (winner === 0 && this.bounty > 0) {
+      this.coinsEarned += this.bounty;
+      this.spawnCoinDrop(b, this.bounty);
+      this.pushLog(`${b.name} 掉落了 ${this.bounty} 金幣`);
+    }
+
     if (winner < 0) this.pushMessage('平手', '#cbd5e1', 2.2);
     else this.pushMessage(`${this.fighters[winner].name} 獲勝`, winner === 0 ? '#7bd88f' : '#ff6b6b', 2.2);
 
@@ -269,6 +282,30 @@ export class Match {
       this.finalWinner = this.wins[0] >= needed ? 0 : 1;
       this.stateTimer = 99;
     }
+  }
+
+  /** 金幣從倒下的角色身上噴出來：一枚 10 元，越高階噴越多枚。 */
+  spawnCoinDrop(fromFighter, amount) {
+    const coins = Math.max(1, Math.round(amount / 10));
+    for (let i = 0; i < coins * 3; i++) {
+      const th = this.rng() * Math.PI * 2;
+      const sp = 1.2 + this.rng() * 2.4;
+      this.particles.push({
+        x: fromFighter.x, y: 1.0 + this.rng() * 0.4, z: fromFighter.z,
+        vx: Math.cos(th) * sp,
+        vy: 3.2 + this.rng() * 2.6,
+        vz: Math.sin(th) * sp,
+        life: 1.3 + this.rng() * 0.7,
+        age: 0,
+        r: 0.05 + this.rng() * 0.03,
+        color: this.rng() < 0.7 ? '#ffd54a' : '#ffedb0',
+      });
+    }
+    this.floaters.push({
+      x: fromFighter.x, y: 1.9, z: fromFighter.z,
+      text: `+${amount} 金幣`, color: '#ffd54a',
+      age: 0, life: 1.8, size: 30,
+    });
   }
 
   updateEffects(dt) {

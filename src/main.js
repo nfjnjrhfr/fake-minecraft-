@@ -46,6 +46,7 @@ const app = {
     playerName: '玩家',
   },
   loadout: deepClone(LOADOUT_PRESETS.knight),
+  wallet: { coins: 0 },
 };
 
 // 讀回上次的設定
@@ -53,12 +54,13 @@ try {
   const saved = JSON.parse(localStorage.getItem('blade-duel') || 'null');
   if (saved?.loadout) Object.assign(app.loadout, saved.loadout);
   if (saved?.settings) Object.assign(app.settings, saved.settings);
+  if (Number.isFinite(saved?.wallet?.coins)) app.wallet.coins = Math.max(0, saved.wallet.coins);
 } catch { /* 存檔壞了就用預設 */ }
 
 function save() {
   try {
     localStorage.setItem('blade-duel', JSON.stringify({
-      loadout: app.loadout, settings: app.settings,
+      loadout: app.loadout, settings: app.settings, wallet: app.wallet,
     }));
   } catch { /* 無痕模式等情況，存不了就算了 */ }
 }
@@ -208,12 +210,28 @@ function gatherInput() {
 const menu = $('menu');
 const hud = $('hud');
 
+function updateCoinBadge() {
+  const el = $('coin-count');
+  if (el) el.textContent = app.wallet.coins;
+}
+
+/** 把這一場掉的金幣結進錢包（只結一次）。 */
+function bankCoins() {
+  const m = app.match;
+  if (!m || m.coinsBanked || !m.coinsEarned) return;
+  m.coinsBanked = true;
+  app.wallet.coins += m.coinsEarned;
+  save();
+  updateCoinBadge();
+}
+
 function showPage(name) {
   for (const p of document.querySelectorAll('.page')) {
     p.classList.toggle('active', p.dataset.page === name);
   }
   menu.classList.remove('hidden');
   menu.scrollTop = 0;
+  updateCoinBadge();
 }
 
 function hideMenu() {
@@ -248,7 +266,7 @@ function buildChips(container, items, getSelected, onSelect) {
 // --- 單機設定 ---
 buildChips($('difficulty-chips'),
   Object.entries(DIFFICULTIES).map(([key, d]) => ({
-    key, label: d.name, sub: `反應 ${Math.round(d.reaction * 1000)}ms`,
+    key, label: d.name, sub: `反應 ${Math.round(d.reaction * 1000)}ms · 掉 ${d.bounty} 金幣`,
   })),
   () => app.settings.difficulty,
   (k) => { app.settings.difficulty = k; updateDifficultyHint(); save(); });
@@ -701,6 +719,7 @@ $('again-btn').addEventListener('click', () => {
 });
 
 function quitToMenu() {
+  bankCoins();   // 中途退場也把已經掉落的金幣帶走
   app.running = false;
   app.paused = false;
   hud.classList.add('hidden');
@@ -863,6 +882,7 @@ function escapeHtml(s) {
 
 function showResult() {
   const m = app.match;
+  bankCoins();
   app.running = false;
   const meIdx = app.session && !app.session.isHost ? 1 : 0;
   const won = m.finalWinner === meIdx;
@@ -882,6 +902,10 @@ function showResult() {
     rows.push(`<div class="result-row"><span>　命中 / 爆頭</span><b>${s.hits} / ${s.headshots}</b></div>`);
     rows.push(`<div class="result-row"><span>　格擋 / 招架</span><b>${s.blocked} / ${s.parries}</b></div>`);
     rows.push(`<div class="result-row"><span>　造成傷害</span><b>${Math.round(s.damageDealt)}</b></div>`);
+  }
+  if (m.coinsEarned > 0) {
+    rows.push(`<div class="result-row coin"><span>💰 本場獲得</span><b>+${m.coinsEarned} 金幣</b></div>`);
+    rows.push(`<div class="result-row coin"><span>💰 目前持有</span><b>${app.wallet.coins} 金幣</b></div>`);
   }
   $('result-box').innerHTML = rows.join('');
   showPage('result');

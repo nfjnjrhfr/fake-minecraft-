@@ -371,6 +371,72 @@ test('回合結束後雙方會復原', () => {
   }
 });
 
+test('擊敗 NPC 掉金幣:菜鳥 10 元,每高一階 +10', () => {
+  const tiers = Object.entries(DIFFICULTIES);
+  tiers.forEach(([key, d], i) => {
+    assert(d.bounty === (i + 1) * 10, `${key} 賞金應該是 ${(i + 1) * 10},實得 ${d.bounty}`);
+  });
+
+  // 玩家在單機模式擊敗 NPC -> 掉落該難度的賞金
+  const winRound = (difficulty) => {
+    const m = new Match({
+      mode: MATCH_MODE.SOLO,
+      loadouts: [LOADOUT_PRESETS.knight, LOADOUT_PRESETS.duelist],
+      difficulty, roundTime: 30, bestOf: 3, seed: 7,
+    });
+    for (let i = 0; i < 60 * 4 && m.state !== 2; i++) m.update(1 / 60);  // 撐過倒數
+    m.fighters[1].health = 0;   // 直接判定 NPC 倒下
+    m.update(1 / 60);
+    return m;
+  };
+  const rookie = winRound('rookie');
+  assert(rookie.coinsEarned === 10, `菜鳥該掉 10,實得 ${rookie.coinsEarned}`);
+  assert(rookie.particles.length > 0, '應該有金幣噴出的特效');
+  const singular = winRound('singular');
+  assert(singular.coinsEarned === 50, `超智能該掉 50,實得 ${singular.coinsEarned}`);
+});
+
+test('玩家落敗或非單機模式不掉金幣', () => {
+  // 玩家被擊敗 -> 沒錢
+  const lose = new Match({
+    mode: MATCH_MODE.SOLO,
+    loadouts: [LOADOUT_PRESETS.knight, LOADOUT_PRESETS.duelist],
+    difficulty: 'hard', roundTime: 30, seed: 7,
+  });
+  for (let i = 0; i < 60 * 4 && lose.state !== 2; i++) lose.update(1 / 60);
+  lose.fighters[0].health = 0;
+  lose.update(1 / 60);
+  assert(lose.coinsEarned === 0, `輸了不該有錢,實得 ${lose.coinsEarned}`);
+
+  // 觀戰模式(NPC 互打)不產生金幣
+  const demo = new Match({
+    mode: MATCH_MODE.DEMO,
+    loadouts: [LOADOUT_PRESETS.knight, LOADOUT_PRESETS.duelist],
+    difficulty: 'singular', roundTime: 30, seed: 7,
+  });
+  for (let i = 0; i < 60 * 4 && demo.state !== 2; i++) demo.update(1 / 60);
+  demo.fighters[1].health = 0;
+  demo.update(1 / 60);
+  assert(demo.coinsEarned === 0, `觀戰模式不該產生金幣,實得 ${demo.coinsEarned}`);
+});
+
+test('多回合的賞金會累加', () => {
+  const m = new Match({
+    mode: MATCH_MODE.SOLO,
+    loadouts: [LOADOUT_PRESETS.knight, LOADOUT_PRESETS.duelist],
+    difficulty: 'normal', roundTime: 30, bestOf: 5, seed: 7,
+  });
+  for (let round = 0; round < 2; round++) {
+    let guard = 0;
+    while (m.state !== 2 && guard++ < 60 * 8) m.update(1 / 60);   // 等 FIGHTING
+    m.fighters[1].health = 0;
+    m.update(1 / 60);                                             // 結束回合
+    let guard2 = 0;
+    while (m.state === 3 && !m.matchOver && guard2++ < 60 * 8) m.update(1 / 60);  // 等下一回合
+  }
+  assert(m.coinsEarned === 40, `普通難度贏兩回合該有 40,實得 ${m.coinsEarned}`);
+});
+
 // ---------------------------------------------------------------------------
 console.log('連線協定');
 // ---------------------------------------------------------------------------
