@@ -9,7 +9,11 @@ export const MATERIALS = {
   iron:      { name: '鐵',     color: '#c9ced6', trim: '#8a9098', defense: 0.22, weight: 2.6, durability: 300 },
   gold:      { name: '黃金',   color: '#e6c14b', trim: '#a8862a', defense: 0.17, weight: 2.2, durability: 160 },
   diamond:   { name: '鑽石',   color: '#4fe3d0', trim: '#2b9c92', defense: 0.30, weight: 3.0, durability: 520 },
-  netherite: { name: '獄髓',   color: '#4a4249', trim: '#2c262c', defense: 0.36, weight: 3.6, durability: 800 },
+  // 動力裝甲：鋼鐵俠的幻想是「獄髓級的防禦、鐵甲級的重量」。
+  // glow 是給渲染層用的：胸口反應爐與頭盔眼部會用這個顏色自發光。
+  powerRed:  { name: '動力裝甲・紅', color: '#b3202a', trim: '#e8b64c', defense: 0.33, weight: 2.4, durability: 620, glow: '#7de8ff' },
+  powerGold: { name: '動力裝甲・金', color: '#d9a032', trim: '#8f2430', defense: 0.29, weight: 2.0, durability: 520, glow: '#7de8ff' },
+  netherite: { name: '獄髓',  color: '#4a4249', trim: '#2c262c', defense: 0.36, weight: 3.6, durability: 800 },
 };
 
 /**
@@ -108,6 +112,16 @@ export const WEAPONS = {
     color: '#5b5159', gripColor: '#2a2226', pommel: '#e0762f',
     moves: ['slashR', 'slashL', 'overhead', 'thrust'],
   },
+  energyBlade: {
+    name: '能量光刃', kind: 'sword',
+    blade: { length: 0.88, width: 0.07, thick: 0.022 },
+    hilt: { length: 0.18, width: 0.065 },
+    damage: 21, weight: 0.9, guard: 0.55,
+    speed: 1.2, poise: 0.7,
+    color: '#7de8ff', gripColor: '#2a2d36', pommel: '#e8b64c',
+    moves: ['slashR', 'slashL', 'overhead', 'thrust'],
+    emissiveBlade: true,   // 渲染層：整條刃身自發光
+  },
 };
 
 /** 副手：盾牌與空手。 */
@@ -119,6 +133,8 @@ export const OFFHANDS = {
                size: { x: 0.5, y: 0.78, z: 0.08 }, color: '#3f5f8a', boss: '#d9b44a' },
   tower:     { name: '塔盾',   kind: 'shield', block: 0.9, weight: 3.4, stability: 1.0,
                size: { x: 0.58, y: 1.0, z: 0.09 }, color: '#4a4a52', boss: '#c9ced6' },
+  repulsor:  { name: '反衝力場', kind: 'shield', block: 0.7, weight: 0.6, stability: 0.65,
+               size: { x: 0.48, y: 0.48, z: 0.05 }, color: '#39506b', boss: '#7de8ff', energy: true },
 };
 
 /** 預設載入的幾套配裝，選單直接用。 */
@@ -157,6 +173,14 @@ export const LOADOUT_PRESETS = {
              gauntlets: 'netherite', belt: 'netherite', leggings: 'netherite', boots: 'netherite' },
     weapon: 'netheriteBlade', offhand: 'tower',
     skin: { skin: '#8a6a4a', shirt: '#2c262c', pants: '#241f24', cape: '#e0762f' },
+  },
+  ironman: {
+    name: '鋼鐵俠',
+    armor: { helmet: 'powerRed', chestplate: 'powerRed', pauldrons: 'powerGold', vambraces: 'powerRed',
+             gauntlets: 'powerGold', belt: 'powerGold', leggings: 'powerRed', boots: 'powerGold' },
+    weapon: 'energyBlade', offhand: 'repulsor',
+    // cape 給空字串 = 不畫披風（鋼鐵俠沒有披風）
+    skin: { skin: '#c99b70', shirt: '#7a1a22', pants: '#5a141c', cape: '' },
   },
   champion: {
     name: '鑽石鬥士',

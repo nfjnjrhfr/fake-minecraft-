@@ -223,6 +223,31 @@ export function drawRig(rig, renderer, opts = {}) {
     mCompose(_offset, 0, 0.18, 0.245, 0, 0, 0);
     mMul(_boxM, headM, _offset);
     renderer.pushBox(_boxM, { x: 0.30, y: 0.10, z: 0.06 }, '#15171c', { alpha });
+
+    // 動力裝甲的眼部發光條（動力頭盔的招牌特徵）
+    const helmMat = MATERIALS[pieces.helmet.material];
+    if (helmMat?.glow) {
+      for (const ex of [-0.078, 0.078]) {
+        mCompose(_offset, ex, 0.185, 0.262, 0, 0, 0);
+        mMul(_boxM, headM, _offset);
+        renderer.pushBox(_boxM, { x: 0.085, y: 0.045, z: 0.035 }, helmMat.glow, { alpha, emissive: true });
+      }
+    }
+  }
+
+  // 3b) 胸口反應爐：穿著會發光的胸甲時，畫在胸甲正面
+  if (pieces.chestplate && pieces.chestplate.durability > 0) {
+    const chestMat = MATERIALS[pieces.chestplate.material];
+    if (chestMat?.glow) {
+      const torsoM = boneWorld(rig, 'torso');
+      mCompose(_offset, 0, 0.44, 0.205, 0, 0, 0);
+      mMul(_boxM, torsoM, _offset);
+      renderer.pushBox(_boxM, { x: 0.13, y: 0.13, z: 0.035 }, chestMat.glow, { alpha, emissive: true });
+      // 外圈框
+      mCompose(_offset, 0, 0.44, 0.198, 0, 0, 0);
+      mMul(_boxM, torsoM, _offset);
+      renderer.pushBox(_boxM, { x: 0.18, y: 0.18, z: 0.03 }, '#22262e', { alpha });
+    }
   }
 
   // 4) 披風（掛在軀幹背面，會隨動作擺動）
@@ -272,7 +297,7 @@ function drawWeapon(rig, renderer, alpha) {
   mMul(m, w, m);
   renderer.pushBox(m, { x: wp.hilt.width * 3.4, y: wp.hilt.width * 0.55, z: wp.hilt.width * 0.8 }, wp.pommel, { alpha });
 
-  // 劍身：分三段做出漸尖的視覺
+  // 劍身：分三段做出漸尖的視覺（能量武器整條自發光）
   const base = wp.hilt.length * 0.5;
   const seg = wp.blade.length / 3;
   for (let i = 0; i < 3; i++) {
@@ -283,12 +308,13 @@ function drawWeapon(rig, renderer, alpha) {
       x: wp.blade.width * taper,
       y: seg * 1.02,
       z: wp.blade.thick * taper,
-    }, wp.color, { alpha, emissive: i === 2 });
+    }, wp.color, { alpha, emissive: !!wp.emissiveBlade || i === 2 });
   }
   // 劍尖
   mTranslate(m, 0, base + wp.blade.length + 0.03, 0);
   mMul(m, w, m);
-  renderer.pushBox(m, { x: wp.blade.width * 0.45, y: 0.08, z: wp.blade.thick * 0.5 }, wp.color, { alpha });
+  renderer.pushBox(m, { x: wp.blade.width * 0.45, y: 0.08, z: wp.blade.thick * 0.5 }, wp.color,
+    { alpha, emissive: !!wp.emissiveBlade });
 }
 
 function drawOffhand(rig, renderer, alpha, flash) {
@@ -299,14 +325,19 @@ function drawOffhand(rig, renderer, alpha, flash) {
   let color = off.color;
   if (flash > 0.01) color = mixHex(color, '#ffffff', flash * 0.8);
 
+  // 能量盾畫成半透明力場，實體盾維持不透明
+  const bodyAlpha = off.energy ? alpha * 0.5 : alpha;
+
   mTranslate(m, 0, -off.size.y * 0.25, 0.05);
   mMul(m, s, m);
-  renderer.pushBox(m, off.size, color, { alpha, outline: '#1c1c22' });
+  renderer.pushBox(m, off.size, color,
+    { alpha: bodyAlpha, outline: off.energy ? off.boss : '#1c1c22', emissive: !!off.energy });
 
-  // 盾心
+  // 盾心（能量盾的盾心是掌部發射器，自發光）
   mTranslate(m, 0, -off.size.y * 0.25, 0.05 + off.size.z * 0.6);
   mMul(m, s, m);
-  renderer.pushBox(m, { x: off.size.x * 0.3, y: off.size.y * 0.22, z: 0.05 }, off.boss, { alpha });
+  renderer.pushBox(m, { x: off.size.x * 0.3, y: off.size.y * 0.22, z: 0.05 }, off.boss,
+    { alpha, emissive: !!off.energy });
 }
 
 /** 兩個 hex 顏色線性混合。 */

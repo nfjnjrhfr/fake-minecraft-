@@ -475,6 +475,35 @@ test('配裝封包完整同步（含顏色與名字）', () => {
   assert(l.partDefense.torso > 0.3, '重建的配裝防禦不對');
 });
 
+test('鋼鐵俠套裝:數值合理且渲染資料齊全', () => {
+  const l = buildLoadout(LOADOUT_PRESETS.ironman);
+  assert(Object.keys(l.pieces).length === 8, '應該全身 8 件動力裝甲');
+  assert(l.partDefense.torso > 0.3, `動力裝甲胸甲要夠硬,實得 ${l.partDefense.torso}`);
+  // 又硬又靈活:防禦接近獄髓,但要跑得比獄髓全套快
+  const nether = buildLoadout(LOADOUT_PRESETS.netherlord);
+  assert(l.moveMul > nether.moveMul, `鋼鐵俠要比獄髓領主靈活:${l.moveMul} vs ${nether.moveMul}`);
+  assert(l.weapon.emissiveBlade === true, '能量光刃要有自發光旗標');
+  assert(l.offhand.energy === true, '反衝力場要有能量盾旗標');
+  // 沒有披風
+  assert(!LOADOUT_PRESETS.ironman.skin.cape, '鋼鐵俠不該有披風');
+  // 骨架能正常擺姿勢
+  const f = new Fighter(0, LOADOUT_PRESETS.ironman);
+  f.updatePose(0.016, null);
+  for (const m of f.rig.world) for (const v of m) assert(Number.isFinite(v), '骨架矩陣出現 NaN');
+});
+
+test('鋼鐵俠套裝能完整走過連線同步(含無披風)', () => {
+  const buf = encodeLoadout(1, LOADOUT_PRESETS.ironman, WEAPON_KEYS, OFFHAND_KEYS, '鋼鐵俠');
+  const dec = decodeLoadout(buf, WEAPON_KEYS, OFFHAND_KEYS);
+  assert(dec.config.weapon === 'energyBlade', `武器不符:${dec.config.weapon}`);
+  assert(dec.config.offhand === 'repulsor', `副手不符:${dec.config.offhand}`);
+  assert(dec.config.armor.helmet === 'powerRed', `頭盔材質不符:${dec.config.armor.helmet}`);
+  assert(dec.config.armor.boots === 'powerGold', `靴子材質不符:${dec.config.armor.boots}`);
+  assert(dec.config.skin.cape === '', `無披風要同步成無披風,實得 "${dec.config.skin.cape}"`);
+  const l = buildLoadout(dec.config);
+  assert(l.partDefense.head > 0.25, '重建後頭盔防禦不對');
+});
+
 test('超過 MTU 的訊息能分片重組', () => {
   const cfg = LOADOUT_PRESETS.champion;
   const msg = encodeLoadout(0, cfg, WEAPON_KEYS, OFFHAND_KEYS, '鑽石鬥士');

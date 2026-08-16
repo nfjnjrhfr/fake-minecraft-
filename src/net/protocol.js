@@ -2,7 +2,7 @@
 // 目標是塞得進 BLE 預設 20 bytes 的 MTU，所有欄位都量化過。
 // 上層再套一層分片（fragment），超過 MTU 的訊息會自動切開重組。
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;   // v4: 動力裝甲材質 + 無披風哨兵
 
 export const MSG = {
   HELLO: 0x01,
@@ -214,7 +214,17 @@ export function decodeEvent(buf) {
 // 配裝同步
 // ---------------------------------------------------------------------------
 
-const MAT_LIST = ['none', 'cloth', 'leather', 'chainmail', 'iron', 'gold', 'diamond', 'netherite'];
+// 新材質一律「往後append」：封包裡存的是索引，改動既有順序會讓
+// 新舊版本互相解讀成錯的材質。
+const MAT_LIST = ['none', 'cloth', 'leather', 'chainmail', 'iron', 'gold', 'diamond', 'netherite',
+  'powerRed', 'powerGold'];
+
+/**
+ * 「沒有披風」的哨兵色。封包的顏色欄位是固定 3 bytes，沒辦法表達「無」，
+ * 而 #010101 這種顏色實際上選不出來，拿來當哨兵最安全。
+ * 沒有這個的話，鋼鐵俠（無披風）同步到對面會長出一件灰披風。
+ */
+const NO_CAPE = '#010101';
 const SLOT_LIST = ['helmet', 'chestplate', 'pauldrons', 'vambraces', 'gauntlets', 'belt', 'leggings', 'boots'];
 
 /** 配裝封包：8 護甲 + 武器 + 副手 + 4 組顏色 + 名字。 */
@@ -231,7 +241,7 @@ export function encodeLoadout(playerId, cfg, weaponKeys, offhandKeys, name = '')
   buf[11] = Math.max(0, offhandKeys.indexOf(cfg.offhand));
   buf[12] = PROTOCOL_VERSION;
   const skin = cfg.skin || {};
-  const colors = [skin.skin, skin.shirt, skin.pants, skin.cape];
+  const colors = [skin.skin, skin.shirt, skin.pants, skin.cape || NO_CAPE];
   let o = 13;
   for (const c of colors) {
     const v = parseInt((c || '#888888').slice(1), 16);
@@ -262,7 +272,10 @@ export function decodeLoadout(buf, weaponKeys, offhandKeys) {
       armor,
       weapon: weaponKeys[buf[10]] || weaponKeys[0],
       offhand: offhandKeys[buf[11]] || offhandKeys[0],
-      skin: { skin: hex(13), shirt: hex(16), pants: hex(19), cape: hex(22) },
+      skin: {
+        skin: hex(13), shirt: hex(16), pants: hex(19),
+        cape: hex(22) === NO_CAPE ? '' : hex(22),
+      },
     },
   };
 }
