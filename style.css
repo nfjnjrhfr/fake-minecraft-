@@ -132,7 +132,52 @@ kbd {
   box-shadow: 0 2px 0 var(--edge);
 }
 
-#rotate { display: none; }
+#rotate,
+#flip-wrap { display: none; }
+
+/* the grass-block button: square, chunky, with a bevel underneath */
+#rotate button,
+#flip-landscape {
+  font: inherit;
+  color: #10131a;
+  background: var(--grass);
+  border: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#rotate button {
+  padding: 15px 30px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  box-shadow: 0 5px 0 #3f6d20;
+}
+
+#rotate button:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 #3f6d20;
+}
+
+#rotate button:focus-visible {
+  outline: 2px solid var(--bone);
+  outline-offset: 3px;
+}
+
+.rotate-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  color: var(--bone);
+}
+
+.rotate-hint {
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--dim);
+}
+
+.rotate-hint b { color: var(--bone); }
 
 /* touch devices: the cabinet chrome steps aside and the game takes the screen */
 @media (hover: none) and (pointer: coarse) {
@@ -150,19 +195,70 @@ kbd {
   canvas:focus,
   canvas:focus-visible { outline: none; }
 
-  /* portrait is unplayable at 16:9 — ask for landscape */
+  /* portrait is unplayable at 16:9 — offer landscape instead of demanding it */
   @media (orientation: portrait) {
     .cabinet { display: none; }
+
     #rotate {
       display: grid;
-      place-items: center;
+      justify-items: center;
+      align-content: center;
+      gap: 22px;
       min-height: 100dvh;
       padding: 24px;
       text-align: center;
-      font-size: 19px;
-      line-height: 1.8;
-      letter-spacing: .06em;
-      color: var(--bone);
+    }
+
+    /* Rotation-locked phones can't turn: this rotates the game instead, so the
+       stage still fills the screen and keeps its 16:9 shape — the width below
+       runs along the screen's *vertical* axis once rotated. */
+    body.force-landscape .cabinet { display: flex; }
+    body.force-landscape #rotate { display: none; }
+
+    body.force-landscape #stage,
+    body.force-landscape #flip-wrap {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(90deg);
+    }
+
+    body.force-landscape.flip #stage,
+    body.force-landscape.flip #flip-wrap {
+      transform: translate(-50%, -50%) rotate(-90deg);
+    }
+
+    body.force-landscape #stage {
+      width: min(100dvh, 100vw * 16 / 9);
+    }
+
+    /* rotated with the stage so it reads upright, and out of the way of both
+       the thumbstick and the action buttons */
+    body.force-landscape #flip-wrap {
+      display: grid;
+      align-items: end;
+      justify-items: center;
+      width: 100dvh;
+      height: 100vw;
+      padding-bottom: 8px;
+      pointer-events: none;
+      transition: opacity .4s ease;
+    }
+
+    /* once faded it must stop swallowing touches meant for the arena */
+    body.force-landscape #flip-wrap.fade { opacity: 0; }
+    body.force-landscape #flip-wrap.fade #flip-landscape { pointer-events: none; }
+
+    #flip-landscape {
+      padding: 9px 16px;
+      font-size: 12px;
+      letter-spacing: .08em;
+      pointer-events: auto;
+      box-shadow: 0 3px 0 #3f6d20;
     }
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #flip-wrap { transition: none; }
 }

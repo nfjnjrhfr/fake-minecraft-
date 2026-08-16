@@ -144,7 +144,52 @@ kbd {
   box-shadow: 0 2px 0 var(--edge);
 }
 
-#rotate { display: none; }
+#rotate,
+#flip-wrap { display: none; }
+
+/* the grass-block button: square, chunky, with a bevel underneath */
+#rotate button,
+#flip-landscape {
+  font: inherit;
+  color: #10131a;
+  background: var(--grass);
+  border: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#rotate button {
+  padding: 15px 30px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  box-shadow: 0 5px 0 #3f6d20;
+}
+
+#rotate button:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 #3f6d20;
+}
+
+#rotate button:focus-visible {
+  outline: 2px solid var(--bone);
+  outline-offset: 3px;
+}
+
+.rotate-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  color: var(--bone);
+}
+
+.rotate-hint {
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--dim);
+}
+
+.rotate-hint b { color: var(--bone); }
 
 /* touch devices: the cabinet chrome steps aside and the game takes the screen */
 @media (hover: none) and (pointer: coarse) {
@@ -162,21 +207,72 @@ kbd {
   canvas:focus,
   canvas:focus-visible { outline: none; }
 
-  /* portrait is unplayable at 16:9 — ask for landscape */
+  /* portrait is unplayable at 16:9 — offer landscape instead of demanding it */
   @media (orientation: portrait) {
     .cabinet { display: none; }
+
     #rotate {
       display: grid;
-      place-items: center;
+      justify-items: center;
+      align-content: center;
+      gap: 22px;
       min-height: 100dvh;
       padding: 24px;
       text-align: center;
-      font-size: 19px;
-      line-height: 1.8;
-      letter-spacing: .06em;
-      color: var(--bone);
+    }
+
+    /* Rotation-locked phones can't turn: this rotates the game instead, so the
+       stage still fills the screen and keeps its 16:9 shape — the width below
+       runs along the screen's *vertical* axis once rotated. */
+    body.force-landscape .cabinet { display: flex; }
+    body.force-landscape #rotate { display: none; }
+
+    body.force-landscape #stage,
+    body.force-landscape #flip-wrap {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(90deg);
+    }
+
+    body.force-landscape.flip #stage,
+    body.force-landscape.flip #flip-wrap {
+      transform: translate(-50%, -50%) rotate(-90deg);
+    }
+
+    body.force-landscape #stage {
+      width: min(100dvh, 100vw * 16 / 9);
+    }
+
+    /* rotated with the stage so it reads upright, and out of the way of both
+       the thumbstick and the action buttons */
+    body.force-landscape #flip-wrap {
+      display: grid;
+      align-items: end;
+      justify-items: center;
+      width: 100dvh;
+      height: 100vw;
+      padding-bottom: 8px;
+      pointer-events: none;
+      transition: opacity .4s ease;
+    }
+
+    /* once faded it must stop swallowing touches meant for the arena */
+    body.force-landscape #flip-wrap.fade { opacity: 0; }
+    body.force-landscape #flip-wrap.fade #flip-landscape { pointer-events: none; }
+
+    #flip-landscape {
+      padding: 9px 16px;
+      font-size: 12px;
+      letter-spacing: .08em;
+      pointer-events: auto;
+      box-shadow: 0 3px 0 #3f6d20;
     }
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #flip-wrap { transition: none; }
 }
 </style>
 </head>
@@ -201,7 +297,16 @@ kbd {
     </div>
   </main>
 
-  <div id="rotate">請把手機轉成橫向 🔄</div>
+  <div id="rotate">
+    <p class="rotate-title">這個遊戲要橫向玩</p>
+    <button id="go-landscape" type="button">轉成橫向全螢幕</button>
+    <p class="rotate-hint">手機鎖定直向也沒關係<br>按下後把手機<b>向左轉</b>（右側朝上）</p>
+  </div>
+
+  <div id="flip-wrap">
+    <button id="flip-landscape" type="button">⟲ 方向相反？點這裡翻轉</button>
+  </div>
+
   <script>
 /* 方塊對戰 Block Brawl — a two-player Minecraft-flavoured arena fighter.
    Everything runs on one canvas, no build step, no dependencies. */
@@ -320,8 +425,99 @@ kbd {
     ]);
   }
 
+  // ------------------------------------------------------- forced landscape
+  // A phone with rotation lock on can never turn, so the button on the
+  // portrait screen first asks for a real orientation lock and, when the
+  // browser refuses (iOS, or any embedded page), rotates the stage with CSS
+  // instead. Either way the game ends up playable sideways.
+  var forcedLandscape = false;
+  var flipped = false;
+  var flipWrap = document.getElementById('flip-wrap');
+  var flipTimer = 0;
+
+  function setForcedLandscape(on) {
+    forcedLandscape = on;
+    document.body.classList.toggle('force-landscape', on);
+    if (!on) {
+      document.body.classList.remove('flip');
+      flipped = false;
+    }
+    if (flipWrap) {
+      flipWrap.classList.remove('fade');
+      clearTimeout(flipTimer);
+      if (on) {
+        // the flip offer is only useful for the first few seconds
+        flipTimer = setTimeout(function () { flipWrap.classList.add('fade'); }, 8000);
+      }
+    }
+  }
+
+  function requestLandscape() {
+    touchMode = true;
+    var root = document.documentElement;
+    var goFullscreen = root.requestFullscreen || root.webkitRequestFullscreen;
+    var orientation = window.screen && window.screen.orientation;
+
+    function useCssRotation() { setForcedLandscape(true); }
+
+    if (!goFullscreen || !orientation || !orientation.lock) {
+      useCssRotation();
+      return;
+    }
+
+    var entering;
+    try {
+      entering = goFullscreen.call(root);
+    } catch (err) {
+      useCssRotation();
+      return;
+    }
+    if (!entering || !entering.then) {
+      useCssRotation();
+      return;
+    }
+    entering.then(function () {
+      return orientation.lock('landscape');
+    }).catch(useCssRotation);
+  }
+
+  var landscapeBtn = document.getElementById('go-landscape');
+  if (landscapeBtn) {
+    landscapeBtn.addEventListener('click', requestLandscape);
+  }
+
+  var flipBtn = document.getElementById('flip-landscape');
+  if (flipBtn) {
+    flipBtn.addEventListener('click', function () {
+      flipped = !flipped;
+      document.body.classList.toggle('flip', flipped);
+    });
+  }
+
+  // once the device really is landscape, the CSS rotation is redundant
+  var portraitQuery = window.matchMedia('(orientation: portrait)');
+  function onOrientationChange() {
+    if (!portraitQuery.matches && forcedLandscape) setForcedLandscape(false);
+  }
+  if (portraitQuery.addEventListener) portraitQuery.addEventListener('change', onOrientationChange);
+  else if (portraitQuery.addListener) portraitQuery.addListener(onOrientationChange);
+
   function toCanvas(e) {
     var r = canvas.getBoundingClientRect();
+    // getBoundingClientRect reports the axis-aligned box of the *rotated*
+    // stage, so map through the rotation by hand instead of trusting x/y
+    if (forcedLandscape) {
+      if (flipped) {
+        return {
+          x: (r.bottom - e.clientY) * (W / r.height),
+          y: (e.clientX - r.left) * (H / r.width)
+        };
+      }
+      return {
+        x: (e.clientY - r.top) * (W / r.height),
+        y: (r.right - e.clientX) * (H / r.width)
+      };
+    }
     return {
       x: (e.clientX - r.left) * (W / r.width),
       y: (e.clientY - r.top) * (H / r.height)

@@ -115,8 +115,99 @@
     ]);
   }
 
+  // ------------------------------------------------------- forced landscape
+  // A phone with rotation lock on can never turn, so the button on the
+  // portrait screen first asks for a real orientation lock and, when the
+  // browser refuses (iOS, or any embedded page), rotates the stage with CSS
+  // instead. Either way the game ends up playable sideways.
+  var forcedLandscape = false;
+  var flipped = false;
+  var flipWrap = document.getElementById('flip-wrap');
+  var flipTimer = 0;
+
+  function setForcedLandscape(on) {
+    forcedLandscape = on;
+    document.body.classList.toggle('force-landscape', on);
+    if (!on) {
+      document.body.classList.remove('flip');
+      flipped = false;
+    }
+    if (flipWrap) {
+      flipWrap.classList.remove('fade');
+      clearTimeout(flipTimer);
+      if (on) {
+        // the flip offer is only useful for the first few seconds
+        flipTimer = setTimeout(function () { flipWrap.classList.add('fade'); }, 8000);
+      }
+    }
+  }
+
+  function requestLandscape() {
+    touchMode = true;
+    var root = document.documentElement;
+    var goFullscreen = root.requestFullscreen || root.webkitRequestFullscreen;
+    var orientation = window.screen && window.screen.orientation;
+
+    function useCssRotation() { setForcedLandscape(true); }
+
+    if (!goFullscreen || !orientation || !orientation.lock) {
+      useCssRotation();
+      return;
+    }
+
+    var entering;
+    try {
+      entering = goFullscreen.call(root);
+    } catch (err) {
+      useCssRotation();
+      return;
+    }
+    if (!entering || !entering.then) {
+      useCssRotation();
+      return;
+    }
+    entering.then(function () {
+      return orientation.lock('landscape');
+    }).catch(useCssRotation);
+  }
+
+  var landscapeBtn = document.getElementById('go-landscape');
+  if (landscapeBtn) {
+    landscapeBtn.addEventListener('click', requestLandscape);
+  }
+
+  var flipBtn = document.getElementById('flip-landscape');
+  if (flipBtn) {
+    flipBtn.addEventListener('click', function () {
+      flipped = !flipped;
+      document.body.classList.toggle('flip', flipped);
+    });
+  }
+
+  // once the device really is landscape, the CSS rotation is redundant
+  var portraitQuery = window.matchMedia('(orientation: portrait)');
+  function onOrientationChange() {
+    if (!portraitQuery.matches && forcedLandscape) setForcedLandscape(false);
+  }
+  if (portraitQuery.addEventListener) portraitQuery.addEventListener('change', onOrientationChange);
+  else if (portraitQuery.addListener) portraitQuery.addListener(onOrientationChange);
+
   function toCanvas(e) {
     var r = canvas.getBoundingClientRect();
+    // getBoundingClientRect reports the axis-aligned box of the *rotated*
+    // stage, so map through the rotation by hand instead of trusting x/y
+    if (forcedLandscape) {
+      if (flipped) {
+        return {
+          x: (r.bottom - e.clientY) * (W / r.height),
+          y: (e.clientX - r.left) * (H / r.width)
+        };
+      }
+      return {
+        x: (e.clientY - r.top) * (W / r.height),
+        y: (r.right - e.clientX) * (H / r.width)
+      };
+    }
     return {
       x: (e.clientX - r.left) * (W / r.width),
       y: (e.clientY - r.top) * (H / r.height)
