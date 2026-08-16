@@ -15,16 +15,34 @@
 
 ## 開始玩
 
-直接用瀏覽器開啟 `index.html` 就能玩（雙擊檔案即可，不需要架伺服器）。
+最簡單：下載 **[`dist/blockbrawl.html`](dist/blockbrawl.html)** 這一個檔案，用瀏覽器打開就能玩。
+整個遊戲（HTML + CSS + JS）都打包在裡面，55 KB、零相依、可離線、也可以直接傳給別人。
 
-手機請把螢幕轉成**橫向**，畫面會自動全螢幕並顯示虛擬搖桿。
-
+開發時則用 `index.html`（分成 `style.css` 與 `game.js` 三個檔案），一樣雙擊就能開，
 或用任意靜態伺服器：
 
 ```bash
 python3 -m http.server 8000
 # 打開 http://localhost:8000
 ```
+
+手機請把螢幕轉成**橫向**，畫面會自動全螢幕並顯示虛擬搖桿。
+
+## 打包成單一檔案
+
+```bash
+node build.js
+```
+
+會把三個原始檔內嵌成兩份輸出（不做壓縮，輸出保持可讀、可 diff）：
+
+| 檔案 | 用途 |
+| --- | --- |
+| `dist/blockbrawl.html` | 完整的獨立網頁，雙擊即開、也可以丟到任何靜態空間 |
+| `dist/embed.html` | 同樣內容但不含 `<html>` / `<head>` / `<body>` 外殼，給會自己套外殼的嵌入環境 |
+
+**想放上網**：Repo 的 `Settings → Pages → Source` 選 `main` 分支即可，
+之後就能用 `https://<你的帳號>.github.io/fake-minecraft-/dist/blockbrawl.html` 開。
 
 ## 遊戲模式
 
@@ -74,9 +92,11 @@ python3 -m http.server 8000
 ## 檔案結構
 
 ```
-index.html   頁面外殼
-style.css    版面與縮放（畫面自動等比例填滿視窗、手機橫向全螢幕）
+index.html   頁面外殼（機台外框）
+style.css    外框樣式與縮放（畫面自動等比例填滿視窗、手機橫向全螢幕）
 game.js      全部的遊戲邏輯：地形生成、物理碰撞、戰鬥、AI、觸控、繪圖、音效
+build.js     把上面三個檔打包成 dist/ 的單一 HTML
+dist/        打包輸出（由 build.js 產生，不要手改）
 roblox/      Roblox 版（Luau），見 roblox/README.md
 ```
 
