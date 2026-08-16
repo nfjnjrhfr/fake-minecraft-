@@ -2,7 +2,8 @@
 
 import { Renderer } from './core/renderer.js';
 import { Match, MATCH_MODE } from './game/match.js';
-import { emptyInput, CODE_BY_ATTACK } from './game/fighter.js';
+import { Fighter, emptyInput, CODE_BY_ATTACK } from './game/fighter.js';
+import { drawRig } from './game/rig.js';
 import {
   LOADOUT_PRESETS, MATERIALS, ARMOR_SLOTS, WEAPONS, OFFHANDS,
   WEAPON_KEYS, OFFHAND_KEYS, MATERIAL_KEYS, buildLoadout,
@@ -204,6 +205,44 @@ function gatherInput() {
 }
 
 // ---------------------------------------------------------------------------
+// 裝備工坊的試衣間:即時渲染「你自己」目前的配裝,會慢速旋轉
+// ---------------------------------------------------------------------------
+
+const previewCanvas = $('preview');
+const previewRenderer = previewCanvas ? new Renderer(previewCanvas) : null;
+let previewFighter = null;
+let previewDirty = true;
+
+function rebuildPreview() { previewDirty = true; }
+
+function renderPreview(dt, now) {
+  if (!previewRenderer) return;
+  const page = document.querySelector('.page[data-page="loadout"]');
+  if (menu.classList.contains('hidden') || !page?.classList.contains('active')) return;
+
+  if (previewDirty) {
+    previewDirty = false;
+    previewFighter = new Fighter(0, deepClone(app.loadout), { name: 'preview' });
+  }
+  if (!previewFighter) return;
+
+  // 內部解析度固定,CSS 負責縮放
+  if (previewCanvas.width !== 560) previewRenderer.resize(280, 190, 2);
+
+  const f = previewFighter;
+  f.yaw = now / 1400;                       // 慢速旋轉展示
+  f.update(emptyInput(), dt, null);         // 待機呼吸動作
+
+  const r = previewRenderer;
+  r.begin();
+  const ang = 0;                            // 相機固定,角色自轉
+  r.setCamera({ x: Math.sin(ang) * 3.6, y: 1.75, z: Math.cos(ang) * 3.6 }, { x: 0, y: 1.05, z: 0 });
+  r.pushShadow(f.x, f.z, 0.55, 0.3);
+  drawRig(f.rig, r, {});
+  r.end({ skyTop: '#0a0f1c', skyMid: '#141f36', skyBottom: '#1c1626', groundSize: 8, groundStep: 1 });
+}
+
+// ---------------------------------------------------------------------------
 // 選單
 // ---------------------------------------------------------------------------
 
@@ -232,6 +271,18 @@ function showPage(name) {
   menu.classList.remove('hidden');
   menu.scrollTop = 0;
   updateCoinBadge();
+  if (name === 'solo') updateMyLoadoutSummary();
+}
+
+/** 單機頁頂端的「你的裝備」一行摘要。 */
+function updateMyLoadoutSummary() {
+  const el = $('my-loadout-summary');
+  if (!el) return;
+  const l = buildLoadout(app.loadout);
+  const armorCount = Object.keys(l.pieces).length;
+  el.textContent = `${l.weapon.name}`
+    + (l.offhand.kind === 'shield' ? ` + ${l.offhand.name}` : '')
+    + ` · 護甲 ${armorCount}/8 件 · 防禦 ${l.ratingDefense} · ${l.weight.toFixed(1)}kg`;
 }
 
 function hideMenu() {
@@ -374,6 +425,7 @@ function renderLoadoutEditor() {
     input.addEventListener('input', () => {
       app.loadout.skin = app.loadout.skin || {};
       app.loadout.skin[key] = input.value;
+      rebuildPreview();
       save();
     });
     const span = document.createElement('span');
@@ -386,6 +438,7 @@ function renderLoadoutEditor() {
 }
 
 function updateStats() {
+  rebuildPreview();
   const l = buildLoadout(app.loadout);
   const rows = [
     ['攻擊力', clamp(l.ratingOffense / 40, 0, 1), l.ratingOffense],
@@ -921,6 +974,8 @@ function loop(now) {
   app.lastTime = now;
   // 分頁切回來時 dt 會爆掉，夾住避免物理穿模
   const dt = clamp(rawDt, 0, 1 / 20);
+
+  renderPreview(dt, now);
 
   if (!app.match) return;
 

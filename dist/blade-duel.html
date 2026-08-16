@@ -721,6 +721,35 @@ kbd {
 }
 .coin-badge b { font-variant-numeric: tabular-nums; }
 .result-row.coin span, .result-row.coin b { color: #ffd54a; }
+
+/* 裝備工坊的試衣間 */
+.preview-canvas {
+  width: 100%;
+  height: 190px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #0a0f1c;
+  margin-bottom: 14px;
+  display: block;
+}
+
+/* 單機頁的「你的裝備」摘要列 */
+.my-loadout-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(79, 195, 247, 0.35);
+  background: rgba(20, 40, 60, 0.45);
+}
+.my-loadout-row > span {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.5;
+}
+.my-loadout-row .btn { flex: 0 0 auto; }
 </style>
 
 <canvas id="view"></canvas>
@@ -833,17 +862,24 @@ kbd {
     <!-- 單機 -->
     <section class="page" data-page="solo">
       <h2>單機訓練</h2>
+      <div class="field my-loadout">
+        <label>你的裝備（出戰用）</label>
+        <div class="my-loadout-row">
+          <span id="my-loadout-summary">—</span>
+          <button class="btn small" data-go="loadout">去裝備工坊調整</button>
+        </div>
+      </div>
       <div class="field">
-        <label>NPC 強度</label>
+        <label>對手 NPC 的強度</label>
         <div class="chips" id="difficulty-chips"></div>
         <p class="hint" id="difficulty-hint"></p>
       </div>
       <div class="field">
-        <label>NPC 打法性格</label>
+        <label>對手 NPC 的打法性格</label>
         <div class="chips" id="style-chips"></div>
       </div>
       <div class="field">
-        <label>NPC 配裝</label>
+        <label>對手 NPC 的配裝（不是你的）</label>
         <div class="chips" id="enemy-preset-chips"></div>
       </div>
       <div class="field">
@@ -915,8 +951,10 @@ kbd {
     <!-- 裝備 -->
     <section class="page wide" data-page="loadout">
       <h2>裝備工坊</h2>
+      <p class="hint" style="margin:-8px 0 14px">這裡設定的是<b style="color:var(--accent)">你自己</b>出戰的裝備，改了立刻反映在下面的試衣間。</p>
       <div class="loadout-wrap">
         <div class="loadout-col">
+          <canvas id="preview" class="preview-canvas"></canvas>
           <div class="field">
             <label>快速套裝</label>
             <div class="chips" id="preset-chips"></div>
@@ -5709,6 +5747,7 @@ function sessionInfo(session) {
 
 
 
+
 const $ = (id) => document.getElementById(id);
 
 /** structuredClone 的安全版：iOS 15.4 之前沒有這個 API，配裝是純 JSON 所以退回 JSON 拷貝即可。 */
@@ -5898,6 +5937,44 @@ function gatherInput() {
 }
 
 // ---------------------------------------------------------------------------
+// 裝備工坊的試衣間:即時渲染「你自己」目前的配裝,會慢速旋轉
+// ---------------------------------------------------------------------------
+
+const previewCanvas = $('preview');
+const previewRenderer = previewCanvas ? new Renderer(previewCanvas) : null;
+let previewFighter = null;
+let previewDirty = true;
+
+function rebuildPreview() { previewDirty = true; }
+
+function renderPreview(dt, now) {
+  if (!previewRenderer) return;
+  const page = document.querySelector('.page[data-page="loadout"]');
+  if (menu.classList.contains('hidden') || !page?.classList.contains('active')) return;
+
+  if (previewDirty) {
+    previewDirty = false;
+    previewFighter = new Fighter(0, deepClone(app.loadout), { name: 'preview' });
+  }
+  if (!previewFighter) return;
+
+  // 內部解析度固定,CSS 負責縮放
+  if (previewCanvas.width !== 560) previewRenderer.resize(280, 190, 2);
+
+  const f = previewFighter;
+  f.yaw = now / 1400;                       // 慢速旋轉展示
+  f.update(emptyInput(), dt, null);         // 待機呼吸動作
+
+  const r = previewRenderer;
+  r.begin();
+  const ang = 0;                            // 相機固定,角色自轉
+  r.setCamera({ x: Math.sin(ang) * 3.6, y: 1.75, z: Math.cos(ang) * 3.6 }, { x: 0, y: 1.05, z: 0 });
+  r.pushShadow(f.x, f.z, 0.55, 0.3);
+  drawRig(f.rig, r, {});
+  r.end({ skyTop: '#0a0f1c', skyMid: '#141f36', skyBottom: '#1c1626', groundSize: 8, groundStep: 1 });
+}
+
+// ---------------------------------------------------------------------------
 // 選單
 // ---------------------------------------------------------------------------
 
@@ -5926,6 +6003,18 @@ function showPage(name) {
   menu.classList.remove('hidden');
   menu.scrollTop = 0;
   updateCoinBadge();
+  if (name === 'solo') updateMyLoadoutSummary();
+}
+
+/** 單機頁頂端的「你的裝備」一行摘要。 */
+function updateMyLoadoutSummary() {
+  const el = $('my-loadout-summary');
+  if (!el) return;
+  const l = buildLoadout(app.loadout);
+  const armorCount = Object.keys(l.pieces).length;
+  el.textContent = `${l.weapon.name}`
+    + (l.offhand.kind === 'shield' ? ` + ${l.offhand.name}` : '')
+    + ` · 護甲 ${armorCount}/8 件 · 防禦 ${l.ratingDefense} · ${l.weight.toFixed(1)}kg`;
 }
 
 function hideMenu() {
@@ -6068,6 +6157,7 @@ function renderLoadoutEditor() {
     input.addEventListener('input', () => {
       app.loadout.skin = app.loadout.skin || {};
       app.loadout.skin[key] = input.value;
+      rebuildPreview();
       save();
     });
     const span = document.createElement('span');
@@ -6080,6 +6170,7 @@ function renderLoadoutEditor() {
 }
 
 function updateStats() {
+  rebuildPreview();
   const l = buildLoadout(app.loadout);
   const rows = [
     ['攻擊力', clamp(l.ratingOffense / 40, 0, 1), l.ratingOffense],
@@ -6615,6 +6706,8 @@ function loop(now) {
   app.lastTime = now;
   // 分頁切回來時 dt 會爆掉，夾住避免物理穿模
   const dt = clamp(rawDt, 0, 1 / 20);
+
+  renderPreview(dt, now);
 
   if (!app.match) return;
 

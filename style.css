@@ -678,3 +678,32 @@ kbd {
 }
 .coin-badge b { font-variant-numeric: tabular-nums; }
 .result-row.coin span, .result-row.coin b { color: #ffd54a; }
+
+/* 裝備工坊的試衣間 */
+.preview-canvas {
+  width: 100%;
+  height: 190px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #0a0f1c;
+  margin-bottom: 14px;
+  display: block;
+}
+
+/* 單機頁的「你的裝備」摘要列 */
+.my-loadout-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(79, 195, 247, 0.35);
+  background: rgba(20, 40, 60, 0.45);
+}
+.my-loadout-row > span {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.5;
+}
+.my-loadout-row .btn { flex: 0 0 auto; }

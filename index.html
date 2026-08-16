@@ -121,17 +121,24 @@
     <!-- 單機 -->
     <section class="page" data-page="solo">
       <h2>單機訓練</h2>
+      <div class="field my-loadout">
+        <label>你的裝備（出戰用）</label>
+        <div class="my-loadout-row">
+          <span id="my-loadout-summary">—</span>
+          <button class="btn small" data-go="loadout">去裝備工坊調整</button>
+        </div>
+      </div>
       <div class="field">
-        <label>NPC 強度</label>
+        <label>對手 NPC 的強度</label>
         <div class="chips" id="difficulty-chips"></div>
         <p class="hint" id="difficulty-hint"></p>
       </div>
       <div class="field">
-        <label>NPC 打法性格</label>
+        <label>對手 NPC 的打法性格</label>
         <div class="chips" id="style-chips"></div>
       </div>
       <div class="field">
-        <label>NPC 配裝</label>
+        <label>對手 NPC 的配裝（不是你的）</label>
         <div class="chips" id="enemy-preset-chips"></div>
       </div>
       <div class="field">
@@ -203,8 +210,10 @@
     <!-- 裝備 -->
     <section class="page wide" data-page="loadout">
       <h2>裝備工坊</h2>
+      <p class="hint" style="margin:-8px 0 14px">這裡設定的是<b style="color:var(--accent)">你自己</b>出戰的裝備，改了立刻反映在下面的試衣間。</p>
       <div class="loadout-wrap">
         <div class="loadout-col">
+          <canvas id="preview" class="preview-canvas"></canvas>
           <div class="field">
             <label>快速套裝</label>
             <div class="chips" id="preset-chips"></div>
