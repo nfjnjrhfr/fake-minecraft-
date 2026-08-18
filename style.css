@@ -196,3 +196,6 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
   .keys{display:none}
   .enter3d p.muted{font-size:13px}
 }
+
+/* ---- 自家礦權 ---- */
+.mine-owned{border-color:var(--jade-d);box-shadow:inset 0 0 26px rgba(63,214,164,.06)}

@@ -199,6 +199,9 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
   .enter3d p.muted{font-size:13px}
 }
 
+/* ---- 自家礦權 ---- */
+.mine-owned{border-color:var(--jade-d);box-shadow:inset 0 0 26px rgba(63,214,164,.06)}
+
 </style>
 
 <div id="app">
@@ -1709,6 +1712,7 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
       day: 1, money: 260000, rep: 0, morale: 70,
       weather: WEATHER[0],
       workers: [newWorker('miner', 2), newWorker('miner', 1), newWorker('porter', 1)],
+      owned: { huika: true },
       equip: {},
       supply: { diesel: 40, battery: 6, grindwheel: 4, blade: 1, dynamite: 0, wood: 2, food: 20, medicine: 2 },
       stones: [],       // 已運下山、在工房
@@ -1726,6 +1730,7 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
     dedupeNames();
     rollBuyers();
     log('第 1 天。你接手了一支三個人的採玉隊，口袋裡 ' + money(S.money) + '。山就在那裡。');
+    log('🏠 村裡長輩把會卡的一口老坑留給你 — 礦權是你的，上山不用再繳日費。', 'ok');
     return S;
   }
 
@@ -1785,14 +1790,16 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
     if (S.session) return { ok: false, msg: '已經在山上了。' };
     const site = SITES.find(s => s.id === siteId);
     if (!teamIds.length) return { ok: false, msg: '至少要帶一個人上山。' };
-    if (S.money < site.fee) return { ok: false, msg: '付不出 ' + site.name + ' 的礦權日費 ' + money(site.fee) };
+    const owned = !!(S.owned && S.owned[siteId]);
+    if (!owned && S.money < site.fee) return { ok: false, msg: '付不出 ' + site.name + ' 的礦權日費 ' + money(site.fee) };
 
     const injured = teamIds.map(id => S.workers.find(w => w.id === id)).filter(w => w && w.injury > 0);
     if (injured.length) return { ok: false, msg: injured[0].name + ' 還在養傷，帶不上山。' };
 
-    S.money -= site.fee;
+    if (!owned) S.money -= site.fee;
     S.session = M.start(S, siteId, teamIds);
-    log('隊伍出發前往 ' + site.name + '（海拔 ' + site.alt + 'm），礦權費 ' + money(site.fee) + '。天氣：' + S.weather.name, 'go');
+    log('隊伍出發前往 ' + site.name + '（海拔 ' + site.alt + 'm），' +
+      (owned ? '自家礦權免日費' : '礦權費 ' + money(site.fee)) + '。天氣：' + S.weather.name, 'go');
 
     // 上山途中事件
     const ev = travelEvent(site);
@@ -2085,6 +2092,26 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
     return { ok: true, total, lines };
   }
 
+  /* ---------------- 買斷礦權 ---------------- */
+  function buyoutPrice(siteId) {
+    const site = SITES.find(x => x.id === siteId);
+    return site.fee * 45;
+  }
+
+  function buyoutSite(siteId) {
+    const site = SITES.find(x => x.id === siteId);
+    if (!site) return { ok: false, msg: '沒有這個場口' };
+    if (S.owned && S.owned[siteId]) return { ok: false, msg: '已經是你的了' };
+    const cost = buyoutPrice(siteId);
+    if (S.money < cost) return { ok: false, msg: '買斷要 ' + money(cost) + '，錢不夠' };
+    S.money -= cost;
+    S.owned = S.owned || {};
+    S.owned[siteId] = true;
+    S.rep += 5;
+    log('🏠 買斷 ' + site.name + ' 礦權 ' + money(cost) + ' — 這座山頭現在是你的了，上山免日費。', 'ok');
+    return { ok: true, cost };
+  }
+
   /* ---------------- 補給站 ---------------- */
   function buyEquip(id, n) {
     n = n || 1;
@@ -2182,6 +2209,7 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
       const d = JSON.parse(raw);
       d.weather = WEATHER.find(w => w.id === (d.weather && d.weather.id)) || WEATHER[0];
       d.session = null;
+      d.owned = d.owned || { huika: true };
       S = d;
       return true;
     } catch (e) { return false; }
@@ -2195,6 +2223,7 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
     carryCapacity, startMining, endMining, haulOptions, endDay,
     workshop, offerFor, sell, auction, auctionReady, rollBuyers,
     buyEquip, repairEquip, buySupply, candidates, hire, fire, train,
+    buyoutSite, buyoutPrice,
     skillLabel, newWorker
   };
 })(window);
@@ -2306,9 +2335,10 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
 
     const sites = SITES.map(st => {
       const stash = (s.stash[st.id] || []).length;
-      return '<div class="card site">' +
+      const owned = !!(s.owned && s.owned[st.id]);
+      return '<div class="card site' + (owned ? ' mine-owned' : '') + '">' +
         '<div class="spread"><h3>' + st.name + ' <span class="sub">海拔 ' + st.alt + 'm</span></h3>' +
-        '<b class="est">' + money(st.fee) + '/天</b></div>' +
+        (owned ? '<b class="tag j">🏠 自家礦權</b>' : '<b class="est">' + money(st.fee) + '/天</b>') + '</div>' +
         '<p class="tiny muted" style="margin:4px 0 8px">' + st.desc + '</p>' +
         '<div class="tagline">' +
         '<span class="tag ' + (st.danger > 0.25 ? 'r' : '') + '">危險 ' + Math.round(st.danger * 100) + '%</span>' +
@@ -2318,9 +2348,11 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
         '<span class="tag j">出料率 ' + Math.round(st.density * 100) + '%</span>' +
         (stash ? '<span class="tag g">山上存料 ' + stash + ' 顆</span>' : '') +
         '</div>' +
+        '<div class="row">' +
         '<button class="btn primary" data-act="go" data-site="' + st.id + '"' + (chosen.length ? '' : ' disabled') + '>' +
-        (chosen.length ? '帶 ' + chosen.length + ' 人上山 →' : '先在右邊編隊') + '</button>' +
-        '</div>';
+        (chosen.length ? '帶 ' + chosen.length + ' 人上山' + (owned ? '（免費）' : '') + ' →' : '先在右邊編隊') + '</button>' +
+        (owned ? '' : '<button class="btn sm gold" data-act="buyout" data-site="' + st.id + '">買斷 ' + money(G.buyoutPrice(st.id)) + '</button>') +
+        '</div></div>';
     }).join('');
 
     return '<div class="grid cols2">' +
@@ -2679,6 +2711,13 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
         if (sel.team[id]) delete sel.team[id]; else sel.team[id] = true;
         render(); break;
 
+      case 'buyout': {
+        const r = G.buyoutSite(el.dataset.site);
+        toast(r.ok ? '這座山頭是你的了！' : r.msg, r.ok ? 'gold' : 'bad');
+        if (r.ok) G.save();
+        render(); break;
+      }
+
       case 'go': {
         const ids = s.workers.filter(w => sel.team[w.id] && w.injury === 0).map(w => w.id);
         const r = G.startMining(el.dataset.site, ids);
@@ -2798,7 +2837,7 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
     openModal('<h3>開玉 — 你接手了一支採玉隊</h3>' +
       '<p class="tiny">口袋裡 ' + money(260000) + '、三個工人、幾把手工具。目標很簡單：把這支隊伍做大，切出一塊足以翻身的料。</p>' +
       '<div class="tiny muted"><b>一天的流程</b><br>' +
-      '① <b>營地</b>編隊、檢查裝備 → 選場口付礦權費上山<br>' +
+      '① <b>營地</b>編隊、檢查裝備 → 選場口上山（<b>會卡的老坑是你自家的，免礦權費</b>；其他場口付日費，賺夠了也能買斷）<br>' +
       '② <b>礦場</b>用工具敲開岩壁挖料（注意水線、照明、塌方）<br>' +
       '③ <b>收工</b>依載重挑料下山，其餘留在山上<br>' +
       '④ <b>工房</b>打燈、相裂、開窗，決定賣原石還是切開<br>' +

@@ -105,9 +105,10 @@
 
     const sites = SITES.map(st => {
       const stash = (s.stash[st.id] || []).length;
-      return '<div class="card site">' +
+      const owned = !!(s.owned && s.owned[st.id]);
+      return '<div class="card site' + (owned ? ' mine-owned' : '') + '">' +
         '<div class="spread"><h3>' + st.name + ' <span class="sub">海拔 ' + st.alt + 'm</span></h3>' +
-        '<b class="est">' + money(st.fee) + '/天</b></div>' +
+        (owned ? '<b class="tag j">🏠 自家礦權</b>' : '<b class="est">' + money(st.fee) + '/天</b>') + '</div>' +
         '<p class="tiny muted" style="margin:4px 0 8px">' + st.desc + '</p>' +
         '<div class="tagline">' +
         '<span class="tag ' + (st.danger > 0.25 ? 'r' : '') + '">危險 ' + Math.round(st.danger * 100) + '%</span>' +
@@ -117,9 +118,11 @@
         '<span class="tag j">出料率 ' + Math.round(st.density * 100) + '%</span>' +
         (stash ? '<span class="tag g">山上存料 ' + stash + ' 顆</span>' : '') +
         '</div>' +
+        '<div class="row">' +
         '<button class="btn primary" data-act="go" data-site="' + st.id + '"' + (chosen.length ? '' : ' disabled') + '>' +
-        (chosen.length ? '帶 ' + chosen.length + ' 人上山 →' : '先在右邊編隊') + '</button>' +
-        '</div>';
+        (chosen.length ? '帶 ' + chosen.length + ' 人上山' + (owned ? '（免費）' : '') + ' →' : '先在右邊編隊') + '</button>' +
+        (owned ? '' : '<button class="btn sm gold" data-act="buyout" data-site="' + st.id + '">買斷 ' + money(G.buyoutPrice(st.id)) + '</button>') +
+        '</div></div>';
     }).join('');
 
     return '<div class="grid cols2">' +
@@ -478,6 +481,13 @@
         if (sel.team[id]) delete sel.team[id]; else sel.team[id] = true;
         render(); break;
 
+      case 'buyout': {
+        const r = G.buyoutSite(el.dataset.site);
+        toast(r.ok ? '這座山頭是你的了！' : r.msg, r.ok ? 'gold' : 'bad');
+        if (r.ok) G.save();
+        render(); break;
+      }
+
       case 'go': {
         const ids = s.workers.filter(w => sel.team[w.id] && w.injury === 0).map(w => w.id);
         const r = G.startMining(el.dataset.site, ids);
@@ -597,7 +607,7 @@
     openModal('<h3>開玉 — 你接手了一支採玉隊</h3>' +
       '<p class="tiny">口袋裡 ' + money(260000) + '、三個工人、幾把手工具。目標很簡單：把這支隊伍做大，切出一塊足以翻身的料。</p>' +
       '<div class="tiny muted"><b>一天的流程</b><br>' +
-      '① <b>營地</b>編隊、檢查裝備 → 選場口付礦權費上山<br>' +
+      '① <b>營地</b>編隊、檢查裝備 → 選場口上山（<b>會卡的老坑是你自家的，免礦權費</b>；其他場口付日費，賺夠了也能買斷）<br>' +
       '② <b>礦場</b>用工具敲開岩壁挖料（注意水線、照明、塌方）<br>' +
       '③ <b>收工</b>依載重挑料下山，其餘留在山上<br>' +
       '④ <b>工房</b>打燈、相裂、開窗，決定賣原石還是切開<br>' +

@@ -35,6 +35,7 @@
       day: 1, money: 260000, rep: 0, morale: 70,
       weather: WEATHER[0],
       workers: [newWorker('miner', 2), newWorker('miner', 1), newWorker('porter', 1)],
+      owned: { huika: true },
       equip: {},
       supply: { diesel: 40, battery: 6, grindwheel: 4, blade: 1, dynamite: 0, wood: 2, food: 20, medicine: 2 },
       stones: [],       // 已運下山、在工房
@@ -52,6 +53,7 @@
     dedupeNames();
     rollBuyers();
     log('第 1 天。你接手了一支三個人的採玉隊，口袋裡 ' + money(S.money) + '。山就在那裡。');
+    log('🏠 村裡長輩把會卡的一口老坑留給你 — 礦權是你的，上山不用再繳日費。', 'ok');
     return S;
   }
 
@@ -111,14 +113,16 @@
     if (S.session) return { ok: false, msg: '已經在山上了。' };
     const site = SITES.find(s => s.id === siteId);
     if (!teamIds.length) return { ok: false, msg: '至少要帶一個人上山。' };
-    if (S.money < site.fee) return { ok: false, msg: '付不出 ' + site.name + ' 的礦權日費 ' + money(site.fee) };
+    const owned = !!(S.owned && S.owned[siteId]);
+    if (!owned && S.money < site.fee) return { ok: false, msg: '付不出 ' + site.name + ' 的礦權日費 ' + money(site.fee) };
 
     const injured = teamIds.map(id => S.workers.find(w => w.id === id)).filter(w => w && w.injury > 0);
     if (injured.length) return { ok: false, msg: injured[0].name + ' 還在養傷，帶不上山。' };
 
-    S.money -= site.fee;
+    if (!owned) S.money -= site.fee;
     S.session = M.start(S, siteId, teamIds);
-    log('隊伍出發前往 ' + site.name + '（海拔 ' + site.alt + 'm），礦權費 ' + money(site.fee) + '。天氣：' + S.weather.name, 'go');
+    log('隊伍出發前往 ' + site.name + '（海拔 ' + site.alt + 'm），' +
+      (owned ? '自家礦權免日費' : '礦權費 ' + money(site.fee)) + '。天氣：' + S.weather.name, 'go');
 
     // 上山途中事件
     const ev = travelEvent(site);
@@ -411,6 +415,26 @@
     return { ok: true, total, lines };
   }
 
+  /* ---------------- 買斷礦權 ---------------- */
+  function buyoutPrice(siteId) {
+    const site = SITES.find(x => x.id === siteId);
+    return site.fee * 45;
+  }
+
+  function buyoutSite(siteId) {
+    const site = SITES.find(x => x.id === siteId);
+    if (!site) return { ok: false, msg: '沒有這個場口' };
+    if (S.owned && S.owned[siteId]) return { ok: false, msg: '已經是你的了' };
+    const cost = buyoutPrice(siteId);
+    if (S.money < cost) return { ok: false, msg: '買斷要 ' + money(cost) + '，錢不夠' };
+    S.money -= cost;
+    S.owned = S.owned || {};
+    S.owned[siteId] = true;
+    S.rep += 5;
+    log('🏠 買斷 ' + site.name + ' 礦權 ' + money(cost) + ' — 這座山頭現在是你的了，上山免日費。', 'ok');
+    return { ok: true, cost };
+  }
+
   /* ---------------- 補給站 ---------------- */
   function buyEquip(id, n) {
     n = n || 1;
@@ -508,6 +532,7 @@
       const d = JSON.parse(raw);
       d.weather = WEATHER.find(w => w.id === (d.weather && d.weather.id)) || WEATHER[0];
       d.session = null;
+      d.owned = d.owned || { huika: true };
       S = d;
       return true;
     } catch (e) { return false; }
@@ -521,6 +546,7 @@
     carryCapacity, startMining, endMining, haulOptions, endDay,
     workshop, offerFor, sell, auction, auctionReady, rollBuyers,
     buyEquip, repairEquip, buySupply, candidates, hire, fire, train,
+    buyoutSite, buyoutPrice,
     skillLabel, newWorker
   };
 })(window);
