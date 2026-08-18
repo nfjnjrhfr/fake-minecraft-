@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>開玉 — 上山採玉模擬</title>
 <style>
 /* ===== 開玉 — 樣式 ===== */
@@ -207,6 +207,13 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
 /* ---- 自家礦權 ---- */
 .mine-owned{border-color:var(--jade-d);box-shadow:inset 0 0 26px rgba(63,214,164,.06)}
 
+/* ---- 固定畫面（防跳動） ---- */
+html{overscroll-behavior:none}
+button,.btn,.tab,.checkrow,.wrk,.toolbtn,.site{touch-action:manipulation}
+body.locked{position:fixed;inset:0;width:100%;height:100%;overflow:hidden}
+body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+#lockBtn.on{border-color:var(--gold);color:var(--gold)}
+
 </style>
 </head>
 <body>
@@ -222,6 +229,7 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
     <div id="stats" class="stats"></div>
     <div class="topbtns">
       <button class="btn primary" data-act="endday">結束這一天 ⏭</button>
+      <button class="btn ghost" data-act="lockscreen" id="lockBtn">🔓 固定畫面</button>
       <button class="btn ghost" data-act="save">存檔</button>
       <button class="btn ghost danger" data-act="reset">重新開始</button>
     </div>
@@ -1023,6 +1031,7 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
           '<button data-k="P">💧抽水</button>' +
           '<button data-k="G">🪵坑木</button>' +
           '<button data-k="M">🗺地圖</button>' +
+          '<button data-k="L">🔒固定</button>' +
           '<button data-k="Q" class="quit">🎒收工</button>' +
         '</div>' +
       '</div>';
@@ -1133,6 +1142,7 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
         else if (k === 'P') say(togglePump(S, sess).msg);
         else if (k === 'G') say(placeTimber(S, sess).msg);
         else if (k === 'M') showMap = !showMap;
+        else if (k === 'L') { if (global.UI && global.UI.toggleLock) { global.UI.toggleLock(); say('切換固定畫面'); } }
         else if (k === 'Q') quit();
       });
     }
@@ -2700,6 +2710,33 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
     $('#view').innerHTML = v();
   }
 
+  /* ---------------- 固定畫面 ---------------- */
+  let lockGuard = null;
+  function setLock(on) {
+    document.body.classList.toggle('locked', on);
+    const btn = $('#lockBtn');
+    if (btn) { btn.textContent = on ? '🔒 已固定' : '🔓 固定畫面'; btn.classList.toggle('on', on); }
+    try { localStorage.setItem('kaiyu-lock', on ? '1' : ''); } catch (e) {}
+    if (on) {
+      const el = document.documentElement;
+      const fs = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (fs) { try { const r = fs.call(el); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+      if (!lockGuard) {
+        lockGuard = e => e.preventDefault();
+        document.addEventListener('gesturestart', lockGuard, { passive: false });  // 捏合縮放
+        document.addEventListener('dblclick', lockGuard);                          // 雙擊縮放
+      }
+    } else {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      if (lockGuard) {
+        document.removeEventListener('gesturestart', lockGuard);
+        document.removeEventListener('dblclick', lockGuard);
+        lockGuard = null;
+      }
+    }
+  }
+  function toggleLock() { setLock(!document.body.classList.contains('locked')); }
+
   function openModal(html) { $('#modalBox').innerHTML = html; $('#modal').classList.remove('hidden'); }
   function closeModal() { $('#modal').classList.add('hidden'); sel.haulInit = false; }
 
@@ -2809,6 +2846,11 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
           '<button class="btn primary" data-act="close" style="margin-top:12px">開工</button>');
         render(); break;
       }
+      case 'lockscreen':
+        toggleLock();
+        toast(document.body.classList.contains('locked')
+          ? '畫面已固定：擋掉下拉刷新、回彈與縮放' : '已解除固定');
+        break;
       case 'save': G.save(); toast('已存檔'); break;
       case 'reset':
         if (confirm('確定要重新開始？目前進度會消失。')) { G.reset(); sel.team = {}; tab = 'camp'; closeModal(); render(); }
@@ -2853,7 +2895,8 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
       '<button class="btn primary" data-act="close" style="margin-top:12px">上山</button>');
   }
   render();
-  global.UI = { render, toast };
+  try { if (localStorage.getItem('kaiyu-lock')) setLock(true); } catch (e) {}
+  global.UI = { render, toast, setLock, toggleLock };
 })(window);
 
 </script>

@@ -464,6 +464,33 @@
     $('#view').innerHTML = v();
   }
 
+  /* ---------------- 固定畫面 ---------------- */
+  let lockGuard = null;
+  function setLock(on) {
+    document.body.classList.toggle('locked', on);
+    const btn = $('#lockBtn');
+    if (btn) { btn.textContent = on ? '🔒 已固定' : '🔓 固定畫面'; btn.classList.toggle('on', on); }
+    try { localStorage.setItem('kaiyu-lock', on ? '1' : ''); } catch (e) {}
+    if (on) {
+      const el = document.documentElement;
+      const fs = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (fs) { try { const r = fs.call(el); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+      if (!lockGuard) {
+        lockGuard = e => e.preventDefault();
+        document.addEventListener('gesturestart', lockGuard, { passive: false });  // 捏合縮放
+        document.addEventListener('dblclick', lockGuard);                          // 雙擊縮放
+      }
+    } else {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      if (lockGuard) {
+        document.removeEventListener('gesturestart', lockGuard);
+        document.removeEventListener('dblclick', lockGuard);
+        lockGuard = null;
+      }
+    }
+  }
+  function toggleLock() { setLock(!document.body.classList.contains('locked')); }
+
   function openModal(html) { $('#modalBox').innerHTML = html; $('#modal').classList.remove('hidden'); }
   function closeModal() { $('#modal').classList.add('hidden'); sel.haulInit = false; }
 
@@ -573,6 +600,11 @@
           '<button class="btn primary" data-act="close" style="margin-top:12px">開工</button>');
         render(); break;
       }
+      case 'lockscreen':
+        toggleLock();
+        toast(document.body.classList.contains('locked')
+          ? '畫面已固定：擋掉下拉刷新、回彈與縮放' : '已解除固定');
+        break;
       case 'save': G.save(); toast('已存檔'); break;
       case 'reset':
         if (confirm('確定要重新開始？目前進度會消失。')) { G.reset(); sel.team = {}; tab = 'camp'; closeModal(); render(); }
@@ -617,5 +649,6 @@
       '<button class="btn primary" data-act="close" style="margin-top:12px">上山</button>');
   }
   render();
-  global.UI = { render, toast };
+  try { if (localStorage.getItem('kaiyu-lock')) setLock(true); } catch (e) {}
+  global.UI = { render, toast, setLock, toggleLock };
 })(window);

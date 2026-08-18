@@ -199,3 +199,10 @@ kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;bord
 
 /* ---- 自家礦權 ---- */
 .mine-owned{border-color:var(--jade-d);box-shadow:inset 0 0 26px rgba(63,214,164,.06)}
+
+/* ---- 固定畫面（防跳動） ---- */
+html{overscroll-behavior:none}
+button,.btn,.tab,.checkrow,.wrk,.toolbtn,.site{touch-action:manipulation}
+body.locked{position:fixed;inset:0;width:100%;height:100%;overflow:hidden}
+body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+#lockBtn.on{border-color:var(--gold);color:var(--gold)}
