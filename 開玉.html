@@ -1,0 +1,2726 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>開玉 — 上山採玉模擬</title>
+<style>
+/* ===== 開玉 — 樣式 ===== */
+:root{
+  --bg:#0c1014; --bg2:#121820; --panel:#161d26; --panel2:#1c2531;
+  --line:#26303d; --text:#e6edf3; --dim:#8b9aa9;
+  --jade:#3fd6a4; --jade-d:#1d6b53; --gold:#e8c46a; --red:#ff6b6b; --blue:#5db2ff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{
+  background:radial-gradient(1200px 700px at 70% -10%, #17302b 0%, var(--bg) 55%) fixed;
+  color:var(--text);
+  font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  font-size:14px; line-height:1.55;
+}
+#app{max-width:1400px;margin:0 auto;padding:12px 16px 60px}
+
+/* ---- 頂欄 ---- */
+#topbar{display:flex;gap:16px;align-items:center;flex-wrap:wrap;
+  background:linear-gradient(180deg,var(--panel2),var(--panel));
+  border:1px solid var(--line);border-radius:14px;padding:12px 16px}
+.brand{display:flex;gap:12px;align-items:center;min-width:210px}
+.logo{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
+  background:linear-gradient(145deg,var(--jade),var(--jade-d));color:#04140f;
+  font-size:24px;font-weight:800;box-shadow:0 0 20px rgba(63,214,164,.25)}
+.brand h1{margin:0;font-size:20px;letter-spacing:3px}
+.brand small{color:var(--dim);letter-spacing:1px}
+.stats{display:flex;gap:8px;flex-wrap:wrap;flex:1}
+.stat{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:5px 11px;min-width:88px}
+.stat b{display:block;font-size:15px}
+.stat span{color:var(--dim);font-size:11px;letter-spacing:1px}
+.topbtns{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ---- 分頁 ---- */
+.tabs{display:flex;gap:6px;margin:14px 0;flex-wrap:wrap}
+.tab{background:var(--panel);border:1px solid var(--line);color:var(--dim);
+  padding:9px 18px;border-radius:10px;cursor:pointer;font-size:14px;transition:.15s}
+.tab:hover{color:var(--text);border-color:#3a4b5e}
+.tab.on{background:linear-gradient(180deg,#2a4a41,#1b3630);color:var(--jade);
+  border-color:var(--jade-d);box-shadow:0 0 14px rgba(63,214,164,.15)}
+.tab .badge{background:var(--gold);color:#2a1f00;border-radius:8px;padding:0 6px;margin-left:6px;font-size:11px}
+
+/* ---- 通用 ---- */
+.btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);
+  padding:7px 14px;border-radius:9px;cursor:pointer;font-size:13px;font-family:inherit;transition:.15s}
+.btn:hover:not(:disabled){border-color:var(--jade-d);background:#22303c}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn.primary{background:linear-gradient(180deg,#2f7d63,#1d5744);border-color:#37a37f;color:#eafff7;font-weight:600}
+.btn.gold{background:linear-gradient(180deg,#8a6f2a,#5f4b16);border-color:#b9953f;color:#fff6dd}
+.btn.danger{border-color:#5b2b2b;color:#ffb4b4}
+.btn.ghost{background:transparent}
+.btn.sm{padding:4px 9px;font-size:12px}
+.grid{display:grid;gap:12px}
+.cols2{grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+.cols3{grid-template-columns:repeat(auto-fill,minmax(270px,1fr));align-items:start}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+.card h3{margin:0 0 8px;font-size:15px;letter-spacing:1px}
+.card h3 .sub{color:var(--dim);font-size:12px;font-weight:400;letter-spacing:0}
+.muted{color:var(--dim)}
+.tiny{font-size:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.spread{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tagline{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.tag{background:#1d2733;border:1px solid var(--line);border-radius:20px;padding:1px 9px;font-size:11px;color:var(--dim)}
+.tag.j{color:var(--jade);border-color:var(--jade-d)}
+.tag.g{color:var(--gold);border-color:#6b5a25}
+.tag.r{color:var(--red);border-color:#5b2b2b}
+.tag.b{color:var(--blue);border-color:#274a6b}
+.bar{height:7px;background:#0c1218;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--jade-d),var(--jade))}
+.bar.red i{background:linear-gradient(90deg,#7a2b2b,var(--red))}
+.bar.gold i{background:linear-gradient(90deg,#7a5f1c,var(--gold))}
+hr{border:0;border-top:1px solid var(--line);margin:10px 0}
+
+/* ---- 礦場 ---- */
+.minewrap{display:grid;grid-template-columns:280px 1fr 250px;gap:12px;align-items:start}
+@media(max-width:1100px){.minewrap{grid-template-columns:1fr}}
+#mineCanvas{width:100%;background:#05070a;border:1px solid var(--line);border-radius:12px;
+  display:block;cursor:crosshair;image-rendering:pixelated}
+.toolbtn{display:flex;gap:8px;align-items:center;width:100%;text-align:left;margin-bottom:5px;
+  background:var(--panel2);border:1px solid var(--line);color:var(--text);
+  padding:7px 9px;border-radius:9px;cursor:pointer;font-family:inherit;font-size:13px}
+.toolbtn:hover:not(:disabled){border-color:var(--jade-d)}
+.toolbtn.on{border-color:var(--gold);background:#2a2519;box-shadow:0 0 10px rgba(232,196,106,.15)}
+.toolbtn:disabled{opacity:.35;cursor:not-allowed}
+.toolbtn .ico{font-size:18px;width:24px;text-align:center}
+.toolbtn .meta{color:var(--dim);font-size:11px}
+.wrk{border:1px solid var(--line);border-radius:9px;padding:7px 9px;margin-bottom:6px;cursor:pointer;background:var(--panel2)}
+.wrk.on{border-color:var(--jade);background:#1a2e28}
+.wrk.hurt{opacity:.5}
+.cellinfo{font-family:ui-monospace,monospace;font-size:12px;color:var(--gold);min-height:20px}
+
+/* ---- 石頭卡 ---- */
+.stone{background:linear-gradient(160deg,#1a2530,#141b23);border:1px solid var(--line);
+  border-radius:12px;padding:11px;position:relative;overflow:hidden}
+.stone.open{border-color:var(--jade-d);box-shadow:inset 0 0 30px rgba(63,214,164,.07)}
+.stone.polished{border-color:var(--gold);box-shadow:inset 0 0 30px rgba(232,196,106,.09)}
+.stone .kg{position:absolute;top:9px;right:11px;color:var(--gold);font-weight:700}
+.stone .name{font-weight:600;letter-spacing:1px}
+.stone .kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12px;margin:6px 0}
+.stone .kv b{color:var(--dim);font-weight:400}
+.stone .acts{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.est{font-size:13px;color:var(--jade)}
+
+/* ---- 日誌 ---- */
+.logline{border-left:3px solid var(--line);padding:3px 0 3px 9px;margin-bottom:3px;font-size:13px}
+.logline .d{color:var(--dim);font-size:11px;margin-right:6px}
+.logline.ok{border-color:var(--jade)}
+.logline.bad{border-color:var(--red)}
+.logline.warn{border-color:var(--gold)}
+.logline.day{border-color:var(--blue);color:var(--blue)}
+.logline.go{border-color:#6a5acd}
+
+/* ---- toast / modal ---- */
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:60;
+  display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
+.toastmsg{background:#0f1a22;border:1px solid var(--jade-d);color:var(--text);
+  padding:9px 18px;border-radius:24px;box-shadow:0 8px 30px rgba(0,0,0,.6);animation:pop .25s}
+.toastmsg.bad{border-color:#6b2b2b}
+.toastmsg.gold{border-color:#7a6224}
+@keyframes pop{from{opacity:0;transform:translateY(10px)}to{opacity:1}}
+#modal{position:fixed;inset:0;background:rgba(3,6,9,.78);display:grid;place-items:center;z-index:70;padding:20px}
+#modal.hidden{display:none}
+.modalbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  padding:18px;max-width:820px;width:100%;max-height:86vh;overflow:auto}
+.checkrow{display:flex;gap:10px;align-items:center;border:1px solid var(--line);
+  border-radius:9px;padding:7px 10px;margin-bottom:5px;cursor:pointer;background:var(--panel2)}
+.checkrow.on{border-color:var(--jade);background:#182a25}
+.site{cursor:pointer;transition:.15s}
+.site:hover{border-color:var(--jade-d);transform:translateY(-2px)}
+.big{font-size:26px;font-weight:800;letter-spacing:2px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:5px 7px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--dim);font-weight:400;font-size:12px}
+
+/* ---- 坑口（3D 入口） ---- */
+.enter3d{text-align:center;padding:26px 18px;
+  background:radial-gradient(600px 300px at 50% 0%,#1d3a33,#111820 70%)}
+.e3-art{width:120px;height:120px;margin:0 auto 12px;border-radius:50%;
+  display:grid;place-items:center;font-size:52px;
+  background:radial-gradient(circle at 50% 35%,#28483f,#080c10 70%);
+  border:1px solid var(--jade-d);box-shadow:0 0 50px rgba(63,214,164,.18) inset,0 0 30px rgba(0,0,0,.6)}
+.big-btn{font-size:16px;padding:12px 26px;margin:12px 0 4px}
+.keys{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:center;margin-top:10px;
+  color:var(--dim);font-size:12px}
+kbd{background:#0e151c;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;
+  padding:1px 6px;margin:0 2px;font-family:ui-monospace,monospace;color:var(--text)}
+
+/* ---- 第一人稱全螢幕 ---- */
+#fpwrap{position:fixed;inset:0;z-index:200;background:#000}
+#fpcv{width:100%;height:100%;display:block;cursor:none;image-rendering:pixelated}
+#fphud{position:absolute;inset:0;pointer-events:none;
+  font-family:"Noto Sans TC","PingFang TC",system-ui,sans-serif;color:#e6edf3;text-shadow:0 2px 6px #000}
+.fp-top{position:absolute;top:14px;left:18px;display:flex;gap:20px;font-size:13px;
+  background:rgba(5,9,12,.5);padding:6px 14px;border-radius:20px;border:1px solid #26303d}
+#fpmap{position:absolute;top:14px;right:18px;border:1px solid #26303d;border-radius:10px;display:none}
+#fp-msg{position:absolute;top:22%;left:0;right:0;text-align:center;font-size:20px;
+  color:#ffe27a;opacity:0;transition:opacity .2s;font-weight:600}
+.fp-target{position:absolute;top:56%;left:0;right:0;text-align:center;font-size:13px;color:#cfe;display:none}
+.fp-hpbar{display:inline-block;width:130px;height:6px;background:rgba(0,0,0,.6);
+  border:1px solid #26303d;border-radius:4px;overflow:hidden;vertical-align:middle;margin-left:6px}
+.fp-hpbar i{display:block;height:100%;background:linear-gradient(90deg,#7a2b2b,#e8c46a)}
+.fp-bottom{position:absolute;left:18px;bottom:16px;display:flex;gap:18px;align-items:flex-end}
+#fp-worker{background:rgba(5,9,12,.5);padding:8px 14px;border-radius:12px;border:1px solid #26303d;min-width:190px}
+.fp-bar{height:7px;background:#0c1218;border:1px solid #26303d;border-radius:5px;overflow:hidden;margin:4px 0}
+.fp-bar i{display:block;height:100%;background:linear-gradient(90deg,#1d6b53,#3fd6a4)}
+#fp-tools{display:flex;flex-wrap:wrap;gap:5px;max-width:60vw}
+.fp-tool{background:rgba(5,9,12,.55);border:1px solid #26303d;border-radius:8px;padding:3px 9px;font-size:12px}
+.fp-tool.on{border-color:#e8c46a;color:#ffe27a;background:rgba(60,48,16,.7)}
+.fp-tool.off{opacity:.32}
+.fp-help{position:absolute;right:18px;bottom:16px;font-size:11px;color:#8b9aa9;max-width:38vw;text-align:right}
+#fphud .tiny{font-size:11px;color:#8b9aa9}
+
+/* ---- 切石動畫 ---- */
+.fxwrap{position:fixed;inset:0;z-index:300;background:rgba(2,4,6,.82);cursor:pointer}
+.fxcv{width:100%;height:100%;display:block}
+.fxcap{position:absolute;left:0;right:0;bottom:16%;text-align:center;opacity:0;transition:opacity .5s}
+.fxbig{font-size:40px;font-weight:800;letter-spacing:6px;text-shadow:0 0 30px currentColor,0 0 8px rgba(255,255,255,.75),0 2px 4px #000}
+.fxsub{color:#e6edf3;letter-spacing:4px;margin-top:6px}
+
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="brand">
+      <span class="logo">翡</span>
+      <div>
+        <h1>開玉</h1>
+        <small>上山．開礦．相玉．一刀定生死</small>
+      </div>
+    </div>
+    <div id="stats" class="stats"></div>
+    <div class="topbtns">
+      <button class="btn primary" data-act="endday">結束這一天 ⏭</button>
+      <button class="btn ghost" data-act="save">存檔</button>
+      <button class="btn ghost danger" data-act="reset">重新開始</button>
+    </div>
+  </header>
+
+  <nav id="tabs" class="tabs"></nav>
+
+  <main id="view"></main>
+
+  <div id="toast"></div>
+  <div id="modal" class="hidden"><div class="modalbox" id="modalBox"></div></div>
+</div>
+
+<script>
+/* ============================================================
+   開玉 — 資料層
+   場口、設備、消耗品、玉石品質表、工人名冊
+   ============================================================ */
+(function (global) {
+  'use strict';
+
+  /* ---------- 玉石品質表 ---------- */
+
+  // 種（質地）：越後面越老、越透
+  const ZHONG = [
+    { id: 'zhuan', name: '磚頭料', base: 40, desc: '不透、粗粒，基本沒水頭' },
+    { id: 'dou', name: '豆種', base: 320, desc: '顆粒明顯，水頭短' },
+    { id: 'nuo', name: '糯種', base: 1400, desc: '像糯米湯，半透' },
+    { id: 'nuobing', name: '糯冰種', base: 4200, desc: '糯中帶冰，通透度不錯' },
+    { id: 'bing', name: '冰種', base: 16000, desc: '冰塊感，起膠' },
+    { id: 'gaobing', name: '高冰種', base: 48000, desc: '接近玻璃，剛性強' },
+    { id: 'boli', name: '玻璃種', base: 130000, desc: '透明起熒，極品質地' }
+  ];
+
+  // 色
+  const COLOR = [
+    { id: 'wuse', name: '無色白', mult: 1.0 },
+    { id: 'piaohua', name: '飄花', mult: 1.35 },
+    { id: 'doulv', name: '豆綠', mult: 1.2 },
+    { id: 'danlv', name: '淡綠', mult: 1.45 },
+    { id: 'qingshui', name: '晴水', mult: 1.9 },
+    { id: 'lanshui', name: '藍水', mult: 1.7 },
+    { id: 'huangfei', name: '黃翡', mult: 1.55 },
+    { id: 'hongfei', name: '紅翡', mult: 2.1 },
+    { id: 'mocui', name: '墨翠', mult: 1.8 },
+    { id: 'ziluolan', name: '紫羅蘭', mult: 2.4 },
+    { id: 'yanglv', name: '陽綠', mult: 3.6 },
+    { id: 'zhengyang', name: '正陽綠', mult: 6.2 },
+    { id: 'diwang', name: '帝王綠', mult: 15.0 }
+  ];
+
+  // 皮殼（原石外皮）— 給玩家的線索
+  const SKIN = [
+    { id: 'heiwu', name: '黑烏砂', hint: '皮下常出高綠，但也常滿裂' },
+    { id: 'huangyan', name: '黃鹽砂', hint: '砂發翻得起，種水通常不差' },
+    { id: 'baiyan', name: '白鹽砂', hint: '皮薄肉細，出冰的機會高' },
+    { id: 'hongwu', name: '紅霧皮', hint: '霧色重，肉容易偏黃' },
+    { id: 'tiehei', name: '鐵鏽皮', hint: '皮厚難看漲，賭性大' },
+    { id: 'huangla', name: '黃臘皮', hint: '常帶糯化，穩但難出高貨' }
+  ];
+
+  /* ---------- 場口（礦區） ---------- */
+  // zhongBias / colorBias：正值把該場口的出貨往好料推
+  const SITES = [
+    {
+      id: 'huika', name: '會卡', alt: 480, fee: 4000,
+      road: 3, danger: 0.10, water: 0.15, hardness: 0.8,
+      zhongBias: -0.15, colorBias: -0.10, crackBias: 0.05, density: 0.16, sizeMul: 1.15,
+      skins: ['huangla', 'hongwu', 'tiehei'],
+      desc: '入門場口，皮厚肉粗，量大但價低。新隊伍練手的地方。'
+    },
+    {
+      id: 'damakan', name: '大馬坎', alt: 620, fee: 12000,
+      road: 3, danger: 0.14, water: 0.30, hardness: 1.0,
+      zhongBias: 0.0, colorBias: 0.05, crackBias: 0.0, density: 0.14, sizeMul: 0.95,
+      skins: ['hongwu', 'huangyan', 'huangla'],
+      desc: '黃霧紅霧出名，容易出黃翡紅翡。水坑多，記得帶抽水機。'
+    },
+    {
+      id: 'muna', name: '木那', alt: 900, fee: 60000,
+      road: 2, danger: 0.22, water: 0.20, hardness: 1.25,
+      zhongBias: 0.12, colorBias: 0.10, crackBias: -0.05, density: 0.12, sizeMul: 1.05,
+      skins: ['baiyan', 'huangyan', 'heiwu'],
+      desc: '種老色陽、點狀棉是招牌。山路難行，圍岩偏硬。'
+    },
+    {
+      id: 'moxisha', name: '莫西沙', alt: 1050, fee: 130000,
+      road: 2, danger: 0.26, water: 0.35, hardness: 1.45,
+      zhongBias: 0.26, colorBias: -0.05, crackBias: -0.02, density: 0.10, sizeMul: 0.8,
+      skins: ['baiyan', 'huangyan'],
+      desc: '出高透明度的第一場口。塊頭小、圍岩極硬，切漲一刀吃三年。'
+    },
+    {
+      id: 'houjiang', name: '後江', alt: 780, fee: 70000,
+      road: 2, danger: 0.20, water: 0.45, hardness: 1.1,
+      zhongBias: 0.14, colorBias: 0.22, crackBias: 0.10, density: 0.11, sizeMul: 0.55,
+      skins: ['heiwu', 'baiyan'],
+      desc: '小塊高色，河床料。水位高，沒抽水機下不了坑。'
+    },
+    {
+      id: 'hpakant', name: '帕敢老坑', alt: 1260, fee: 260000,
+      road: 1, danger: 0.38, water: 0.40, hardness: 1.6,
+      zhongBias: 0.20, colorBias: 0.16, crackBias: 0.04, density: 0.09, sizeMul: 1.35,
+      skins: ['heiwu', 'tiehei', 'baiyan'],
+      desc: '老坑之王，大料高綠都從這出。坑深、塌方多、礦權貴，賭的是命也是錢。'
+    }
+  ];
+
+  /* ---------- 設備 ---------- */
+  // cat: dig 採掘 / support 支援 / safety 安全 / transport 運輸 / shop 工房 / camp 營地
+  const EQUIP = {
+    /* --- 採掘工具：礦場工具列 --- */
+    shovel: {
+      name: '鐵鏟', cat: 'dig', price: 900, dur: 200, icon: '⛏',
+      desc: '清表土用。挖土快，敲石頭幾乎沒用。',
+      tool: { pattern: 'single', power: 16, soft: 2.2, stam: 3, wear: 1, crack: 0.10, needs: [] }
+    },
+    pickaxe: {
+      name: '十字鎬', cat: 'dig', price: 1800, dur: 260, icon: '⛏',
+      desc: '萬用手工具，土石通吃，效率普通。',
+      tool: { pattern: 'single', power: 24, soft: 1.2, stam: 5, wear: 1, crack: 0.25, needs: [] }
+    },
+    sledge: {
+      name: '大鐵鎚', cat: 'dig', price: 2600, dur: 240, icon: '🔨',
+      desc: '直上直下三格，破圍岩猛，但砸到玉必裂。',
+      tool: { pattern: 'vert3', power: 38, soft: 0.9, stam: 9, wear: 2, crack: 0.55, needs: [] }
+    },
+    chisel: {
+      name: '鑿子＋手鎚', cat: 'dig', price: 1500, dur: 300, icon: '🪛',
+      desc: '取料神器。慢，但幾乎不傷玉肉，出料乾淨。',
+      tool: { pattern: 'single', power: 13, soft: 1.0, stam: 4, wear: 1, crack: 0.0, needs: [] }
+    },
+    prybar: {
+      name: '撬棍', cat: 'dig', price: 1200, dur: 320, icon: '🩻',
+      desc: '沿縫撬，橫向三格鬆動圍岩，傷玉極低。',
+      tool: { pattern: 'horz3', power: 18, soft: 1.1, stam: 6, wear: 1, crack: 0.05, needs: [] }
+    },
+    jackhammer: {
+      name: '風鎬', cat: 'dig', price: 42000, dur: 400, icon: '🛠',
+      desc: '效率翻倍。需要空壓機供風、吃柴油，震裂風險高。',
+      tool: { pattern: 'cross', power: 46, soft: 1.0, stam: 8, wear: 3, crack: 0.50, fuel: { diesel: 3 }, needs: ['compressor'] }
+    },
+    excavator: {
+      name: '挖土機', cat: 'dig', price: 380000, dur: 900, icon: '🚜',
+      desc: '一斗掃 3×3，剝離表土無敵。需機械師操作，對玉肉極不友善。',
+      tool: { pattern: 'box3', power: 58, soft: 1.6, stam: 8, wear: 5, crack: 0.72, fuel: { diesel: 9 }, skill: { mech: 3 }, needs: [] }
+    },
+    dynamite_kit: {
+      name: '爆破器材組', cat: 'dig', price: 26000, dur: 500, icon: '💥',
+      desc: '裝藥起爆，半徑兩格全開。需要爆破手與炸藥，塌方與傷亡風險最高。',
+      tool: { pattern: 'blast', power: 130, soft: 1.3, stam: 16, wear: 6, crack: 0.85, use: { dynamite: 2 }, skill: { blast: 3 }, danger: 0.35, needs: [] }
+    },
+
+    /* --- 支援設備 --- */
+    headlamp: { name: '頭燈', cat: 'support', price: 700, dur: 150, icon: '🔦', desc: '照明半徑 +1。吃電池，坑道作業必備。', light: 1, upkeep: { battery: 1 } },
+    floodlight: { name: '探照燈', cat: 'support', price: 9000, dur: 300, icon: '💡', desc: '照明半徑 +3。要發電機供電。', light: 3, needs: ['generator'], upkeep: { diesel: 2 } },
+    generator: { name: '柴油發電機', cat: 'support', price: 55000, dur: 600, icon: '🔌', desc: '供電給探照燈、切石機在山上運作。' },
+    compressor: { name: '空壓機', cat: 'support', price: 68000, dur: 600, icon: '🌀', desc: '供風給風鎬。沒它風鎬只是廢鐵。' },
+    pump: { name: '抽水機', cat: 'support', price: 32000, dur: 450, icon: '💧', desc: '排掉坑底積水，才挖得動水線以下。每回合吃柴油。', upkeep: { diesel: 3 } },
+    timber: { name: '坑木支撐架', cat: 'support', price: 4500, dur: 999, icon: '🪵', desc: '在礦場架設支撐，大幅降低塌方風險。用一次消耗一組坑木。' },
+
+    /* --- 安全裝備 --- */
+    helmet: { name: '安全帽', cat: 'safety', price: 600, dur: 400, icon: '⛑', desc: '落石傷害 -35%。一人一頂才有效。', safety: 0.35 },
+    rope: { name: '安全繩組', cat: 'safety', price: 2200, dur: 350, icon: '🪢', desc: '陡坡與坑壁作業墜落率 -40%。', safety: 0.40 },
+    harness: { name: '全身吊帶', cat: 'safety', price: 5200, dur: 400, icon: '🦺', desc: '深坑救援可行，重傷轉輕傷機率 +30%。', safety: 0.30 },
+    firstaid: { name: '急救箱', cat: 'safety', price: 3000, dur: 200, icon: '🧰', desc: '現場止血，受傷天數 -1，需消耗藥品。', safety: 0.2 },
+
+    /* --- 運輸（決定每天扛得下山的公斤數） --- */
+    basket: { name: '背簍', cat: 'transport', price: 300, dur: 200, icon: '🧺', desc: '人力背，載重 25kg。', carry: 25 },
+    cart: { name: '手推車', cat: 'transport', price: 3500, dur: 300, icon: '🛒', desc: '載重 90kg，路況 2 以上才推得動。', carry: 90, road: 2 },
+    mule: { name: '騾隊', cat: 'transport', price: 28000, dur: 999, icon: '🐴', desc: '載重 260kg，爛路照走，每天吃糧食。', carry: 260, road: 1, upkeep: { food: 2 } },
+    pickup: { name: '小貨卡', cat: 'transport', price: 180000, dur: 800, icon: '🛻', desc: '載重 900kg，需要路況 2 以上。', carry: 900, road: 2, upkeep: { diesel: 12 } },
+    truck: { name: '十輪大卡', cat: 'transport', price: 520000, dur: 1000, icon: '🚚', desc: '載重 3500kg，只走得了好路（路況 3）。', carry: 3500, road: 3, upkeep: { diesel: 30 } },
+
+    /* --- 工房（相玉與加工） --- */
+    flashlight: { name: '強光手電筒', cat: 'shop', price: 1200, dur: 300, icon: '🔦', desc: '打燈看種水。揭示【種】。', upkeep: { battery: 1 } },
+    loupe: { name: '十倍放大鏡', cat: 'shop', price: 900, dur: 999, icon: '🔍', desc: '看裂看棉。揭示【裂】與【棉】。' },
+    grinder: { name: '手持磨機', cat: 'shop', price: 7800, dur: 350, icon: '🪚', desc: '擦皮開窗。揭示【色】，開得漂亮還能抬價。消耗砂輪片。' },
+    saw: { name: '切石機', cat: 'shop', price: 96000, dur: 500, icon: '🪓', desc: '一刀切開，全部揭曉。漲或垮，就這一刀。消耗切割片。' },
+    polisher: { name: '拋光機', cat: 'shop', price: 34000, dur: 400, icon: '✨', desc: '把明料拋成成品，售價 +30%。消耗砂輪片。' },
+    scale: { name: '電子秤＋卡尺', cat: 'shop', price: 2500, dur: 999, icon: '⚖️', desc: '精準過磅，玉商殺價空間 -8%。' },
+
+    /* --- 營地 --- */
+    tent: { name: '工寮帳篷', cat: 'camp', price: 8000, dur: 400, icon: '⛺', desc: '山上過夜不掉士氣，每天回復體力 +10。' },
+    stove: { name: '爐具炊事組', cat: 'camp', price: 4200, dur: 400, icon: '🍲', desc: '熱食，士氣每天 +3，糧食消耗 -20%。' },
+    radio: { name: '無線電', cat: 'camp', price: 6500, dur: 500, icon: '📻', desc: '意外時能叫支援，事故死亡率大幅下降。' }
+  };
+
+  /* ---------- 消耗品 ---------- */
+  const SUPPLY = {
+    diesel: { name: '柴油', unit: '公升', price: 55, icon: '🛢' },
+    battery: { name: '電池', unit: '組', price: 55, icon: '🔋' },
+    grindwheel: { name: '砂輪片', unit: '片', price: 180, icon: '⭕' },
+    blade: { name: '切割片', unit: '片', price: 520, icon: '🌀' },
+    dynamite: { name: '炸藥', unit: '條', price: 1400, icon: '🧨' },
+    wood: { name: '坑木', unit: '組', price: 600, icon: '🪵' },
+    food: { name: '糧食', unit: '份', price: 130, icon: '🍚' },
+    medicine: { name: '藥品', unit: '份', price: 850, icon: '💊' }
+  };
+
+  /* ---------- 工人 ---------- */
+  const NAMES = [
+    '阿吉', '老周', '岩溫', '召南', '波敏', '吳丹', '刀勇', '大牛', '阿罕', '小普',
+    '賽龍', '玉旺', '阿吞', '老柯', '巖甩', '溫敏', '阿貴', '三炮', '德昌', '阿宰'
+  ];
+
+  const ROLES = {
+    miner: { name: '礦工', key: 'mine', desc: '挖得快、耐操，手工具效率 +' },
+    blaster: { name: '爆破手', key: 'blast', desc: '能操作爆破器材，炸得準、意外少' },
+    mech: { name: '機械師', key: 'mech', desc: '能開挖土機，機具耐久消耗 -30%' },
+    eye: { name: '相玉師', key: 'eye', desc: '不下坑，但估價誤差小、開窗切石成功率高' },
+    porter: { name: '背工', key: 'porter', desc: '不採礦，載重 +40kg／人' }
+  };
+
+  const WEATHER = [
+    { id: 'sunny', name: '晴', icon: '☀️', work: 1.0, danger: 1.0, desc: '好天氣，正常出工。' },
+    { id: 'cloudy', name: '陰', icon: '☁️', work: 0.98, danger: 1.0, desc: '悶熱，但不影響作業。' },
+    { id: 'rain', name: '雨', icon: '🌧', work: 0.82, danger: 1.4, desc: '路滑水漲，坑底出水變快。' },
+    { id: 'storm', name: '暴雨', icon: '⛈', work: 0.55, danger: 2.2, desc: '土石鬆動，塌方風險暴增。' },
+    { id: 'fog', name: '濃霧', icon: '🌫', work: 0.9, danger: 1.25, desc: '視線差，照明範圍 -1。' }
+  ];
+
+  global.DATA = { ZHONG, COLOR, SKIN, SITES, EQUIP, SUPPLY, NAMES, ROLES, WEATHER };
+})(window);
+
+/* ============================================================
+   開玉 — 玉石模型
+   原石生成 / 隱藏屬性 / 估價 / 相玉揭示（打燈、放大鏡、開窗、切開）
+   ============================================================ */
+(function (global) {
+  'use strict';
+  const { ZHONG, COLOR, SKIN, SITES } = global.DATA;
+
+  let seq = 1;
+
+  /* ---- 工具函數 ---- */
+  const rnd = Math.random;
+  function pick(arr) { return arr[Math.floor(rnd() * arr.length)]; }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  // 常態分佈近似（-1 ~ 1 集中在 0）
+  function gauss() { return (rnd() + rnd() + rnd() + rnd() - 2) / 2; }
+
+  /* ---- 品質權重：好料本來就是萬中選一 ---- */
+  // 磚頭料 豆種 糯種 糯冰 冰種 高冰 玻璃種
+  const ZHONG_W = [34, 30, 19, 10, 5, 1.6, 0.4];
+  // 無色 飄花 豆綠 淡綠 晴水 藍水 黃翡 紅翡 墨翠 紫羅蘭 陽綠 正陽綠 帝王綠
+  const COLOR_W = [34, 12, 13, 11, 5, 5, 5, 3, 3, 2, 3, 0.9, 0.2];
+
+  // bias > 0 把分佈往「好」的那端推（場口特性、深度、運氣）
+  function weightedIndex(weights, bias) {
+    let sum = 0;
+    const w = new Array(weights.length);
+    for (let i = 0; i < weights.length; i++) { w[i] = weights[i] * Math.exp(bias * i * 1.25); sum += w[i]; }
+    let r = rnd() * sum;
+    for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) return i; }
+    return w.length - 1;
+  }
+
+  /* ---- 產生一顆原石 ---- */
+  function makeStone(site, opts) {
+    opts = opts || {};
+    const s = typeof site === 'string' ? SITES.find(x => x.id === site) : site;
+
+    const kg = clamp(
+      Math.round((0.4 + Math.pow(rnd(), 2.4) * 26) * s.sizeMul * (opts.sizeMul || 1) * 10) / 10,
+      0.2, 90
+    );
+
+    // 大料的種通常差一點（大而完美太稀有）
+    const sizePenalty = kg > 12 ? -0.12 : (kg < 1.5 ? 0.06 : 0);
+    const zi = weightedIndex(ZHONG_W, s.zhongBias + sizePenalty + (opts.luck || 0));
+    const ci = weightedIndex(COLOR_W, s.colorBias + (opts.luck || 0) * 0.8);
+
+    // 裂：開採手法造成的裂在外面加
+    let crack = clamp(0.10 + rnd() * 0.45 + s.crackBias, 0, 0.95);
+    if (kg > 15) crack = clamp(crack + 0.12, 0, 0.95);
+    const cotton = clamp(rnd() * 0.7 - (zi >= 4 ? 0.15 : 0), 0, 0.9);
+
+    const skinId = pick(s.skins);
+
+    return {
+      id: 'S' + (seq++),
+      site: s.id, siteName: s.name,
+      skin: skinId,
+      kg,
+      zhong: zi,          // 索引
+      color: ci,
+      crack,              // 0~1
+      cotton,             // 0~1
+      state: 'rough',     // rough 原石 / open 明料 / polished 成品
+      window: 0,          // 0 未開窗 1 窗口漂亮 -1 窗口髒
+      known: { zhong: false, color: false, crack: false, cotton: false },
+      seed: rnd(),        // 用來讓估價噪音固定
+      note: ''
+    };
+  }
+
+  /* ---- 明料真實價值 ---- */
+  function trueValue(st) {
+    const z = ZHONG[st.zhong], c = COLOR[st.color];
+    let unit = z.base * c.mult;
+    unit *= (1 - 0.72 * st.crack);
+    unit *= (1 - 0.35 * st.cotton);
+    // 大料加成（手鐲位、擺件位）
+    const sizeBonus = 1 + clamp(Math.log2(Math.max(st.kg, 0.25)) * 0.14, -0.35, 0.75);
+    let v = unit * st.kg * sizeBonus;
+    if (st.state === 'polished') v *= 1.3;
+    if (st.window === 1) v *= 1.04;
+    if (st.window === -1) v *= 0.9;
+    return Math.round(v);
+  }
+
+  /* ---- 玩家/玉商看到的估價（依已知資訊噪音遞減） ---- */
+  function knownRatio(st) {
+    const k = st.known;
+    let r = 0.12;
+    if (k.zhong) r += 0.34;
+    if (k.color) r += 0.30;
+    if (k.crack) r += 0.14;
+    if (k.cotton) r += 0.10;
+    if (st.state !== 'rough') r = 1;
+    return clamp(r, 0, 1);
+  }
+
+  // eyeSkill 0~10：相玉師越強噪音越小
+  function estimate(st, eyeSkill) {
+    const tv = trueValue(st);
+    if (st.state !== 'rough') return { low: tv, high: tv, mid: tv, sure: 1 };
+    const known = knownRatio(st);
+    const skill = clamp((eyeSkill || 0) / 10, 0, 1);
+    // 不確定度：完全不知道時可能差 8 倍
+    const spread = (1 - known) * (1 - skill * 0.45) * 1.6 + 0.12;
+    // 固定偏移，讓同一顆石頭每次看到的估價一致
+    const bias = (st.seed - 0.5) * spread;
+    const mid = Math.max(200, tv * Math.exp(bias));
+    return {
+      low: Math.round(mid / Math.exp(spread)),
+      high: Math.round(mid * Math.exp(spread)),
+      mid: Math.round(mid),
+      sure: known
+    };
+  }
+
+  /* ---- 顯示用文字（未知就給模糊區間） ---- */
+  function describe(st, eyeSkill) {
+    const skill = clamp((eyeSkill || 0) / 10, 0, 1);
+    const out = {};
+    const zi = st.zhong, ci = st.color;
+
+    if (st.known.zhong || st.state !== 'rough') out.zhong = ZHONG[zi].name;
+    else {
+      const w = Math.max(1, Math.round(2.2 - skill * 1.2));
+      const a = clamp(zi - w, 0, ZHONG.length - 1), b = clamp(zi + w, 0, ZHONG.length - 1);
+      out.zhong = ZHONG[a].name + '～' + ZHONG[b].name + '？';
+    }
+
+    if (st.known.color || st.state !== 'rough') out.color = COLOR[ci].name;
+    else if (st.window !== 0) out.color = COLOR[clamp(ci + (st.seed > 0.7 ? 1 : 0), 0, COLOR.length - 1)].name + '（窗口所見）';
+    else out.color = '皮下未明';
+
+    const lv = v => v < 0.2 ? '幾乎無' : v < 0.4 ? '少' : v < 0.65 ? '中等' : v < 0.85 ? '多' : '滿';
+    out.crack = (st.known.crack || st.state !== 'rough') ? lv(st.crack) : '未探';
+    out.cotton = (st.known.cotton || st.state !== 'rough') ? lv(st.cotton) : '未探';
+    out.skin = SKIN.find(s => s.id === st.skin);
+    return out;
+  }
+
+  /* ---- 相玉動作 ---- */
+
+  // 打燈：揭示種；相玉師差的話有機會誤判（顯示但標記存疑）
+  function candle(st) {
+    st.known.zhong = true;
+    return { ok: true, msg: '打燈：光透進去，質地看清楚了 — ' + ZHONG[st.zhong].name };
+  }
+
+  // 放大鏡：揭示裂與棉
+  function inspect(st) {
+    st.known.crack = true;
+    st.known.cotton = true;
+    return { ok: true, msg: '十倍鏡下：裂' + (st.crack > 0.6 ? '一片' : st.crack > 0.35 ? '不少' : '不多') +
+      '，棉' + (st.cotton > 0.5 ? '偏重' : '還好') };
+  }
+
+  // 開窗：揭示色（有機會擦壞）
+  function openWindow(st, eyeSkill) {
+    const skill = clamp((eyeSkill || 0) / 10, 0, 1);
+    st.known.color = true;
+    st.known.zhong = true;
+    const good = rnd() < 0.45 + skill * 0.35;
+    st.window = good ? 1 : -1;
+    return {
+      ok: true, good,
+      msg: good
+        ? '窗口擦得漂亮，色從窗口透出來 — ' + COLOR[st.color].name + '，賭性降了，價也好開口。'
+        : '手一抖擦歪了，窗口見髒見綹 — ' + COLOR[st.color].name + '，行家看了搖頭。'
+    };
+  }
+
+  // 切開：全揭示，切壞會加裂
+  function cutOpen(st, eyeSkill) {
+    const skill = clamp((eyeSkill || 0) / 10, 0, 1);
+    const before = trueValue(st);
+    // 切歪：沒相玉師時容易一刀切在色上
+    if (rnd() > 0.5 + skill * 0.4) st.crack = clamp(st.crack + 0.08 + rnd() * 0.12, 0, 0.97);
+    st.state = 'open';
+    st.known = { zhong: true, color: true, crack: true, cotton: true };
+    const after = trueValue(st);
+    return { ok: true, before, after, msg: '切面見肉：' + ZHONG[st.zhong].name + ' ' + COLOR[st.color].name };
+  }
+
+  function polish(st) {
+    st.state = 'polished';
+    return { ok: true, msg: '拋光完成，起貨了。' };
+  }
+
+  /* ---- 開採造成的裂 ---- */
+  function addMiningCrack(st, amount) {
+    st.crack = clamp(st.crack + amount, 0, 0.97);
+  }
+
+  function label(st) {
+    const z = ZHONG[st.zhong], c = COLOR[st.color];
+    if (st.state === 'rough') return st.siteName + '原石 ' + st.kg + 'kg';
+    return (st.state === 'polished' ? '成品 ' : '明料 ') + z.name + c.name + ' ' + st.kg + 'kg';
+  }
+
+  global.JADE = {
+    makeStone, trueValue, estimate, describe, candle, inspect,
+    openWindow, cutOpen, polish, addMiningCrack, label, knownRatio, clamp, gauss, pick
+  };
+})(window);
+
+/* ============================================================
+   開玉 — 第一人稱 3D 坑道引擎
+   自寫軟體光線投射（raycasting）：只看得見燈照到的前方，
+   坑道要跟著地上的導引線走，看不到完整地圖。
+   ============================================================ */
+(function (global) {
+  'use strict';
+  const { EQUIP, SITES, SUPPLY } = global.DATA;
+  const J = global.JADE;
+
+  const MS = 56;                 // 地圖格數
+  const OPEN = 0, ROCK = 1, HARD = 2, VEIN = 3, BED = 4;
+  const TYPE = {
+    1: { name: '圍岩', hp: 42, hard: 1.0, rgb: [96, 102, 112] },
+    2: { name: '硬岩', hp: 96, hard: 1.75, rgb: [64, 68, 76] },
+    3: { name: '玉脈帶', hp: 60, hard: 1.2, rgb: [62, 122, 100] },
+    4: { name: '岩盤', hp: 1e9, hard: 99, rgb: [40, 42, 48] }
+  };
+  const idx = (x, y) => y * MS + x;
+
+  /* ================= 產生坑道 ================= */
+  function genLevel(S, site) {
+    const map = new Uint8Array(MS * MS).fill(ROCK);
+    const hp = new Float32Array(MS * MS);
+    const wet = new Uint8Array(MS * MS);
+    const seen = new Uint8Array(MS * MS);
+    const path = new Uint8Array(MS * MS);
+    const nodes = {};
+
+    for (let y = 1; y < MS - 1; y++) for (let x = 1; x < MS - 1; x++) {
+      const depth = x / MS, r = Math.random();
+      let t = ROCK;
+      if (r < 0.16 + depth * 0.3) t = HARD;
+      else if (r > 0.9 - depth * 0.14) t = VEIN;
+      map[idx(x, y)] = t;
+      hp[idx(x, y)] = TYPE[t].hp * (0.75 + depth * 1.0) * site.hardness;
+      if (depth > 1 - site.water) wet[idx(x, y)] = 1;
+    }
+    for (let i = 0; i < MS; i++) { map[idx(i, 0)] = BED; map[idx(i, MS - 1)] = BED; map[idx(0, i)] = BED; map[idx(MS - 1, i)] = BED; }
+
+    const carve = (x, y) => {
+      if (x < 1 || y < 1 || x >= MS - 1 || y >= MS - 1) return;
+      map[idx(x, y)] = OPEN;
+    };
+    const room = (x, y, r) => { for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) carve(x + i, y + j); };
+
+    // 洞口
+    let cx = 3, cy = MS >> 1;
+    room(cx, cy, 2);
+    const way = [];
+    let dir = 0;                       // 0:+x 1:+y 2:-y
+    for (let step = 0; step < 150 && cx < MS - 8; step++) {
+      const r = Math.random();
+      if (r < 0.24) dir = 1; else if (r < 0.48) dir = 2; else dir = 0;
+      const dx = dir === 0 ? 1 : 0;
+      const dy = dir === 1 ? 1 : dir === 2 ? -1 : 0;
+      const nx = cx + dx, ny = Math.max(4, Math.min(MS - 5, cy + dy));
+      if (dir !== 0 && Math.abs(ny - (MS >> 1)) > 14) continue;
+      cx = Math.min(MS - 5, nx); cy = ny;
+      carve(cx, cy); carve(cx, cy - 1);            // 坑道高一點好走
+      path[idx(cx, cy)] = 1;
+      way.push([cx, cy]);
+      if (Math.random() < 0.12) room(cx, cy, 1);    // 偶爾一個小硐室
+    }
+    // 開採面
+    room(cx, cy, 2);
+    for (let j = -3; j <= 3; j++) for (let i = -3; i <= 3; i++) {
+      const x = cx + i, y = cy + j;
+      if (x > 0 && y > 0 && x < MS - 1 && y < MS - 1 && map[idx(x, y)] !== OPEN && map[idx(x, y)] !== BED) {
+        map[idx(x, y)] = VEIN; hp[idx(x, y)] = TYPE[VEIN].hp * 1.6 * site.hardness;
+      }
+    }
+
+    // 埋玉：靠近坑道與玉脈帶機率最高，越深越好
+    for (let y = 1; y < MS - 1; y++) for (let x = 1; x < MS - 1; x++) {
+      const t = map[idx(x, y)];
+      if (t === OPEN || t === BED) continue;
+      let near = false;
+      for (let j = -2; j <= 2 && !near; j++) for (let i = -2; i <= 2 && !near; i++) {
+        const nx = x + i, ny = y + j;
+        if (nx > 0 && ny > 0 && nx < MS && ny < MS && map[idx(nx, ny)] === OPEN) near = true;
+      }
+      const depth = x / MS;
+      let p = site.density * (0.3 + depth * 1.6) * (t === VEIN ? 2.4 : t === HARD ? 1.0 : 0.55);
+      if (!near) p *= 0.45;
+      p = Math.min(p, 0.3);
+      if (Math.random() < p) {
+        nodes[idx(x, y)] = J.makeStone(site, { sizeMul: 0.6 + depth * 0.9, luck: (depth - 0.45) * 0.3 });
+      }
+    }
+
+    return { map, hp, wet, seen, path, nodes, way, spawn: { x: 3.5, y: (MS >> 1) + 0.5 }, face: { x: cx, y: cy } };
+  }
+
+  /* ================= 開工 ================= */
+  function start(S, siteId, teamIds) {
+    const site = SITES.find(s => s.id === siteId);
+    const lv = genLevel(S, site);
+    const sess = {
+      site, siteId, lv,
+      team: teamIds.slice(),
+      active: teamIds[0] || null,
+      tool: firstTool(S),
+      stones: [],
+      pumpOn: false,
+      lightOn: hasWorking(S, 'headlamp') || hasWorking(S, 'floodlight'),
+      timbers: 0, dugCount: 0, actions: 0, collapsed: 0,
+      accum: { pump: 0, light: 0, lamp: 0 },
+      player: { x: lv.spawn.x, y: lv.spawn.y, ang: 0, bob: 0, vx: 0, vy: 0 },
+      log: [], over: false
+    };
+    markSeen(sess);
+    return sess;
+  }
+
+  function firstTool(S) {
+    const order = ['pickaxe', 'chisel', 'shovel', 'prybar', 'sledge', 'jackhammer', 'excavator', 'dynamite_kit'];
+    for (const id of order) if (hasWorking(S, id)) return id;
+    return null;
+  }
+  function hasWorking(S, id) { const e = S.equip[id]; return !!(e && e.qty > 0 && e.dur > 0); }
+  function worker(S, id) { return S.workers.find(w => w.id === id); }
+  function skillName(k) { return { mine: '採礦', blast: '爆破', mech: '機械', eye: '相玉' }[k] || k; }
+  function coverage(S, sess, id) {
+    const e = S.equip[id];
+    if (!e || e.qty <= 0 || e.dur <= 0) return 0;
+    return Math.min(1, e.qty / Math.max(1, sess.team.length));
+  }
+  function bestSkill(S, sess, key) {
+    return sess.team.map(id => worker(S, id)).filter(Boolean).reduce((m, x) => Math.max(m, x.skill[key] || 0), 0);
+  }
+
+  function lightRadius(S, sess) {
+    let r = 3.5;
+    if (sess.lightOn && hasWorking(S, 'headlamp')) r = Math.max(r, 3.5 + EQUIP.headlamp.light * 2.6);
+    if (sess.lightOn && hasWorking(S, 'floodlight') && hasWorking(S, 'generator')) r = Math.max(r, 3.5 + EQUIP.floodlight.light * 2.6);
+    if (S.weather.id === 'fog') r -= 2;
+    return Math.max(2.5, r);
+  }
+
+  function markSeen(sess) {
+    const p = sess.player, lv = sess.lv, R = 5;
+    for (let j = -R; j <= R; j++) for (let i = -R; i <= R; i++) {
+      const x = Math.floor(p.x) + i, y = Math.floor(p.y) + j;
+      if (x > 0 && y > 0 && x < MS && y < MS) lv.seen[idx(x, y)] = 1;
+    }
+  }
+
+  /* ================= 工具可用性 ================= */
+  function canUse(S, sess, toolId) {
+    const eq = EQUIP[toolId];
+    if (!eq || !eq.tool) return { ok: false, why: '沒有這個工具' };
+    if (!hasWorking(S, toolId)) return { ok: false, why: eq.name + ' 沒有或已損壞' };
+    const t = eq.tool;
+    for (const need of (t.needs || [])) if (!hasWorking(S, need)) return { ok: false, why: '需要 ' + EQUIP[need].name };
+    if (t.use) for (const k in t.use) if ((S.supply[k] || 0) < t.use[k]) return { ok: false, why: '缺 ' + SUPPLY[k].name };
+    if (t.fuel) for (const k in t.fuel) if ((S.supply[k] || 0) < t.fuel[k]) return { ok: false, why: '缺 ' + SUPPLY[k].name };
+    if (t.skill) {
+      const w = worker(S, sess.active);
+      if (!w) return { ok: false, why: '沒有選定工人' };
+      for (const k in t.skill) {
+        if ((w.skill[k] || 0) < t.skill[k]) {
+          const able = sess.team.map(id => worker(S, id)).filter(x => x && (x.skill[k] || 0) >= t.skill[k]);
+          return { ok: false, why: able.length ? '要由 ' + able.map(x => x.name).join('、') + ' 操作' : '隊上沒有 ' + skillName(k) + ' ' + t.skill[k] + ' 以上的人' };
+        }
+      }
+    }
+    return { ok: true };
+  }
+
+  /* ================= 挖掘 ================= */
+  // 從眼睛射一條線，找出面前的岩壁
+  function aim(sess, reach) {
+    const p = sess.player, lv = sess.lv;
+    const dx = Math.cos(p.ang), dy = Math.sin(p.ang);
+    for (let d = 0.15; d < (reach || 2.0); d += 0.06) {
+      const x = Math.floor(p.x + dx * d), y = Math.floor(p.y + dy * d);
+      if (x < 0 || y < 0 || x >= MS || y >= MS) return null;
+      const t = lv.map[idx(x, y)];
+      if (t !== OPEN) return { x, y, t, d };
+    }
+    return null;
+  }
+
+  function patternCells(sess, tx, ty, pattern) {
+    const p = sess.player;
+    const fx = Math.abs(Math.cos(p.ang)) > Math.abs(Math.sin(p.ang)) ? 1 : 0; // 面向 x 或 y
+    const out = [];
+    const add = (x, y) => out.push([x, y]);
+    switch (pattern) {
+      case 'single': add(tx, ty); break;
+      case 'vert3': add(tx, ty); add(tx + (fx ? Math.sign(Math.cos(p.ang)) : 0), ty + (fx ? 0 : Math.sign(Math.sin(p.ang))));
+        add(tx + (fx ? 2 * Math.sign(Math.cos(p.ang)) : 0), ty + (fx ? 0 : 2 * Math.sign(Math.sin(p.ang)))); break;
+      case 'horz3': add(tx, ty); if (fx) { add(tx, ty - 1); add(tx, ty + 1); } else { add(tx - 1, ty); add(tx + 1, ty); } break;
+      case 'cross': add(tx, ty); add(tx + 1, ty); add(tx - 1, ty); add(tx, ty + 1); add(tx, ty - 1); break;
+      case 'box3': for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) add(tx + i, ty + j); break;
+      case 'blast': for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) if (Math.abs(i) + Math.abs(j) <= 2) add(tx + i, ty + j); break;
+      default: add(tx, ty);
+    }
+    return out;
+  }
+
+  function dig(S, sess) {
+    const chk = canUse(S, sess, sess.tool);
+    if (!chk.ok) return { ok: false, msg: chk.why };
+    const w = worker(S, sess.active);
+    if (!w) return { ok: false, msg: '沒有選定工人' };
+    if (w.injury > 0) return { ok: false, msg: w.name + ' 受傷中' };
+
+    const eq = EQUIP[sess.tool], t = eq.tool;
+    const target = aim(sess, 2.0);
+    if (!target) return { ok: false, msg: '面前沒有岩壁' };
+    if (target.t === BED) return { ok: false, msg: '這是岩盤，挖不動' };
+
+    const stamCost = Math.round(t.stam * (1 - (w.skill.mine || 0) * 0.03) * (S.weather.work < 1 ? 1.15 : 1));
+    if (w.stam < stamCost) return { ok: false, msg: w.name + ' 沒力氣了，按 [T] 換人或 [Q] 收工' };
+
+    w.stam -= stamCost;
+    if (t.use) for (const k in t.use) S.supply[k] -= t.use[k];
+    if (t.fuel) for (const k in t.fuel) S.supply[k] -= t.fuel[k];
+    const gear = S.equip[sess.tool];
+    const wasAlive = gear.dur > 0;
+    gear.dur = Math.max(0, gear.dur - t.wear * (bestSkill(S, sess, 'mech') >= 3 ? 0.7 : 1));
+    const broke = wasAlive && gear.dur <= 0;
+    upkeep(S, sess);
+
+    const lv = sess.lv, msgs = [], got = [];
+    const skillBonus = 1 + (w.skill.mine || 0) * 0.05;
+    let hits = 0;
+
+    for (const [x, y] of patternCells(sess, target.x, target.y, t.pattern)) {
+      if (x < 1 || y < 1 || x >= MS - 1 || y >= MS - 1) continue;
+      const i = idx(x, y), cell = lv.map[i];
+      if (cell === OPEN || cell === BED) continue;
+      let dmg = t.power * skillBonus * S.weather.work * ((t.soft || 1) / TYPE[cell].hard);
+      if (lv.wet[i] && !sess.pumpOn) dmg *= 0.4;
+      dmg *= 0.85 + Math.random() * 0.3;
+      lv.hp[i] -= dmg;
+      hits++;
+      if (lv.hp[i] <= 0) {
+        lv.map[i] = OPEN; sess.dugCount++;
+        const st = lv.nodes[i];
+        if (st) {
+          const crackAdd = t.crack * (0.5 + Math.random() * 0.8);
+          J.addMiningCrack(st, crackAdd);
+          st.note = crackAdd > 0.35 ? '開採震裂' : (crackAdd <= 0.02 ? '取料乾淨' : '');
+          sess.stones.push(st); got.push(st);
+          delete lv.nodes[i];
+          msgs.push('💎 出料！' + st.kg + 'kg' + (crackAdd > 0.35 ? '（震出裂）' : ''));
+        }
+      }
+    }
+
+    sess.actions++;
+    markSeen(sess);
+    const acc = accident(S, sess, t, w);
+    if (acc) msgs.push(acc);
+    if (broke) msgs.push('🔧 ' + eq.name + ' 報廢了');
+    return { ok: true, msg: msgs.join('　'), hits, got, target, stam: stamCost };
+  }
+
+  function upkeep(S, sess) {
+    const a = sess.accum;
+    if (sess.pumpOn && hasWorking(S, 'pump')) {
+      if (++a.pump >= 3) { a.pump = 0; S.supply.diesel = Math.max(0, S.supply.diesel - 3); S.equip.pump.dur -= 1; }
+      if (S.supply.diesel <= 0) { sess.pumpOn = false; sess.log.push('柴油用光，抽水機停了。'); }
+    }
+    if (sess.lightOn) {
+      if (hasWorking(S, 'floodlight') && hasWorking(S, 'generator')) {
+        if (++a.light >= 2) { a.light = 0; S.supply.diesel = Math.max(0, S.supply.diesel - 2); S.equip.generator.dur -= 1; }
+      } else if (hasWorking(S, 'headlamp')) {
+        if (++a.lamp >= 12) { a.lamp = 0; S.supply.battery = Math.max(0, S.supply.battery - 1); S.equip.headlamp.dur -= 1; }
+      }
+    }
+  }
+
+  function collapseRisk(S, sess) {
+    const depth = sess.player.x / MS;
+    let risk = sess.site.danger * (0.25 + depth * 1.5 + sess.dugCount / 900) * S.weather.danger;
+    risk *= Math.max(0.25, 1 - sess.timbers * 0.18);
+    if (sess.pumpOn) risk *= 0.9;
+    if (!sess.lightOn) risk *= 1.25;
+    return risk;
+  }
+
+  function accident(S, sess, t, w) {
+    const helm = coverage(S, sess, 'helmet'), ropeC = coverage(S, sess, 'rope');
+    let p = collapseRisk(S, sess) * 0.05 + (t.danger || 0) * 0.12;
+    p *= 1.5 - helm * 0.5;
+    p *= 1 - ropeC * EQUIP.rope.safety * 0.5;
+    if (Math.random() > p) return null;
+
+    const severe = Math.random() < 0.35 * (1 - coverage(S, sess, 'harness') * EQUIP.harness.safety);
+    let days = severe ? 3 + Math.floor(Math.random() * 4) : 1 + Math.floor(Math.random() * 2);
+    days = Math.max(1, Math.round(days * (1 - helm * EQUIP.helmet.safety)));
+    if (hasWorking(S, 'firstaid') && S.supply.medicine > 0) { S.supply.medicine--; days = Math.max(1, days - 1); }
+    if (hasWorking(S, 'radio') && severe) days = Math.max(1, Math.round(days * 0.65));
+    w.injury += days; w.stam = Math.max(0, w.stam - 25); w.morale = Math.max(0, w.morale - 12);
+    S.morale = Math.max(0, S.morale - 4);
+    sess.collapsed++;
+
+    // 塌方：坑道被土石回填
+    let extra = '';
+    if (Math.random() < 0.45) {
+      const lv = sess.lv; let buried = 0;
+      const px = Math.floor(sess.player.x), py = Math.floor(sess.player.y);
+      for (let j = -4; j <= 4; j++) for (let i = -4; i <= 4; i++) {
+        const x = px + i, y = py + j, k = idx(x, y);
+        if (x < 1 || y < 1 || x >= MS - 1 || y >= MS - 1) continue;
+        if (lv.map[k] === OPEN && !lv.path[k] && Math.random() < 0.12) {
+          lv.map[k] = ROCK; lv.hp[k] = TYPE[ROCK].hp * 0.5; buried++; sess.dugCount--;
+        }
+      }
+      if (buried) extra = '，土石回填 ' + buried + ' 格';
+    }
+    const line = '⚠️ 落石！' + w.name + (severe ? ' 重傷' : ' 受傷') + '，休養 ' + days + ' 天' + extra;
+    sess.log.push(line);
+    return line;
+  }
+
+  function placeTimber(S, sess) {
+    if (!hasWorking(S, 'timber')) return { ok: false, msg: '沒有坑木支撐架' };
+    if ((S.supply.wood || 0) < 1) return { ok: false, msg: '沒有坑木了' };
+    S.supply.wood--; sess.timbers++;
+    return { ok: true, msg: '架好一組支撐（塌方 -18%）' };
+  }
+  function togglePump(S, sess) {
+    if (!hasWorking(S, 'pump')) return { ok: false, msg: '沒有抽水機' };
+    if (!sess.pumpOn && S.supply.diesel < 3) return { ok: false, msg: '柴油不夠' };
+    sess.pumpOn = !sess.pumpOn;
+    return { ok: true, msg: sess.pumpOn ? '抽水機運轉，水位下降' : '抽水機關閉' };
+  }
+  function toggleLight(S, sess) {
+    if (!hasWorking(S, 'headlamp') && !hasWorking(S, 'floodlight')) return { ok: false, msg: '沒有照明設備' };
+    sess.lightOn = !sess.lightOn;
+    return { ok: true, msg: sess.lightOn ? '開燈' : '關燈' };
+  }
+
+  /* ================================================================
+     第一人稱渲染器
+     ================================================================ */
+  const RW = 400, RH = 225;      // 內部解析度（放大到全螢幕）
+
+  function FP(S, sess, onExit) {
+    const wrap = document.createElement('div');
+    wrap.id = 'fpwrap';
+    wrap.innerHTML =
+      '<canvas id="fpcv"></canvas>' +
+      '<div id="fphud">' +
+        '<div class="fp-top"><span id="fp-depth"></span><span id="fp-risk"></span><span id="fp-supply"></span></div>' +
+        '<canvas id="fpmap" width="150" height="150"></canvas>' +
+        '<div id="fp-msg"></div>' +
+        '<div class="fp-target" id="fp-target"></div>' +
+        '<div class="fp-bottom">' +
+          '<div id="fp-worker"></div>' +
+          '<div id="fp-tools"></div>' +
+        '</div>' +
+        '<div class="fp-help">滑鼠移動＝看　WASD＝走　左鍵/空白鍵＝挖　1~8＝換工具　T＝換人　F＝燈　P＝抽水　G＝架坑木　M＝地圖　Q＝收工</div>' +
+      '</div>';
+    document.body.appendChild(wrap);
+
+    const cv = wrap.querySelector('#fpcv'), ctx = cv.getContext('2d');
+    const mapCv = wrap.querySelector('#fpmap'), mapCtx = mapCv.getContext('2d');
+    const buf = ctx.createImageData(RW, RH);
+    const px = buf.data;
+    const zbuf = new Float32Array(RW);
+    const off = document.createElement('canvas'); off.width = RW; off.height = RH;
+    const offCtx = off.getContext('2d');
+
+    let running = true, showMap = false, msgT = 0, msg = '';
+    const keys = {};
+    const particles = [];
+    const swing = { t: 1, dur: 0.42, hit: false };
+
+    function resize() {
+      cv.width = window.innerWidth; cv.height = window.innerHeight;
+      ctx.imageSmoothingEnabled = false;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    /* ---- 輸入 ---- */
+    function onKey(e, down) {
+      keys[e.code] = down;
+      if (!down) return;
+      if (e.code === 'KeyQ' || e.code === 'Escape') { if (e.code === 'KeyQ') quit(); return; }
+      if (e.code === 'Space') doDig();
+      if (e.code === 'KeyM') showMap = !showMap;
+      if (e.code === 'KeyF') { const r = toggleLight(S, sess); say(r.msg); }
+      if (e.code === 'KeyP') { const r = togglePump(S, sess); say(r.msg); }
+      if (e.code === 'KeyG') { const r = placeTimber(S, sess); say(r.msg); }
+      if (e.code === 'KeyT') nextWorker();
+      const n = parseInt(e.key, 10);
+      if (n >= 1 && n <= 8) {
+        const ids = Object.keys(EQUIP).filter(id => EQUIP[id].tool);
+        const id = ids[n - 1];
+        if (id) { const c = canUse(S, sess, id); if (c.ok) { sess.tool = id; say('換上 ' + EQUIP[id].name); hud(); } else say(c.why); }
+      }
+    }
+    const kd = e => { if (['KeyW','KeyA','KeyS','KeyD','Space','KeyQ'].indexOf(e.code) >= 0) e.preventDefault(); onKey(e, true); };
+    const ku = e => onKey(e, false);
+    document.addEventListener('keydown', kd);
+    document.addEventListener('keyup', ku);
+
+    const mm = e => { if (document.pointerLockElement === cv) sess.player.ang += e.movementX * 0.0026; };
+    document.addEventListener('mousemove', mm);
+    cv.addEventListener('click', () => { if (document.pointerLockElement !== cv) cv.requestPointerLock(); });
+    const md = e => { if (document.pointerLockElement === cv && e.button === 0) doDig(); };
+    document.addEventListener('mousedown', md);
+
+    function nextWorker() {
+      const list = sess.team.filter(id => { const w = worker(S, id); return w && w.injury === 0; });
+      if (!list.length) return;
+      const i = list.indexOf(sess.active);
+      sess.active = list[(i + 1) % list.length];
+      const w = worker(S, sess.active);
+      say('換 ' + w.name + ' 上工（體力 ' + Math.round(w.stam) + '）');
+    }
+
+    function say(m) { if (!m) return; msg = m; msgT = 2.6; }
+
+    /* ---- 揮動：關節動畫 ---- */
+    function doDig() {
+      if (swing.t < 1) return;                 // 上一下還沒揮完
+      const eq = EQUIP[sess.tool];
+      const c = canUse(S, sess, sess.tool);
+      if (!c.ok) { say(c.why); return; }
+      swing.t = 0; swing.hit = false;
+      swing.dur = eq.tool.pattern === 'blast' ? 1.1 : eq.tool.stam > 8 ? 0.6 : 0.42;
+    }
+
+    function applyHit() {
+      const r = dig(S, sess);
+      if (!r.ok) { say(r.msg); return; }
+      if (r.msg) say(r.msg);
+      // 碎屑粒子
+      const t = r.target;
+      const cell = t ? TYPE[t.t] || TYPE[1] : TYPE[1];
+      const n = EQUIP[sess.tool].tool.pattern === 'blast' ? 90 : 26;
+      for (let i = 0; i < n; i++) {
+        particles.push({
+          x: cv.width / 2 + (Math.random() - 0.5) * 90,
+          y: cv.height / 2 + (Math.random() - 0.5) * 90,
+          vx: (Math.random() - 0.5) * 620, vy: (Math.random() - 0.9) * 520,
+          life: 0.5 + Math.random() * 0.6, max: 1.1,
+          size: 1 + Math.random() * 3.5,
+          c: cell.rgb
+        });
+      }
+      (r.got || []).forEach(() => {
+        for (let i = 0; i < 60; i++) particles.push({
+          x: cv.width / 2, y: cv.height / 2,
+          vx: (Math.random() - 0.5) * 700, vy: (Math.random() - 0.5) * 700,
+          life: 0.9 + Math.random() * 0.7, max: 1.6, size: 1.5 + Math.random() * 3,
+          c: [80, 240, 190], glow: true
+        });
+      });
+      hud();
+    }
+
+    /* ---- 移動 ---- */
+    function move(dt) {
+      const p = sess.player, lv = sess.lv;
+      const w = worker(S, sess.active);
+      let sp = 2.7 * (keys.ShiftLeft ? 1.6 : 1);
+      if (w && w.stam < 20) sp *= 0.6;
+      const here = idx(Math.floor(p.x), Math.floor(p.y));
+      if (lv.wet[here] && !sess.pumpOn) sp *= 0.45;             // 積水難走
+
+      let fx = 0, fy = 0;
+      if (keys.KeyW || keys.ArrowUp) fx += 1;
+      if (keys.KeyS || keys.ArrowDown) fx -= 1;
+      if (keys.KeyA) fy -= 1;
+      if (keys.KeyD) fy += 1;
+      if (keys.ArrowLeft) p.ang -= 1.8 * dt;
+      if (keys.ArrowRight) p.ang += 1.8 * dt;
+      if (!fx && !fy) { p.bob *= 0.9; return; }
+
+      const c = Math.cos(p.ang), s = Math.sin(p.ang);
+      let dx = (c * fx - s * fy), dy = (s * fx + c * fy);
+      const len = Math.hypot(dx, dy) || 1;
+      dx = dx / len * sp * dt; dy = dy / len * sp * dt;
+      const R = 0.28;
+      const solid = (x, y) => {
+        const t = lv.map[idx(Math.floor(x), Math.floor(y))];
+        return t !== OPEN && t !== undefined;
+      };
+      if (!solid(p.x + dx + Math.sign(dx) * R, p.y)) p.x += dx;
+      if (!solid(p.x, p.y + dy + Math.sign(dy) * R)) p.y += dy;
+      p.bob += sp * dt * 3.4;
+      markSeen(sess);
+    }
+
+    /* ---- 光線投射渲染 ---- */
+    function render() {
+      const p = sess.player, lv = sess.lv;
+      const lightR = lightRadius(S, sess);
+      const fov = 0.9;
+      const dirX = Math.cos(p.ang), dirY = Math.sin(p.ang);
+      const planeX = -dirY * fov, planeY = dirX * fov;
+      const horizon = (RH >> 1) + Math.sin(p.bob) * 2.2;
+
+      // 天花板與地板（含地上的導引線）
+      for (let y = 0; y < RH; y++) {
+        const isFloor = y > horizon;
+        const rowDist = isFloor ? (0.5 * RH) / (y - horizon) : (0.5 * RH) / (horizon - y);
+        const stepX = (dirX + planeX) * rowDist, stepY = (dirY + planeY) * rowDist;
+        const dX = ((dirX - planeX) * rowDist - stepX) / RW, dY = ((dirY - planeY) * rowDist - stepY) / RW;
+        let fxp = p.x + stepX, fyp = p.y + stepY;
+        const fog = Math.max(0, 1 - rowDist / lightR);
+        const shade = fog * fog;
+        for (let x = 0; x < RW; x++) {
+          const cxi = Math.floor(fxp), cyi = Math.floor(fyp);
+          let r, g, b;
+          if (isFloor) {
+            const k = idx(cxi, cyi);
+            const onPath = cxi > 0 && cyi > 0 && cxi < MS && cyi < MS && lv.path[k];
+            const wetc = cxi > 0 && cyi > 0 && cxi < MS && cyi < MS && lv.wet[k] && !sess.pumpOn;
+            const chk = ((cxi * 7 + cyi * 13) & 3) * 6;
+            if (onPath) {
+              // 螢光導引線：自體發光，黑暗中也看得見
+              const pulse = 0.75 + 0.25 * Math.sin(perf * 3 + cxi + cyi);
+              const em = Math.max(shade, 0.42 * pulse);
+              r = 30 * em; g = (150 + 90 * pulse) * em; b = (120 + 60 * pulse) * em;
+            } else if (wetc) { r = 20 * shade; g = (60 + chk) * shade; b = (95 + chk) * shade; }
+            else { r = (62 + chk) * shade; g = (52 + chk) * shade; b = (40 + chk) * shade; }
+          } else {
+            const chk = ((cxi * 5 + cyi * 11) & 3) * 4;
+            r = (30 + chk) * shade; g = (28 + chk) * shade; b = (26 + chk) * shade;
+          }
+          const o = (y * RW + x) << 2;
+          px[o] = r; px[o + 1] = g; px[o + 2] = b; px[o + 3] = 255;
+          fxp += dX; fyp += dY;
+        }
+      }
+
+      // 牆面
+      for (let x = 0; x < RW; x++) {
+        const camX = 2 * x / RW - 1;
+        const rdx = dirX + planeX * camX, rdy = dirY + planeY * camX;
+        let mapX = Math.floor(p.x), mapY = Math.floor(p.y);
+        const dDistX = Math.abs(1 / (rdx || 1e-6)), dDistY = Math.abs(1 / (rdy || 1e-6));
+        let stepX2, stepY2, sideDistX, sideDistY;
+        if (rdx < 0) { stepX2 = -1; sideDistX = (p.x - mapX) * dDistX; } else { stepX2 = 1; sideDistX = (mapX + 1 - p.x) * dDistX; }
+        if (rdy < 0) { stepY2 = -1; sideDistY = (p.y - mapY) * dDistY; } else { stepY2 = 1; sideDistY = (mapY + 1 - p.y) * dDistY; }
+        let hit = 0, side = 0, guard = 0;
+        while (!hit && guard++ < 90) {
+          if (sideDistX < sideDistY) { sideDistX += dDistX; mapX += stepX2; side = 0; }
+          else { sideDistY += dDistY; mapY += stepY2; side = 1; }
+          if (mapX < 0 || mapY < 0 || mapX >= MS || mapY >= MS) break;
+          if (lv.map[idx(mapX, mapY)] !== OPEN) hit = 1;
+        }
+        if (!hit) { zbuf[x] = 1e9; continue; }
+        const dist = side === 0 ? (sideDistX - dDistX) : (sideDistY - dDistY);
+        zbuf[x] = dist;
+        const h = Math.floor(RH / Math.max(dist, 0.12));
+        let y0 = Math.floor(horizon - h / 2), y1 = Math.floor(horizon + h / 2);
+        const cell = lv.map[idx(mapX, mapY)];
+        const T = TYPE[cell] || TYPE[1];
+        const k = idx(mapX, mapY);
+        const dmg = 1 - Math.max(0, lv.hp[k]) / (T.hp * 2.2);      // 打過的痕跡
+        const fog = Math.max(0, 1 - dist / lightR);
+        let shade = fog * fog * (side ? 0.72 : 1);
+        // 玉肉透光：快挖穿又有料時透出綠光
+        const node = lv.nodes[k];
+        const glow = node && lv.hp[k] < T.hp * 0.55 ? (1 - lv.hp[k] / (T.hp * 0.55)) : 0;
+        let r = T.rgb[0], g = T.rgb[1], b = T.rgb[2];
+        if (dmg > 0) { r += dmg * 55; g += dmg * 40; b += dmg * 20; }
+        if (glow > 0) { r = r * (1 - glow) + 70 * glow; g = g * (1 - glow) + 255 * glow; b = b * (1 - glow) + 190 * glow; }
+        if (lv.wet[k] && !sess.pumpOn) { r *= 0.7; g *= 0.9; b *= 1.25; }
+        r *= shade; g *= shade; b *= shade;
+        if (y0 < 0) y0 = 0; if (y1 > RH) y1 = RH;
+        for (let y = y0; y < y1; y++) {
+          const o = (y * RW + x) << 2;
+          px[o] = r; px[o + 1] = g; px[o + 2] = b; px[o + 3] = 255;
+        }
+      }
+
+      offCtx.putImageData(buf, 0, 0);
+      ctx.drawImage(off, 0, 0, RW, RH, 0, 0, cv.width, cv.height);
+    }
+
+    /* ---- 手臂關節動畫 ---- */
+    function drawArm() {
+      const W = cv.width, H = cv.height;
+      const eq = EQUIP[sess.tool];
+      if (!eq) return;
+      const p = sess.player;
+      const t = Math.min(1, swing.t);
+      // 揮動曲線：抬起 → 下砸 → 收回
+      const raise = t < 0.35 ? t / 0.35 : t < 0.55 ? 1 - (t - 0.35) / 0.2 * 1.35 : -0.35 + (t - 0.55) / 0.45 * 0.35;
+      const bob = Math.sin(p.bob) * 0.02, bob2 = Math.cos(p.bob * 2) * 0.012;
+
+      const pat = eq.tool.pattern;
+      const heavy = pat === 'box3' || pat === 'blast' || eq.tool.power > 40;
+      const S0 = { x: W * (0.80 + bob2), y: H * (1.16 + bob) };          // 肩
+      const upper = H * 0.34, fore = H * 0.30;
+
+      // 肩→肘→腕 的關節角度
+      let a1 = -1.15 - raise * 0.95;             // 上臂
+      let a2 = 0.85 + raise * 1.25;              // 前臂相對角
+      if (pat === 'cross') { a1 += Math.sin(swing.t * 40) * 0.04; a2 += Math.cos(swing.t * 40) * 0.05; } // 風鎬震動
+      if (heavy) { a1 -= 0.12; }
+
+      const E = { x: S0.x + Math.cos(a1) * upper, y: S0.y + Math.sin(a1) * upper };
+      const Hd = { x: E.x + Math.cos(a1 + a2) * fore, y: E.y + Math.sin(a1 + a2) * fore };
+
+      ctx.save();
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      // 上臂（袖子）
+      ctx.strokeStyle = '#2c3b33'; ctx.lineWidth = H * 0.085;
+      ctx.beginPath(); ctx.moveTo(S0.x, S0.y); ctx.lineTo(E.x, E.y); ctx.stroke();
+      // 前臂（皮膚）
+      ctx.strokeStyle = '#8a6547'; ctx.lineWidth = H * 0.068;
+      ctx.beginPath(); ctx.moveTo(E.x, E.y); ctx.lineTo(Hd.x, Hd.y); ctx.stroke();
+      // 手套
+      ctx.fillStyle = '#3a2f26';
+      ctx.beginPath(); ctx.arc(Hd.x, Hd.y, H * 0.042, 0, 7); ctx.fill();
+
+      // 工具本體：從手往前延伸
+      const ta = a1 + a2 - 0.5;
+      const tl = H * (heavy ? 0.34 : 0.26);
+      const Tp = { x: Hd.x + Math.cos(ta) * tl, y: Hd.y + Math.sin(ta) * tl };
+      ctx.strokeStyle = '#6b4d2f'; ctx.lineWidth = H * 0.022;
+      ctx.beginPath(); ctx.moveTo(Hd.x, Hd.y); ctx.lineTo(Tp.x, Tp.y); ctx.stroke();
+
+      ctx.translate(Tp.x, Tp.y); ctx.rotate(ta);
+      ctx.fillStyle = '#c9d2da';
+      const s = H * 0.001;
+      switch (sess.tool) {
+        case 'pickaxe':
+          ctx.fillRect(-60 * s, -6 * s, 120 * s, 12 * s);
+          ctx.beginPath(); ctx.moveTo(60 * s, 0); ctx.lineTo(30 * s, -22 * s); ctx.lineTo(34 * s, 6 * s); ctx.fill(); break;
+        case 'sledge': ctx.fillRect(-26 * s, -34 * s, 52 * s, 68 * s); break;
+        case 'chisel':
+          ctx.fillStyle = '#b9c2cc'; ctx.fillRect(-8 * s, -8 * s, 70 * s, 16 * s);
+          ctx.beginPath(); ctx.moveTo(62 * s, -8 * s); ctx.lineTo(78 * s, 0); ctx.lineTo(62 * s, 8 * s); ctx.fill(); break;
+        case 'shovel':
+          ctx.beginPath(); ctx.ellipse(30 * s, 0, 38 * s, 26 * s, 0, 0, 7); ctx.fill(); break;
+        case 'prybar':
+          ctx.fillRect(-70 * s, -5 * s, 140 * s, 10 * s);
+          ctx.beginPath(); ctx.moveTo(70 * s, -5 * s); ctx.lineTo(92 * s, -16 * s); ctx.lineTo(92 * s, 4 * s); ctx.fill(); break;
+        case 'jackhammer':
+          ctx.fillStyle = '#d8a13a'; ctx.fillRect(-40 * s, -22 * s, 80 * s, 44 * s);
+          ctx.fillStyle = '#9aa3ad'; ctx.fillRect(40 * s, -7 * s, 90 * s, 14 * s); break;
+        case 'excavator':
+          ctx.fillStyle = '#e0a92b'; ctx.fillRect(-90 * s, -18 * s, 180 * s, 30 * s);
+          ctx.fillStyle = '#8c939b';
+          ctx.beginPath(); ctx.moveTo(90 * s, -18 * s); ctx.lineTo(150 * s, 10 * s); ctx.lineTo(90 * s, 40 * s); ctx.fill(); break;
+        case 'dynamite_kit':
+          ctx.fillStyle = '#c0392b'; ctx.fillRect(-14 * s, -34 * s, 28 * s, 68 * s);
+          ctx.strokeStyle = '#e8c46a'; ctx.lineWidth = 3 * s;
+          ctx.beginPath(); ctx.moveTo(0, -34 * s); ctx.quadraticCurveTo(30 * s, -60 * s, 60 * s, -40 * s); ctx.stroke(); break;
+        default: ctx.fillRect(-30 * s, -8 * s, 60 * s, 16 * s);
+      }
+      ctx.restore();
+    }
+
+    /* ---- 粒子 ---- */
+    function drawParticles(dt) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const q = particles[i];
+        q.life -= dt;
+        if (q.life <= 0) { particles.splice(i, 1); continue; }
+        q.vy += 1400 * dt;
+        q.x += q.vx * dt; q.y += q.vy * dt;
+        const a = Math.max(0, q.life / q.max);
+        ctx.fillStyle = 'rgba(' + (q.c[0] | 0) + ',' + (q.c[1] | 0) + ',' + (q.c[2] | 0) + ',' + a + ')';
+        if (q.glow) { ctx.shadowColor = 'rgba(80,255,200,.9)'; ctx.shadowBlur = 12; }
+        ctx.fillRect(q.x, q.y, q.size, q.size);
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    /* ---- 小地圖（只畫走過的地方） ---- */
+    function drawMap() {
+      const lv = sess.lv, p = sess.player;
+      const R = 14, cell = 150 / (R * 2);
+      mapCtx.clearRect(0, 0, 150, 150);
+      mapCtx.fillStyle = 'rgba(4,8,10,.85)'; mapCtx.fillRect(0, 0, 150, 150);
+      for (let j = -R; j < R; j++) for (let i = -R; i < R; i++) {
+        const x = Math.floor(p.x) + i, y = Math.floor(p.y) + j;
+        if (x < 0 || y < 0 || x >= MS || y >= MS) continue;
+        const k = idx(x, y);
+        if (!lv.seen[k]) continue;
+        const t = lv.map[k];
+        mapCtx.fillStyle = t === OPEN ? (lv.path[k] ? '#2f8f6d' : '#20272e') : (t === VEIN ? '#2b4a3f' : '#3a4048');
+        mapCtx.fillRect((i + R) * cell, (j + R) * cell, cell, cell);
+      }
+      mapCtx.fillStyle = '#ffd76a';
+      mapCtx.beginPath(); mapCtx.arc(75, 75, 3, 0, 7); mapCtx.fill();
+      mapCtx.strokeStyle = '#ffd76a'; mapCtx.beginPath(); mapCtx.moveTo(75, 75);
+      mapCtx.lineTo(75 + Math.cos(p.ang) * 11, 75 + Math.sin(p.ang) * 11); mapCtx.stroke();
+    }
+
+    /* ---- HUD ---- */
+    function hud() {
+      const w = worker(S, sess.active);
+      const risk = collapseRisk(S, sess);
+      wrap.querySelector('#fp-depth').textContent = '深度 ' + Math.round(sess.player.x) + 'm　產出 ' + sess.stones.length + ' 顆';
+      wrap.querySelector('#fp-risk').innerHTML = '塌方 <b style="color:' +
+        (risk > 0.3 ? '#ff6b6b' : '#3fd6a4') + '">' + (risk < 0.15 ? '低' : risk < 0.3 ? '中' : risk < 0.5 ? '高' : '極高') + '</b>' +
+        '　坑木 ' + sess.timbers;
+      wrap.querySelector('#fp-supply').textContent =
+        '🛢' + Math.round(S.supply.diesel) + '　🔋' + S.supply.battery + '　🧨' + S.supply.dynamite + '　🪵' + S.supply.wood +
+        (sess.pumpOn ? '　💧抽水中' : '') + (sess.lightOn ? '　💡燈亮' : '　🌑無燈');
+      if (w) {
+        wrap.querySelector('#fp-worker').innerHTML =
+          '<b>' + w.name + '</b> <span class="tiny">' + global.DATA.ROLES[w.role].name + '</span>' +
+          '<div class="fp-bar"><i style="width:' + Math.max(0, w.stam / w.maxStam * 100) + '%"></i></div>' +
+          '<span class="tiny">體力 ' + Math.round(w.stam) + '/' + w.maxStam + '　[T] 換人</span>';
+      }
+      const ids = Object.keys(EQUIP).filter(id => EQUIP[id].tool);
+      wrap.querySelector('#fp-tools').innerHTML = ids.map((id, i) => {
+        const ok = canUse(S, sess, id).ok;
+        return '<span class="fp-tool ' + (sess.tool === id ? 'on' : '') + (ok ? '' : ' off') + '">' +
+          (i + 1) + ' ' + EQUIP[id].icon + EQUIP[id].name + '</span>';
+      }).join('');
+    }
+    hud();
+
+    /* ---- 主迴圈 ---- */
+    let last = performance.now(), perf = 0, hudT = 0;
+    function loop(now) {
+      if (!running) return;
+      const dt = Math.min(0.05, (now - last) / 1000); last = now; perf += dt;
+
+      move(dt);
+      if (swing.t < 1) {
+        swing.t += dt / swing.dur;
+        if (!swing.hit && swing.t >= 0.5) { swing.hit = true; applyHit(); }
+        if (swing.t >= 1 && (keys.Space)) doDig();
+      }
+      render();
+      drawArm();
+      drawParticles(dt);
+
+      // 準心與目標資訊
+      const tgt = aim(sess, 2.0);
+      ctx.strokeStyle = tgt ? 'rgba(255,220,120,.9)' : 'rgba(255,255,255,.35)';
+      ctx.lineWidth = 2;
+      const cxp = cv.width / 2, cyp = cv.height / 2;
+      ctx.beginPath();
+      ctx.moveTo(cxp - 10, cyp); ctx.lineTo(cxp - 3, cyp);
+      ctx.moveTo(cxp + 3, cyp); ctx.lineTo(cxp + 10, cyp);
+      ctx.moveTo(cxp, cyp - 10); ctx.lineTo(cxp, cyp - 3);
+      ctx.moveTo(cxp, cyp + 3); ctx.lineTo(cxp, cyp + 10);
+      ctx.stroke();
+
+      const tEl = wrap.querySelector('#fp-target');
+      if (tgt) {
+        const T = TYPE[tgt.t], k = idx(tgt.x, tgt.y);
+        const pct = Math.max(0, Math.min(1, sess.lv.hp[k] / (T.hp * 2.2)));
+        tEl.style.display = 'block';
+        tEl.innerHTML = T.name + '　<span class="fp-hpbar"><i style="width:' + (pct * 100) + '%"></i></span>';
+      } else tEl.style.display = 'none';
+
+      if (showMap) { mapCv.style.display = 'block'; drawMap(); } else mapCv.style.display = 'none';
+
+      if (msgT > 0) { msgT -= dt; const el = wrap.querySelector('#fp-msg'); el.textContent = msg; el.style.opacity = Math.min(1, msgT); }
+      hudT += dt; if (hudT > 0.25) { hudT = 0; hud(); }
+
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    function quit() {
+      running = false;
+      document.removeEventListener('keydown', kd);
+      document.removeEventListener('keyup', ku);
+      document.removeEventListener('mousemove', mm);
+      document.removeEventListener('mousedown', md);
+      window.removeEventListener('resize', resize);
+      if (document.pointerLockElement) document.exitPointerLock();
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      wrap.remove();
+      onExit && onExit();
+    }
+
+    return { quit };
+  }
+
+  function enter(S, onExit) {
+    const el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    return FP(S, S.session, onExit);
+  }
+
+  global.MINE = {
+    MS, TYPE, start, enter, dig, canUse, hasWorking, coverage,
+    placeTimber, togglePump, toggleLight, collapseRisk, lightRadius, aim
+  };
+})(window);
+
+/* ============================================================
+   開玉 — 切石粒子動畫
+   切石機下刀 → 火花 → 石體裂開 → 玉肉見光 → 碎屑飛散
+   ============================================================ */
+(function (global) {
+  'use strict';
+  const COLOR_HEX = {
+    wuse: '#e8eef0', piaohua: '#bfe6d8', doulv: '#7fae6a', danlv: '#a8d8a0',
+    qingshui: '#a9e2e8', lanshui: '#6fb6cf', huangfei: '#e0c169', hongfei: '#d1644a',
+    mocui: '#26382f', ziluolan: '#b48bd6', yanglv: '#3fbf6a', zhengyang: '#18b04e', diwang: '#00913f'
+  };
+
+  function cut(stone, opts, done) {
+    const zhong = global.DATA.ZHONG[stone.zhong], color = global.DATA.COLOR[stone.color];
+    const hex = COLOR_HEX[color.id] || '#8fd6b8';
+    const trans = stone.zhong / 6;                       // 種越好越透
+
+    const wrap = document.createElement('div');
+    wrap.className = 'fxwrap';
+    wrap.innerHTML = '<canvas class="fxcv"></canvas><div class="fxcap"></div>';
+    document.body.appendChild(wrap);
+    const cv = wrap.querySelector('canvas'), ctx = cv.getContext('2d');
+    const cap = wrap.querySelector('.fxcap');
+    const rs = () => { cv.width = window.innerWidth; cv.height = window.innerHeight; };
+    rs(); window.addEventListener('resize', rs);
+
+    const P = [];
+    let t = 0, last = performance.now(), split = 0, done2 = false;
+    const W = () => cv.width, H = () => cv.height;
+    const size = () => Math.min(W(), H()) * 0.22;
+
+    function spark(x, y, n, col, spd) {
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const v = spd * (0.3 + Math.random());
+        P.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 120, life: 0.4 + Math.random() * 0.9, max: 1.3, s: 1 + Math.random() * 3, c: col });
+      }
+    }
+
+    function frame(now) {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+      const w = W(), h = H(), cx = w / 2, cy = h / 2, R = size();
+
+      ctx.fillStyle = 'rgba(4,6,9,.45)'; ctx.fillRect(0, 0, w, h);
+
+      // 階段一：鋸片下刀，噴火花
+      if (t < 1.5) {
+        const prog = t / 1.5;
+        const bladeY = cy - R * 1.9 + prog * R * 1.9;
+        ctx.save();
+        ctx.translate(cx, bladeY);
+        ctx.strokeStyle = '#8c99a6'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(0, 0, R * 0.85, 0, 7); ctx.stroke();
+        for (let i = 0; i < 24; i++) {
+          const a = i / 24 * Math.PI * 2 + t * 26;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * R * 0.85, Math.sin(a) * R * 0.85);
+          ctx.lineTo(Math.cos(a) * R * 0.95, Math.sin(a) * R * 0.95);
+          ctx.stroke();
+        }
+        ctx.restore();
+        if (prog > 0.45) spark(cx + (Math.random() - .5) * R * 0.3, bladeY + R * 0.8, 6, '#ffcf6a', 520);
+      } else if (split < 1) {
+        split = Math.min(1, split + dt * 1.1);
+        if (split === 1 || t < 1.6) {
+          spark(cx, cy, 90, hex, 700);
+          spark(cx, cy, 40, '#fff3c4', 400);
+        }
+      }
+
+      // 石體：兩半往外滑開，切面露出玉肉
+      const gap = split * R * 0.55;
+      for (const sgn of [-1, 1]) {
+        ctx.save();
+        ctx.translate(cx + sgn * gap, cy);
+        ctx.rotate(sgn * split * 0.12);
+        // 皮殼
+        ctx.fillStyle = '#6a5a45';
+        ctx.beginPath();
+        ctx.moveTo(0, -R); ctx.lineTo(sgn * R * 0.95, -R * 0.55);
+        ctx.lineTo(sgn * R * 1.05, R * 0.5); ctx.lineTo(0, R);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 2; ctx.stroke();
+        // 切面（玉肉）
+        if (split > 0.02) {
+          const g = ctx.createLinearGradient(0, -R, 0, R);
+          g.addColorStop(0, shade(hex, 0.12));
+          g.addColorStop(0.5, shade(hex, 0.3 + trans * 0.5));
+          g.addColorStop(1, shade(hex, -0.12));
+          ctx.fillStyle = g;
+          const fw = sgn * R * 0.22;   // 切面寬度
+          ctx.beginPath(); ctx.moveTo(0, -R); ctx.lineTo(fw, -R * 0.55);
+          ctx.lineTo(fw, R * 0.5); ctx.lineTo(0, R); ctx.closePath(); ctx.fill();
+          // 棉
+          ctx.fillStyle = 'rgba(255,255,255,' + (0.05 + stone.cotton * 0.25) + ')';
+          for (let i = 0; i < 6; i++) {
+            ctx.beginPath();
+            ctx.ellipse(fw * 0.5, -R * 0.7 + i * R * 0.3, 5 + i, 8 + i * 2, 0, 0, 7); ctx.fill();
+          }
+          // 裂
+          ctx.strokeStyle = 'rgba(20,25,20,' + (0.15 + stone.crack * 0.7) + ')'; ctx.lineWidth = 1.4;
+          for (let i = 0; i < Math.round(1 + stone.crack * 7); i++) {
+            ctx.beginPath();
+            ctx.moveTo(fw * 0.4 + i * fw * 0.08, -R + i * R * 0.28);
+            ctx.lineTo(fw * 0.6, -R + i * R * 0.28 + R * 0.4);
+            ctx.stroke();
+          }
+          // 光暈：種越好越亮
+          ctx.shadowColor = hex; ctx.shadowBlur = 25 * trans + 6;
+          ctx.strokeStyle = 'rgba(255,255,255,' + (0.15 + trans * 0.4) + ')';
+          ctx.beginPath(); ctx.moveTo(0, -R); ctx.lineTo(0, R); ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+        ctx.restore();
+      }
+
+      // 粒子
+      for (let i = P.length - 1; i >= 0; i--) {
+        const q = P[i]; q.life -= dt;
+        if (q.life <= 0) { P.splice(i, 1); continue; }
+        q.vy += 900 * dt; q.x += q.vx * dt; q.y += q.vy * dt;
+        ctx.globalAlpha = Math.max(0, q.life / q.max);
+        ctx.fillStyle = q.c;
+        ctx.shadowColor = q.c; ctx.shadowBlur = 8;
+        ctx.fillRect(q.x, q.y, q.s, q.s);
+        ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+      }
+
+      if (t > 1.8 && !done2) {
+        done2 = true;
+        cap.innerHTML = '<div class="fxbig" style="color:' + hex + '">' + zhong.name + '　' + color.name + '</div>' +
+          '<div class="fxsub">' + (opts.win ? '🎉 切漲了' : opts.lose ? '💀 垮了' : '開了') + '</div>';
+        cap.style.opacity = 1;
+      }
+      if (t > 3.4) {
+        window.removeEventListener('resize', rs);
+        wrap.remove();
+        done && done();
+        return;
+      }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    wrap.addEventListener('click', () => { t = 3.4; });
+  }
+
+  function shade(hex, amt) {
+    const n = parseInt(hex.slice(1), 16);
+    let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    r = Math.max(0, Math.min(255, r + amt * 255));
+    g = Math.max(0, Math.min(255, g + amt * 255));
+    b = Math.max(0, Math.min(255, b + amt * 255));
+    return 'rgb(' + (r | 0) + ',' + (g | 0) + ',' + (b | 0) + ')';
+  }
+
+  global.FX = { cut };
+})(window);
+
+/* ============================================================
+   開玉 — 遊戲主邏輯
+   狀態 / 工人 / 日循環 / 工房相玉 / 市場 / 補給站 / 存檔
+   ============================================================ */
+(function (global) {
+  'use strict';
+  const D = global.DATA, J = global.JADE, M = global.MINE;
+  const { EQUIP, SUPPLY, SITES, ROLES, WEATHER, NAMES } = D;
+
+  const SAVE_KEY = 'kaiyu-save-v1';
+  let S = null;
+
+  /* ---------------- 建檔 ---------------- */
+  function newWorker(roleId, lvl) {
+    const level = lvl || (1 + Math.floor(Math.random() * 3));
+    const skill = { mine: 1, blast: 0, mech: 0, eye: 0, porter: 0 };
+    const key = ROLES[roleId].key;
+    skill[key] = 2 + Math.floor(Math.random() * 3) + level;
+    skill.mine = Math.max(skill.mine, roleId === 'miner' ? skill.mine : 1 + Math.floor(Math.random() * 3));
+    const maxStam = 70 + Math.floor(Math.random() * 40) + level * 5;
+    return {
+      id: 'W' + Math.random().toString(36).slice(2, 8),
+      name: NAMES[Math.floor(Math.random() * NAMES.length)] + (Math.random() < 0.25 ? '仔' : ''),
+      role: roleId, level,
+      skill, maxStam, stam: maxStam,
+      morale: 65 + Math.floor(Math.random() * 20),
+      injury: 0, exp: 0,
+      wage: Math.round((650 + level * 220 + skill[key] * 90) / 10) * 10,
+      hired: false
+    };
+  }
+
+  function newGame() {
+    S = {
+      day: 1, money: 260000, rep: 0, morale: 70,
+      weather: WEATHER[0],
+      workers: [newWorker('miner', 2), newWorker('miner', 1), newWorker('porter', 1)],
+      equip: {},
+      supply: { diesel: 40, battery: 6, grindwheel: 4, blade: 1, dynamite: 0, wood: 2, food: 20, medicine: 2 },
+      stones: [],       // 已運下山、在工房
+      stash: {},        // 留在各場口山上的料
+      session: null,
+      market: 1.0,
+      buyers: [],
+      log: [],
+      stats: { mined: 0, sold: 0, revenue: 0, bestSale: 0, days: 0, accidents: 0 },
+      lastAuction: 0,
+      over: null
+    };
+    // 起手設備
+    ['pickaxe', 'shovel', 'chisel', 'basket', 'headlamp', 'helmet', 'flashlight', 'loupe', 'tent'].forEach(id => addEquip(id));
+    dedupeNames();
+    rollBuyers();
+    log('第 1 天。你接手了一支三個人的採玉隊，口袋裡 ' + money(S.money) + '。山就在那裡。');
+    return S;
+  }
+
+  // 隊上同名的人加個稱呼區別，喊人才不會亂
+  function dedupeNames() {
+    const seen = {};
+    const suffix = ['', '（二）', '（三）', '（四）', '（五）'];
+    S.workers.forEach(w => {
+      const base = w.baseName || w.name;
+      w.baseName = base;
+      seen[base] = (seen[base] || 0) + 1;
+      w.name = base + (suffix[seen[base] - 1] || '（' + seen[base] + '）');
+    });
+  }
+
+  function addEquip(id, n) {
+    n = n || 1;
+    const def = EQUIP[id];
+    if (!S.equip[id]) S.equip[id] = { qty: 0, dur: def.dur, max: def.dur };
+    S.equip[id].qty += n;
+    S.equip[id].dur = def.dur;
+    S.equip[id].max = def.dur;
+  }
+
+  /* ---------------- 小工具 ---------------- */
+  function money(v) {
+    const s = Math.abs(Math.round(v)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return (v < 0 ? '-$' : '$') + s;
+  }
+  function log(msg, cls) {
+    S.log.unshift({ day: S.day, msg, cls: cls || '' });
+    if (S.log.length > 220) S.log.pop();
+  }
+  function has(id) { return S.equip[id] && S.equip[id].qty > 0 && S.equip[id].dur > 0; }
+  function eyeSkill() {
+    return S.workers.filter(w => w.injury === 0).reduce((m, w) => Math.max(m, w.skill.eye || 0), 0);
+  }
+  function team() { return S.session ? S.session.team.map(id => S.workers.find(w => w.id === id)).filter(Boolean) : []; }
+
+  /* ---------------- 運輸能力 ---------------- */
+  function carryCapacity(site) {
+    let cap = 0;
+    const roster = S.session ? team() : S.workers.filter(w => w.injury === 0);
+    cap += roster.length * 20;                                 // 人力肩扛
+    cap += roster.filter(w => w.role === 'porter').length * 40; // 背工加成
+    for (const id in S.equip) {
+      const def = EQUIP[id], e = S.equip[id];
+      if (!def.carry || e.qty <= 0 || e.dur <= 0) continue;
+      if (def.road && site && site.road < def.road) continue;   // 路太爛開不進來
+      cap += def.carry * e.qty;
+    }
+    return Math.round(cap);
+  }
+
+  /* ---------------- 上山 ---------------- */
+  function startMining(siteId, teamIds) {
+    if (S.session) return { ok: false, msg: '已經在山上了。' };
+    const site = SITES.find(s => s.id === siteId);
+    if (!teamIds.length) return { ok: false, msg: '至少要帶一個人上山。' };
+    if (S.money < site.fee) return { ok: false, msg: '付不出 ' + site.name + ' 的礦權日費 ' + money(site.fee) };
+
+    const injured = teamIds.map(id => S.workers.find(w => w.id === id)).filter(w => w && w.injury > 0);
+    if (injured.length) return { ok: false, msg: injured[0].name + ' 還在養傷，帶不上山。' };
+
+    S.money -= site.fee;
+    S.session = M.start(S, siteId, teamIds);
+    log('隊伍出發前往 ' + site.name + '（海拔 ' + site.alt + 'm），礦權費 ' + money(site.fee) + '。天氣：' + S.weather.name, 'go');
+
+    // 上山途中事件
+    const ev = travelEvent(site);
+    if (ev) log(ev, 'warn');
+    return { ok: true };
+  }
+
+  function travelEvent(site) {
+    const roadRisk = (4 - site.road) * 0.06 * S.weather.danger;
+    if (Math.random() > roadRisk) return null;
+    const r = Math.random();
+    const t = team();
+    const w = t[Math.floor(Math.random() * t.length)];
+    if (r < 0.35 && w) {
+      w.stam = Math.max(10, w.stam - 25);
+      return '上山路上遇到坍方繞路，' + w.name + ' 到礦場就先累了一半。';
+    } else if (r < 0.6) {
+      const loss = Math.min(S.supply.diesel, 5 + Math.floor(Math.random() * 8));
+      S.supply.diesel -= loss;
+      return '油桶在爛路上顛破，漏掉 ' + loss + ' 公升柴油。';
+    } else if (r < 0.8 && w) {
+      w.injury += 1; w.stam = Math.floor(w.stam * 0.5);
+      return '⚠️ ' + w.name + ' 在陡坡滑了一跤，扭傷，休息一天。';
+    }
+    S.money -= 3000;
+    return '半路遇到臨檢站，塞了 ' + money(3000) + ' 才放行。';
+  }
+
+  /* ---------------- 收工下山 ---------------- */
+  function haulOptions() {
+    if (!S.session) return [];
+    const stash = S.stash[S.session.siteId] || [];
+    return S.session.stones.concat(stash);
+  }
+
+  function endMining(selectedIds) {
+    if (!S.session) return { ok: false };
+    const site = S.session.site;
+    const all = haulOptions();
+    const cap = carryCapacity(site);
+    const chosen = all.filter(s => selectedIds.indexOf(s.id) >= 0);
+    const load = chosen.reduce((a, s) => a + s.kg, 0);
+    if (load > cap) return { ok: false, msg: '超載了：' + load.toFixed(1) + 'kg / 上限 ' + cap + 'kg' };
+
+    chosen.forEach(s => S.stones.push(s));
+    const left = all.filter(s => selectedIds.indexOf(s.id) < 0);
+    S.stash[site.id] = left;
+    S.stats.mined += S.session.stones.length;
+    if (S.session.collapsed) S.stats.accidents += S.session.collapsed;
+
+    log('收工下山：帶回 ' + chosen.length + ' 顆共 ' + load.toFixed(1) + 'kg' +
+      (left.length ? '，' + left.length + ' 顆留在 ' + site.name + ' 山上' : '') + '。', 'ok');
+    S.session = null;
+    return { ok: true, hauled: chosen.length, left: left.length };
+  }
+
+  /* ---------------- 結束一天 ---------------- */
+  function endDay() {
+    if (S.session) return { ok: false, msg: '隊伍還在山上，先收工。' };
+    const notes = [];
+
+    // 工資
+    let wages = 0;
+    S.workers.forEach(w => { wages += w.injury > 0 ? Math.round(w.wage * 0.5) : w.wage; });
+    S.money -= wages;
+    notes.push('發工資 ' + money(wages));
+    if (S.money < 0) {
+      S.morale -= 10;
+      S.workers.forEach(w => w.morale -= 8);
+      notes.push('資金見底，工人開始議論欠薪。');
+    }
+
+    // 糧食
+    let need = S.workers.length;
+    if (has('stove')) need = Math.ceil(need * 0.8);
+    for (const id in S.equip) {
+      const def = EQUIP[id];
+      if (def.upkeep && def.upkeep.food && S.equip[id].qty > 0) need += def.upkeep.food * S.equip[id].qty;
+    }
+    if (S.supply.food >= need) {
+      S.supply.food -= need;
+      if (has('stove')) { S.morale += 3; S.workers.forEach(w => w.morale = Math.min(100, w.morale + 3)); }
+    } else {
+      S.supply.food = 0;
+      S.morale -= 12;
+      S.workers.forEach(w => w.morale = Math.max(0, w.morale - 10));
+      notes.push('⚠️ 糧食不足，全隊餓肚子，士氣重挫。');
+    }
+
+    // 休息回復
+    const restBonus = has('tent') ? 10 : 0;
+    S.workers.forEach(w => {
+      w.stam = Math.min(w.maxStam, w.stam + Math.round(w.maxStam * 0.55) + restBonus);
+      if (w.injury > 0) {
+        w.injury--;
+        if (S.supply.medicine > 0 && Math.random() < 0.6) { S.supply.medicine--; w.injury = Math.max(0, w.injury - 1); }
+        if (w.injury === 0) notes.push(w.name + ' 傷好了，明天可以下坑。');
+      }
+      w.morale = Math.min(100, Math.max(0, w.morale + (S.money > 0 ? 2 : -2)));
+    });
+    S.morale = Math.min(100, Math.max(0, S.morale + (S.money > 0 ? 1 : -3)));
+
+    // 離職
+    S.workers.slice().forEach(w => {
+      if (w.morale < 18 && Math.random() < 0.35) {
+        S.workers = S.workers.filter(x => x.id !== w.id);
+        notes.push('💔 ' + w.name + ' 收拾行李走人了。');
+      }
+    });
+
+    // 市場波動
+    const drift = (Math.random() - 0.48) * 0.09;
+    S.market = J.clamp(S.market * (1 + drift), 0.55, 2.2);
+    if (Math.random() < 0.12) {
+      const shock = Math.random() < 0.5 ? -0.18 : 0.22;
+      S.market = J.clamp(S.market * (1 + shock), 0.5, 2.6);
+      notes.push(shock > 0 ? '📈 邊境開盤消息熱，玉價指數跳漲。' : '📉 買家縮手，玉價指數走跌。');
+    }
+    if (S.day % 2 === 0) rollBuyers();
+
+    // 天氣
+    S.weather = rollWeather();
+
+    S.day++;
+    S.stats.days++;
+    log('—— 第 ' + S.day + ' 天　' + S.weather.icon + S.weather.name + '　' + S.weather.desc, 'day');
+    notes.forEach(n => log(n));
+
+    if (S.money < -120000) {
+      S.over = '破產：債主上門，礦權被收回，隊伍就地解散。';
+      log('💀 ' + S.over, 'bad');
+    }
+    save();
+    return { ok: true, notes };
+  }
+
+  function rollWeather() {
+    const r = Math.random();
+    // 雨季（每 30 天為一輪，第 12~24 天雨多）
+    const wet = (S.day % 30) >= 12 && (S.day % 30) <= 24;
+    if (wet) {
+      if (r < 0.32) return WEATHER[2];
+      if (r < 0.5) return WEATHER[3];
+      if (r < 0.66) return WEATHER[4];
+      if (r < 0.85) return WEATHER[1];
+      return WEATHER[0];
+    }
+    if (r < 0.45) return WEATHER[0];
+    if (r < 0.7) return WEATHER[1];
+    if (r < 0.85) return WEATHER[2];
+    if (r < 0.93) return WEATHER[4];
+    return WEATHER[3];
+  }
+
+  /* ---------------- 工房：相玉與加工 ---------------- */
+  function workshop(action, stoneId) {
+    const st = S.stones.find(s => s.id === stoneId);
+    if (!st) return { ok: false, msg: '找不到這顆料' };
+    const eye = eyeSkill();
+
+    if (action === 'candle') {
+      if (!has('flashlight')) return { ok: false, msg: '需要強光手電筒' };
+      if (S.supply.battery < 1) return { ok: false, msg: '沒電池了' };
+      S.supply.battery--; S.equip.flashlight.dur -= 1;
+      const r = J.candle(st); log('打燈 ' + J.label(st) + '：' + r.msg); return r;
+    }
+    if (action === 'loupe') {
+      if (!has('loupe')) return { ok: false, msg: '需要十倍放大鏡' };
+      const r = J.inspect(st); log('相玉 ' + J.label(st) + '：' + r.msg); return r;
+    }
+    if (action === 'window') {
+      if (!has('grinder')) return { ok: false, msg: '需要手持磨機' };
+      if (S.supply.grindwheel < 1) return { ok: false, msg: '沒有砂輪片' };
+      if (st.state !== 'rough') return { ok: false, msg: '已經切開的料不用再開窗' };
+      S.supply.grindwheel--; S.equip.grinder.dur -= 3;
+      const r = J.openWindow(st, eye); log('開窗：' + r.msg, r.good ? 'ok' : 'warn'); return r;
+    }
+    if (action === 'cut') {
+      if (!has('saw')) return { ok: false, msg: '需要切石機' };
+      if (S.supply.blade < 1) return { ok: false, msg: '沒有切割片' };
+      if (st.state !== 'rough') return { ok: false, msg: '已經切開了' };
+      S.supply.blade--; S.equip.saw.dur -= 5;
+      const est = J.estimate(st, eye);
+      const r = J.cutOpen(st, eye);
+      const v = J.trueValue(st);
+      const win = v > est.mid * 1.15, lose = v < est.mid * 0.6;
+      log('🔪 一刀切開 ' + st.siteName + '料 ' + st.kg + 'kg：' + r.msg +
+        '　實價 ' + money(v) + '（切前估 ' + money(est.mid) + '）' +
+        (win ? ' — 漲了！' : lose ? ' — 垮了。' : ''), win ? 'ok' : lose ? 'bad' : '');
+      S.rep += win ? 2 : 0;
+      return Object.assign(r, { value: v, est: est.mid, win, lose });
+    }
+    if (action === 'polish') {
+      if (!has('polisher')) return { ok: false, msg: '需要拋光機' };
+      if (st.state !== 'open') return { ok: false, msg: '只有切開的明料能拋光' };
+      if (S.supply.grindwheel < 1) return { ok: false, msg: '沒有砂輪片' };
+      S.supply.grindwheel--; S.equip.polisher.dur -= 2;
+      const r = J.polish(st); log('拋光 ' + J.label(st) + '，售價 +30%'); return r;
+    }
+    return { ok: false, msg: '未知動作' };
+  }
+
+  /* ---------------- 市場 ---------------- */
+  const BUYER_NAMES = ['瑞豐玉行', '老陳', '緬商吳先生', '廣東客', '台北盤商', '香港藏家', '雲南阿姐', '直播間王總'];
+  const PREFS = [
+    { id: 'bing', name: '愛冰種以上', test: s => s.zhong >= 4, mult: 1.35 },
+    { id: 'green', name: '只認陽綠', test: s => s.color >= 10, mult: 1.45 },
+    { id: 'big', name: '收大料', test: s => s.kg >= 8, mult: 1.3 },
+    { id: 'rough', name: '專賭原石', test: s => s.state === 'rough', mult: 1.2 },
+    { id: 'fine', name: '要成品', test: s => s.state === 'polished', mult: 1.4 },
+    { id: 'purple', name: '找紫羅蘭', test: s => s.color === 9, mult: 1.5 }
+  ];
+
+  function rollBuyers() {
+    S.buyers = [];
+    const used = {};
+    for (let i = 0; i < 3; i++) {
+      let n; do { n = BUYER_NAMES[Math.floor(Math.random() * BUYER_NAMES.length)]; } while (used[n]);
+      used[n] = 1;
+      const pref = PREFS[Math.floor(Math.random() * PREFS.length)];
+      S.buyers.push({
+        name: n, pref,
+        base: 0.6 + Math.random() * 0.3,             // 出價基準
+        seed: Math.random(),
+        haggle: 0.06 + Math.random() * 0.1
+      });
+    }
+  }
+
+  function offerFor(st, buyer) {
+    const eye = eyeSkill();
+    let base;
+    if (st.state === 'rough') {
+      // 玉商也是賭，他用自己的眼力估，並打賭性折扣
+      const est = J.estimate(st, 4 + buyer.seed * 4);
+      const risk = 0.45 + J.knownRatio(st) * 0.4;
+      base = est.mid * risk;
+    } else {
+      base = J.trueValue(st) * 0.92;
+    }
+    let m = buyer.base * S.market;
+    if (buyer.pref.test(st)) m *= buyer.pref.mult;
+    m *= 1 + Math.min(0.25, S.rep * 0.004);          // 名聲
+    if (has('scale')) m *= 1.08;                      // 過磅精準，殺價空間小
+    m = Math.min(m, st.state === 'rough' ? 1.6 : 1.12); // 玉商不會做賠本生意
+    return Math.max(300, Math.round(base * m));
+  }
+
+  function sell(stoneId, buyerIdx) {
+    const i = S.stones.findIndex(s => s.id === stoneId);
+    if (i < 0) return { ok: false, msg: '找不到料' };
+    const st = S.stones[i];
+    const buyer = S.buyers[buyerIdx];
+    const price = offerFor(st, buyer);
+    S.money += price;
+    S.stats.sold++; S.stats.revenue += price;
+    S.stats.bestSale = Math.max(S.stats.bestSale, price);
+    S.rep += price > 500000 ? 6 : price > 100000 ? 3 : price > 20000 ? 1 : 0;
+    S.stones.splice(i, 1);
+    log('💰 賣給 ' + buyer.name + '：' + J.label(st) + ' → ' + money(price), 'ok');
+    return { ok: true, price };
+  }
+
+  function auctionReady() { return S.day - S.lastAuction >= 7; }
+
+  function auction(stoneIds) {
+    if (!auctionReady()) return { ok: false, msg: '公盤每 7 天一次，還沒到。' };
+    if (!stoneIds.length) return { ok: false, msg: '沒有投標的料' };
+    let total = 0; const lines = [];
+    stoneIds.forEach(id => {
+      const i = S.stones.findIndex(s => s.id === id);
+      if (i < 0) return;
+      const st = S.stones[i];
+      // 三口暗標取最高
+      let best = 0;
+      for (let k = 0; k < 3; k++) {
+        const b = { base: 0.7 + Math.random() * 0.45, seed: Math.random(), pref: PREFS[Math.floor(Math.random() * PREFS.length)] };
+        best = Math.max(best, offerFor(st, b));
+      }
+      const net = Math.round(best * 0.9); // 10% 公盤手續費
+      total += net;
+      lines.push(J.label(st) + ' → ' + money(net));
+      S.stones.splice(i, 1);
+      S.stats.sold++;
+    });
+    S.money += total; S.stats.revenue += total;
+    S.lastAuction = S.day;
+    S.rep += 4;
+    log('🏛 公盤開標，' + lines.length + ' 件成交，淨收 ' + money(total), 'ok');
+    return { ok: true, total, lines };
+  }
+
+  /* ---------------- 補給站 ---------------- */
+  function buyEquip(id, n) {
+    n = n || 1;
+    const def = EQUIP[id];
+    const cost = def.price * n;
+    if (S.money < cost) return { ok: false, msg: '錢不夠（需要 ' + money(cost) + '）' };
+    S.money -= cost; addEquip(id, n);
+    log('購入 ' + def.name + ' ×' + n + '　-' + money(cost));
+    return { ok: true };
+  }
+
+  function repairEquip(id) {
+    const e = S.equip[id], def = EQUIP[id];
+    if (!e) return { ok: false, msg: '沒有這個設備' };
+    const missing = 1 - e.dur / e.max;
+    const cost = Math.round(def.price * missing * 0.55);
+    if (cost <= 0) return { ok: false, msg: '狀況良好，不用修' };
+    if (S.money < cost) return { ok: false, msg: '修不起（需要 ' + money(cost) + '）' };
+    S.money -= cost; e.dur = e.max;
+    log('維修 ' + def.name + '　-' + money(cost));
+    return { ok: true, cost };
+  }
+
+  function buySupply(id, n) {
+    const cost = SUPPLY[id].price * n;
+    if (S.money < cost) return { ok: false, msg: '錢不夠' };
+    S.money -= cost;
+    S.supply[id] = (S.supply[id] || 0) + n;
+    return { ok: true };
+  }
+
+  /* ---------------- 人力市場 ---------------- */
+  function candidates() {
+    if (!S._cands || S._candDay !== S.day) {
+      S._candDay = S.day;
+      const roles = Object.keys(ROLES);
+      S._cands = [0, 1, 2].map(() => newWorker(roles[Math.floor(Math.random() * roles.length)]));
+    }
+    return S._cands;
+  }
+
+  function hire(id) {
+    const c = candidates().find(w => w.id === id);
+    if (!c) return { ok: false, msg: '人已經走了' };
+    const bonus = c.wage * 5;
+    if (S.money < bonus) return { ok: false, msg: '簽約金 ' + money(bonus) + ' 付不出來' };
+    S.money -= bonus;
+    c.hired = true;
+    S.workers.push(c);
+    dedupeNames();
+    S._cands = S._cands.filter(w => w.id !== id);
+    log('僱用 ' + c.name + '（' + ROLES[c.role].name + '）簽約金 ' + money(bonus) + '，日薪 ' + money(c.wage));
+    return { ok: true };
+  }
+
+  function fire(id) {
+    const w = S.workers.find(x => x.id === id);
+    if (!w) return { ok: false };
+    S.workers = S.workers.filter(x => x.id !== id);
+    S.morale -= 5;
+    log('辭退 ' + w.name + '，其他人臉色不太好看。');
+    return { ok: true };
+  }
+
+  function train(id) {
+    const w = S.workers.find(x => x.id === id);
+    if (!w) return { ok: false };
+    const cost = 8000 + w.level * 4000;
+    if (S.money < cost) return { ok: false, msg: '訓練費 ' + money(cost) + ' 不夠' };
+    S.money -= cost;
+    const key = ROLES[w.role].key;
+    w.skill[key] += 1; w.level += 1; w.maxStam += 4;
+    w.wage = Math.round(w.wage * 1.12 / 10) * 10;
+    log(w.name + ' 完成訓練：' + skillLabel(key) + ' 提升到 ' + w.skill[key] + '（日薪調為 ' + money(w.wage) + '）');
+    return { ok: true };
+  }
+
+  function skillLabel(k) { return { mine: '採礦', blast: '爆破', mech: '機械', eye: '相玉', porter: '負重' }[k] || k; }
+
+  /* ---------------- 存檔 ---------------- */
+  function save() {
+    try {
+      const copy = Object.assign({}, S);
+      copy.session = null;                 // 山上作業不存檔
+      copy.weather = { id: S.weather.id };
+      localStorage.setItem(SAVE_KEY, JSON.stringify(copy));
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return false;
+      const d = JSON.parse(raw);
+      d.weather = WEATHER.find(w => w.id === (d.weather && d.weather.id)) || WEATHER[0];
+      d.session = null;
+      S = d;
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function reset() { localStorage.removeItem(SAVE_KEY); return newGame(); }
+
+  global.GAME = {
+    get S() { return S; },
+    newGame, load, save, reset, log, money, has, eyeSkill, team,
+    carryCapacity, startMining, endMining, haulOptions, endDay,
+    workshop, offerFor, sell, auction, auctionReady, rollBuyers,
+    buyEquip, repairEquip, buySupply, candidates, hire, fire, train,
+    skillLabel, newWorker
+  };
+})(window);
+
+/* ============================================================
+   開玉 — 介面層
+   ============================================================ */
+(function (global) {
+  'use strict';
+  const D = global.DATA, J = global.JADE, M = global.MINE, G = global.GAME;
+  const { EQUIP, SUPPLY, SITES, ROLES, ZHONG, COLOR } = D;
+
+  let tab = 'camp';
+  const sel = { team: {}, haul: {}, auct: {}, hover: null };
+
+  const $ = s => document.querySelector(s);
+  const money = v => G.money(v);
+  const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const S = () => G.S;
+
+  /* ---------------- toast ---------------- */
+  function toast(msg, cls) {
+    if (!msg) return;
+    const box = $('#toast');
+    // 同一句話不洗版，累加次數就好
+    const last = box.lastElementChild;
+    if (last && last.dataset.msg === msg) {
+      last.dataset.n = (+last.dataset.n || 1) + 1;
+      last.textContent = msg + ' ×' + last.dataset.n;
+      clearTimeout(+last.dataset.timer);
+      last.dataset.timer = setTimeout(() => last.remove(), 2600);
+      return;
+    }
+    const d = document.createElement('div');
+    d.className = 'toastmsg ' + (cls || '');
+    d.dataset.msg = msg; d.dataset.n = 1;
+    d.textContent = msg;
+    box.appendChild(d);
+    while (box.children.length > 3) box.firstElementChild.remove();
+    d.dataset.timer = setTimeout(() => d.remove(), 2600);
+  }
+
+  /* ---------------- 頂欄 ---------------- */
+  function header() {
+    const s = S();
+    const trend = s.market >= 1.15 ? '📈' : s.market <= 0.85 ? '📉' : '➖';
+    $('#stats').innerHTML = [
+      ['第 ' + s.day + ' 天', '日期'],
+      [s.weather.icon + ' ' + s.weather.name, '天氣'],
+      [money(s.money), '資金'],
+      [Math.round(s.morale) + '%', '士氣'],
+      [s.rep, '名聲'],
+      [trend + ' ' + s.market.toFixed(2), '玉價指數'],
+      [s.workers.length + ' 人', '隊伍'],
+      [s.stones.length + ' 顆', '倉庫存料']
+    ].map(([b, l]) => '<div class="stat"><b>' + esc(b) + '</b><span>' + l + '</span></div>').join('');
+  }
+
+  const TABS = [
+    { id: 'camp', name: '⛺ 營地' },
+    { id: 'mine', name: '⛏ 礦場' },
+    { id: 'shop', name: '🔦 工房' },
+    { id: 'market', name: '💰 市場' },
+    { id: 'crew', name: '👷 人力' },
+    { id: 'store', name: '🏪 補給站' },
+    { id: 'log', name: '📜 日誌' }
+  ];
+
+  function tabsBar() {
+    const s = S();
+    $('#tabs').innerHTML = TABS.map(t => {
+      let badge = '';
+      if (t.id === 'mine' && s.session) badge = '<span class="badge">作業中</span>';
+      if (t.id === 'shop' && s.stones.length) badge = '<span class="badge">' + s.stones.length + '</span>';
+      if (t.id === 'market' && G.auctionReady()) badge = '<span class="badge">公盤</span>';
+      return '<button class="tab ' + (tab === t.id ? 'on' : '') + '" data-act="tab" data-tab="' + t.id + '">' + t.name + badge + '</button>';
+    }).join('');
+  }
+
+  /* ---------------- 營地 ---------------- */
+  function viewCamp() {
+    const s = S();
+    const chosen = s.workers.filter(w => sel.team[w.id] && w.injury === 0);
+    const cap = (function () {
+      // 以目前勾選的隊伍估算載重
+      const fake = { team: chosen.map(w => w.id) };
+      const old = s.session; s.session = fake;
+      const c = G.carryCapacity(null); s.session = old; return c;
+    })();
+
+    const checks = [
+      ['照明', G.has('headlamp') || G.has('floodlight'), '沒燈只看得到洞口附近，還更容易出事'],
+      ['抽水機', G.has('pump'), '水線以下效率只剩四成'],
+      ['安全帽', s.equip.helmet && s.equip.helmet.qty >= Math.max(1, chosen.length), '一人一頂才算配齊'],
+      ['運輸', cap > 60, '載重不足，挖到的料只能丟在山上'],
+      ['柴油', s.supply.diesel >= 20, '機具沒油等於廢鐵'],
+      ['糧食', s.supply.food >= s.workers.length * 2, '斷糧士氣崩盤']
+    ];
+
+    const crew = s.workers.map(w => {
+      const on = sel.team[w.id] && w.injury === 0;
+      return '<div class="checkrow ' + (on ? 'on' : '') + ' ' + (w.injury ? 'hurt' : '') + '" data-act="team" data-id="' + w.id + '">' +
+        '<div style="flex:1"><b>' + esc(w.name) + '</b> <span class="tag">' + ROLES[w.role].name + ' Lv' + w.level + '</span>' +
+        (w.injury ? '<span class="tag r">傷 ' + w.injury + '天</span>' : '') +
+        '<div class="bar" style="margin-top:4px"><i style="width:' + (w.stam / w.maxStam * 100) + '%"></i></div>' +
+        '<div class="tiny muted">體力 ' + Math.round(w.stam) + '/' + w.maxStam +
+        '　採礦' + w.skill.mine + ' 爆破' + w.skill.blast + ' 機械' + w.skill.mech + ' 相玉' + w.skill.eye + '</div></div></div>';
+    }).join('') || '<p class="muted">沒有工人了，去人力市場招人。</p>';
+
+    const sites = SITES.map(st => {
+      const stash = (s.stash[st.id] || []).length;
+      return '<div class="card site">' +
+        '<div class="spread"><h3>' + st.name + ' <span class="sub">海拔 ' + st.alt + 'm</span></h3>' +
+        '<b class="est">' + money(st.fee) + '/天</b></div>' +
+        '<p class="tiny muted" style="margin:4px 0 8px">' + st.desc + '</p>' +
+        '<div class="tagline">' +
+        '<span class="tag ' + (st.danger > 0.25 ? 'r' : '') + '">危險 ' + Math.round(st.danger * 100) + '%</span>' +
+        '<span class="tag b">水位 ' + Math.round(st.water * 100) + '%</span>' +
+        '<span class="tag">圍岩硬度 ×' + st.hardness + '</span>' +
+        '<span class="tag">路況 ' + '★'.repeat(st.road) + '</span>' +
+        '<span class="tag j">出料率 ' + Math.round(st.density * 100) + '%</span>' +
+        (stash ? '<span class="tag g">山上存料 ' + stash + ' 顆</span>' : '') +
+        '</div>' +
+        '<button class="btn primary" data-act="go" data-site="' + st.id + '"' + (chosen.length ? '' : ' disabled') + '>' +
+        (chosen.length ? '帶 ' + chosen.length + ' 人上山 →' : '先在右邊編隊') + '</button>' +
+        '</div>';
+    }).join('');
+
+    return '<div class="grid cols2">' +
+      '<div class="card"><h3>今天 <span class="sub">' + s.weather.icon + ' ' + s.weather.name + '　' + s.weather.desc + '</span></h3>' +
+      '<div class="tagline">' + checks.map(c =>
+        '<span class="tag ' + (c[1] ? 'j' : 'r') + '" title="' + c[2] + '">' + (c[1] ? '✓ ' : '✗ ') + c[0] + '</span>').join('') + '</div>' +
+      '<div class="tiny muted">' + checks.filter(c => !c[1]).map(c => '· ' + c[0] + '：' + c[2]).join('<br>') + '</div>' +
+      '<hr><div class="spread"><span>選定隊伍載重上限</span><b class="est">' + cap + ' kg</b></div>' +
+      '<div class="tiny muted">載重＝人力 20kg/人＋背工 40kg＋運輸設備（路況不足的車輛開不進場口）</div>' +
+      '</div>' +
+      '<div class="card"><h3>編隊 <span class="sub">點選要上山的人</span></h3>' + crew + '</div>' +
+      '</div>' +
+      '<h3 style="margin:18px 0 8px;letter-spacing:2px">場口 — 你今天要賭哪一個坑？</h3>' +
+      '<div class="grid cols3">' + sites + '</div>';
+  }
+
+  /* ---------------- 礦場 ---------------- */
+  function viewMine() {
+    const s = S();
+    if (!s.session) {
+      return '<div class="card" style="text-align:center;padding:50px">' +
+        '<div class="big">隊伍還在營地</div>' +
+        '<p class="muted">到「營地」編隊、選場口，付了礦權費才能上山。</p>' +
+        '<button class="btn primary" data-act="tab" data-tab="camp">去營地 →</button></div>';
+    }
+    const ss = s.session;
+
+    // 工人面板
+    const crew = ss.team.map(id => {
+      const w = s.workers.find(x => x.id === id);
+      if (!w) return '';
+      return '<div class="wrk ' + (ss.active === id ? 'on' : '') + ' ' + (w.injury ? 'hurt' : '') + '" data-act="active" data-id="' + id + '">' +
+        '<div class="spread"><b>' + esc(w.name) + '</b><span class="tiny muted">' + ROLES[w.role].name + '</span></div>' +
+        '<div class="bar' + (w.stam < w.maxStam * 0.25 ? ' red' : '') + '"><i style="width:' + Math.max(0, w.stam / w.maxStam * 100) + '%"></i></div>' +
+        '<div class="tiny muted">體力 ' + Math.round(w.stam) + '/' + w.maxStam + (w.injury ? '　🩹傷' : '') + '</div></div>';
+    }).join('');
+
+    // 工具列
+    const toolIds = Object.keys(EQUIP).filter(id => EQUIP[id].tool);
+    const tools = toolIds.map((id, i) => {
+      const e = EQUIP[id], chk = M.canUse(s, ss, id);
+      const t = e.tool;
+      const info = [
+        '威力 ' + t.power,
+        '型 ' + ({ single: '單格', vert3: '直三格', horz3: '橫三格', cross: '十字', box3: '3×3', blast: '爆破半徑2' })[t.pattern],
+        '體力 ' + t.stam,
+        '傷玉 ' + Math.round(t.crack * 100) + '%'
+      ].join('　');
+      const cost = [];
+      if (t.fuel) for (const k in t.fuel) cost.push(SUPPLY[k].icon + t.fuel[k]);
+      if (t.use) for (const k in t.use) cost.push(SUPPLY[k].icon + t.use[k]);
+      return '<button class="toolbtn ' + (ss.tool === id ? 'on' : '') + '" data-act="tool" data-id="' + id + '"' +
+        (chk.ok ? '' : ' disabled title="' + esc(chk.why) + '"') + '>' +
+        '<span class="ico">' + e.icon + '</span><span style="flex:1"><b>' + e.name + '</b> <span class="tiny muted">[' + (i + 1) + ']</span>' +
+        '<div class="meta">' + info + (cost.length ? '　' + cost.join(' ') : '') + '</div></span></button>';
+    }).join('');
+
+    const risk = M.collapseRisk(s, ss);
+    const riskTxt = risk < 0.15 ? '低' : risk < 0.3 ? '中' : risk < 0.5 ? '高' : '極高';
+    const found = ss.stones.length
+      ? ss.stones.map(st => '<div class="tiny">💎 ' + st.kg + 'kg　' + st.siteName + '　<span class="muted">' + (st.note || '待相玉') + '</span></div>').join('')
+      : '<div class="tiny muted">還沒挖到東西。往深處推進，玉脈帶（帶綠紋的岩層）機率最高。</div>';
+
+    return '<div class="minewrap">' +
+      '<div>' +
+        '<div class="card"><h3>下坑班表</h3>' + crew + '</div>' +
+        '<div class="card" style="margin-top:12px"><h3>支援設備</h3>' +
+          '<button class="toolbtn ' + (ss.pumpOn ? 'on' : '') + '" data-act="pump"><span class="ico">💧</span><span><b>抽水機</b>' +
+            '<div class="meta">' + (ss.pumpOn ? '運轉中（每 3 次作業耗 3L 柴油）' : '停機 — 水線下效率 40%') + '</div></span></button>' +
+          '<button class="toolbtn ' + (ss.lightOn ? 'on' : '') + '" data-act="light"><span class="ico">💡</span><span><b>照明</b>' +
+            '<div class="meta">' + (ss.lightOn ? '已開，可視半徑 ' + M.lightRadius(s, ss) : '關閉') + '</div></span></button>' +
+          '<button class="toolbtn" data-act="timber"><span class="ico">🪵</span><span><b>架設坑木</b>' +
+            '<div class="meta">已架 ' + ss.timbers + ' 組（庫存 ' + (s.supply.wood || 0) + '）　塌方 -18%/組</div></span></button>' +
+        '</div>' +
+        '<div class="card" style="margin-top:12px"><h3>坑內狀況</h3>' +
+          '<div class="spread tiny"><span>塌方風險</span><b class="' + (risk > 0.3 ? 'tag r' : 'tag j') + '">' + riskTxt + '</b></div>' +
+          '<div class="bar ' + (risk > 0.3 ? 'red' : '') + '"><i style="width:' + Math.min(100, risk * 160) + '%"></i></div>' +
+          '<hr><div class="tiny muted">柴油 ' + Math.round(s.supply.diesel) + 'L　電池 ' + s.supply.battery +
+          '　炸藥 ' + s.supply.dynamite + '　坑木 ' + s.supply.wood + '<br>已開挖 ' + ss.dugCount + ' 格　作業 ' + ss.actions + ' 次</div>' +
+        '</div>' +
+      '</div>' +
+      '<div>' +
+        '<div class="card enter3d">' +
+          '<div class="e3-art"><span>⛏</span></div>' +
+          '<div class="big">' + ss.site.name + '　坑口</div>' +
+          '<p class="muted tiny">全螢幕第一人稱。頭燈只照得到前方，坑道深處看不見 —— <b>跟著地上的螢光導引線走</b>，走到底就是開採面。</p>' +
+          '<button class="btn primary big-btn" data-act="enter3d">▶ 進入坑道（全螢幕 3D）</button>' +
+          '<div class="keys">' +
+            '<span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 走動</span>' +
+            '<span><kbd>滑鼠</kbd> 環顧四周</span>' +
+            '<span><kbd>左鍵</kbd> 揮工具開挖</span>' +
+            '<span><kbd>1</kbd>~<kbd>8</kbd> 換工具</span>' +
+            '<span><kbd>T</kbd> 換人</span>' +
+            '<span><kbd>F</kbd> 燈　<kbd>P</kbd> 抽水　<kbd>G</kbd> 坑木</span>' +
+            '<span><kbd>M</kbd> 小地圖（只顯示走過的地方）</span>' +
+            '<span><kbd>Q</kbd> 離開坑道</span>' +
+          '</div>' +
+          '<button class="btn gold" data-act="quit" style="margin-top:10px">🎒 收工下山</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="card"><h3>今日產出 <span class="sub">' + ss.stones.length + ' 顆</span></h3>' + found +
+        '<hr><h3>提示</h3><div class="tiny muted">' +
+        '· 帶綠紋的<b>玉脈帶</b>出料率最高，硬岩其次。<br>' +
+        '· 岩壁快被打穿時會透出<b>綠光</b>，那裡有料 — 換<b>鑿子</b>取出來才不會震裂。<br>' +
+        '· 風鎬／挖土機／炸藥快，但傷玉率 50~85%，裂一多價格直接砍七成。<br>' +
+        '· 積水區地面偏藍、走路變慢，開抽水機才挖得動。<br>' +
+        '· 挖得越深越容易塌，記得架坑木。</div></div>' +
+      '</div>';
+  }
+
+  /* ---------------- 收工／載運 ---------------- */
+  function haulModal() {
+    const s = S();
+    const all = G.haulOptions();
+    const cap = G.carryCapacity(s.session.site);
+    // 預設自動挑：估價/公斤 高的優先
+    if (!sel.haulInit) {
+      sel.haul = {};
+      let load = 0;
+      all.slice().sort((a, b) => J.estimate(b, G.eyeSkill()).mid / b.kg - J.estimate(a, G.eyeSkill()).mid / a.kg)
+        .forEach(st => { if (load + st.kg <= cap) { sel.haul[st.id] = true; load += st.kg; } });
+      sel.haulInit = true;
+    }
+    const load = all.filter(st => sel.haul[st.id]).reduce((a, b) => a + b.kg, 0);
+    const rows = all.map(st => {
+      const e = J.estimate(st, G.eyeSkill());
+      return '<div class="checkrow ' + (sel.haul[st.id] ? 'on' : '') + '" data-act="haul" data-id="' + st.id + '">' +
+        '<span style="flex:1"><b>' + st.kg + 'kg</b> ' + st.siteName + '　<span class="tiny muted">' +
+        (D.SKIN.find(k => k.id === st.skin) || {}).name + '　' + (st.note || '') + '</span></span>' +
+        '<span class="est tiny">估 ' + money(e.low) + '～' + money(e.high) + '</span></div>';
+    }).join('') || '<p class="muted">今天空手而回。</p>';
+
+    return '<h3>收工下山 — 挑要扛下去的料</h3>' +
+      '<p class="tiny muted">載重上限 ' + cap + 'kg（人力＋背工＋運輸設備）。沒帶下去的留在山上，下次來還在，但會被別人摸走一部分的風險自負。</p>' +
+      '<div class="spread"><span>目前裝載</span><b class="' + (load > cap ? 'tag r' : 'est') + '">' + load.toFixed(1) + ' / ' + cap + ' kg</b></div>' +
+      '<div class="bar ' + (load > cap ? 'red' : 'gold') + '" style="margin:6px 0 12px"><i style="width:' + Math.min(100, load / cap * 100) + '%"></i></div>' +
+      rows +
+      '<div class="row" style="margin-top:14px"><button class="btn primary" data-act="haul-ok">確認下山</button>' +
+      '<button class="btn ghost" data-act="close">再挖一下</button></div>';
+  }
+
+  /* ---------------- 工房 ---------------- */
+  function viewShop() {
+    const s = S();
+    const eye = G.eyeSkill();
+    const tools = [
+      ['flashlight', '打燈看種水', 'candle'],
+      ['loupe', '放大鏡看裂棉', 'loupe'],
+      ['grinder', '磨機開窗看色', 'window'],
+      ['saw', '切石機開料', 'cut'],
+      ['polisher', '拋光起貨', 'polish'],
+      ['scale', '電子秤（被動）', null]
+    ];
+    const bar = tools.map(([id, desc]) => {
+      const ok = G.has(id), e = s.equip[id];
+      return '<span class="tag ' + (ok ? 'j' : 'r') + '">' + EQUIP[id].icon + ' ' + EQUIP[id].name +
+        (e ? '　' + Math.round(e.dur / e.max * 100) + '%' : '（未購入）') + '</span>';
+    }).join('');
+
+    if (!s.stones.length) {
+      return '<div class="card"><h3>工房</h3><div class="tagline">' + bar + '</div>' +
+        '<p class="muted">倉庫沒有料。上山挖，或者從市場…市場只收不賣。</p></div>';
+    }
+
+    const cards = s.stones.map(st => {
+      const d = J.describe(st, eye), e = J.estimate(st, eye);
+      const rough = st.state === 'rough';
+      const btn = (a, label, cond, tip) =>
+        '<button class="btn sm ' + (a === 'cut' ? 'gold' : '') + '" data-act="ws" data-a="' + a + '" data-id="' + st.id + '"' +
+        (cond ? '' : ' disabled') + ' title="' + esc(tip || '') + '">' + label + '</button>';
+      return '<div class="stone ' + st.state + '">' +
+        '<span class="kg">' + st.kg + ' kg</span>' +
+        '<div class="name">' + (rough ? st.siteName + '　原石' : (st.state === 'polished' ? '✨ 成品' : '🔪 明料')) + '</div>' +
+        '<div class="tiny muted">' + d.skin.name + '　' + d.skin.hint + '</div>' +
+        '<div class="kv">' +
+        '<b>種</b><span>' + d.zhong + '</span>' +
+        '<b>色</b><span>' + d.color + '</span>' +
+        '<b>裂</b><span>' + d.crack + '</span>' +
+        '<b>棉</b><span>' + d.cotton + '</span>' +
+        (st.window ? '<b>窗</b><span>' + (st.window > 0 ? '開得漂亮' : '窗口見髒') + '</span>' : '') +
+        '</div>' +
+        '<div class="est">' + (rough ? '估值 ' + money(e.low) + ' ～ ' + money(e.high) : '實價 ' + money(J.trueValue(st))) +
+        '<span class="tiny muted">　把握度 ' + Math.round(e.sure * 100) + '%</span></div>' +
+        '<div class="acts">' +
+        btn('candle', '🔦 打燈', rough && !st.known.zhong && G.has('flashlight') && s.supply.battery > 0, '揭示種') +
+        btn('loupe', '🔍 相裂', rough && !st.known.crack && G.has('loupe'), '揭示裂與棉') +
+        btn('window', '🪚 開窗', rough && !st.window && G.has('grinder') && s.supply.grindwheel > 0, '揭示色，消耗砂輪片') +
+        btn('cut', '🪓 切開', rough && G.has('saw') && s.supply.blade > 0, '一刀定生死，消耗切割片') +
+        btn('polish', '✨ 拋光', st.state === 'open' && G.has('polisher') && s.supply.grindwheel > 0, '售價 +30%') +
+        '</div></div>';
+    }).join('');
+
+    return '<div class="card"><h3>工房 <span class="sub">相玉師眼力 ' + eye + '／10　— 眼力越高，估價越準、開窗切石越不容易失手</span></h3>' +
+      '<div class="tagline">' + bar + '</div>' +
+      '<div class="tiny muted">砂輪片 ' + s.supply.grindwheel + '　切割片 ' + s.supply.blade + '　電池 ' + s.supply.battery + '</div>' +
+      '<div class="row" style="margin-top:8px">' +
+      '<button class="btn sm" data-act="wsall" data-a="candle">🔦 全部打燈</button>' +
+      '<button class="btn sm" data-act="wsall" data-a="loupe">🔍 全部相裂</button>' +
+      '<span class="tiny muted">批次處理，耗材不夠就做到沒有為止</span></div></div>' +
+      '<div class="grid cols3" style="margin-top:12px">' + cards + '</div>';
+  }
+
+  /* ---------------- 市場 ---------------- */
+  function viewMarket() {
+    const s = S();
+    const buyers = s.buyers.map((b, i) =>
+      '<div class="card"><h3>' + esc(b.name) + ' <span class="sub">' + b.pref.name + '</span></h3>' +
+      '<div class="tiny muted">出價基準 ' + (b.base * s.market).toFixed(2) + '×　對口的貨加 ' +
+      Math.round((b.pref.mult - 1) * 100) + '%</div></div>').join('');
+
+    const rows = s.stones.map(st => {
+      const e = J.estimate(st, G.eyeSkill());
+      const offers = s.buyers.map((b, i) => {
+        const p = G.offerFor(st, b);
+        return '<td><button class="btn sm" data-act="sell" data-id="' + st.id + '" data-b="' + i + '">' + money(p) + '</button></td>';
+      }).join('');
+      return '<tr><td><b>' + st.kg + 'kg</b> ' + (st.state === 'rough' ? st.siteName + '原石' :
+        ZHONG[st.zhong].name + COLOR[st.color].name + (st.state === 'polished' ? '成品' : '明料')) +
+        '<div class="tiny muted">' + (st.state === 'rough' ? '自估 ' + money(e.mid) : '實價 ' + money(J.trueValue(st))) + '</div></td>' +
+        offers +
+        '<td><label class="tiny"><input type="checkbox" data-act="auct" data-id="' + st.id + '"' +
+        (sel.auct[st.id] ? ' checked' : '') + '> 投公盤</label></td></tr>';
+    }).join('');
+
+    const auctBtn = G.auctionReady()
+      ? '<button class="btn gold" data-act="auction">🏛 送件開標（手續費 10%）</button>'
+      : '<button class="btn" disabled>下次公盤：第 ' + (s.lastAuction + 7) + ' 天</button>';
+
+    return '<div class="grid cols3">' + buyers + '</div>' +
+      '<div class="card" style="margin-top:12px"><div class="spread"><h3>出貨 <span class="sub">玉價指數 ' + s.market.toFixed(2) + '　名聲加成 +' +
+      Math.round(Math.min(25, s.rep * 0.4)) + '%</span></h3>' + auctBtn + '</div>' +
+      (s.stones.length ? '<table><thead><tr><th>貨</th>' +
+        s.buyers.map(b => '<th>' + esc(b.name) + '</th>').join('') + '<th>公盤</th></tr></thead><tbody>' + rows + '</tbody></table>'
+        : '<p class="muted">沒有貨可賣。</p>') +
+      '<hr><div class="tiny muted">原石（未切）玉商會壓賭性折扣，資訊揭露越多、折扣越少；切開的明料按實價收，拋光再加三成。' +
+      '公盤三口暗標取最高，通常比玉商好，但七天才一次。</div></div>';
+  }
+
+  /* ---------------- 人力 ---------------- */
+  function viewCrew() {
+    const s = S();
+    const card = (w, hireMode) => {
+      const cost = w.wage * 5;
+      return '<div class="card"><div class="spread"><h3>' + esc(w.name) +
+        ' <span class="sub">' + ROLES[w.role].name + '　Lv' + w.level + '</span></h3>' +
+        '<b class="est">' + money(w.wage) + '/天</b></div>' +
+        '<div class="tiny muted">' + ROLES[w.role].desc + '</div>' +
+        '<div class="kv tiny" style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:8px 0">' +
+        ['mine', 'blast', 'mech', 'eye'].map(k =>
+          '<span>' + G.skillLabel(k) + ' <b class="est">' + w.skill[k] + '</b></span>').join('') + '</div>' +
+        '<div class="bar"><i style="width:' + (w.stam / w.maxStam * 100) + '%"></i></div>' +
+        '<div class="tiny muted">體力 ' + Math.round(w.stam) + '/' + w.maxStam + '　士氣 ' + Math.round(w.morale) + '%' +
+        (w.injury ? '　<span class="tag r">傷 ' + w.injury + ' 天</span>' : '') + '</div>' +
+        '<div class="row" style="margin-top:8px">' +
+        (hireMode
+          ? '<button class="btn primary" data-act="hire" data-id="' + w.id + '">僱用（簽約金 ' + money(cost) + '）</button>'
+          : '<button class="btn" data-act="train" data-id="' + w.id + '">訓練 ' + money(8000 + w.level * 4000) + '</button>' +
+            '<button class="btn danger sm" data-act="fire" data-id="' + w.id + '">辭退</button>') +
+        '</div></div>';
+    };
+    return '<h3 style="letter-spacing:2px">我的隊伍（每天發薪 ' +
+      money(s.workers.reduce((a, w) => a + w.wage, 0)) + '）</h3>' +
+      '<div class="grid cols3">' + (s.workers.map(w => card(w, false)).join('') || '<p class="muted">沒人了。</p>') + '</div>' +
+      '<h3 style="margin-top:20px;letter-spacing:2px">今天在山下等活的人</h3>' +
+      '<div class="grid cols3">' + G.candidates().map(w => card(w, true)).join('') + '</div>';
+  }
+
+  /* ---------------- 補給站 ---------------- */
+  function viewStore() {
+    const s = S();
+    const CATS = { dig: '採掘工具', support: '支援設備', safety: '安全裝備', transport: '運輸工具', shop: '工房器材', camp: '營地設施' };
+    const blocks = Object.keys(CATS).map(cat => {
+      const items = Object.keys(EQUIP).filter(id => EQUIP[id].cat === cat).map(id => {
+        const def = EQUIP[id], e = s.equip[id];
+        const dur = e ? Math.round(e.dur / e.max * 100) : 0;
+        const need = (def.needs || []).map(n => EQUIP[n].name).join('、');
+        return '<div class="card" style="padding:10px">' +
+          '<div class="spread"><b>' + def.icon + ' ' + def.name + (e && e.qty ? ' ×' + e.qty : '') + '</b>' +
+          '<span class="est">' + money(def.price) + '</span></div>' +
+          '<div class="tiny muted">' + def.desc + (need ? '　<span class="tag r">需 ' + need + '</span>' : '') + '</div>' +
+          (e && e.qty ? '<div class="bar ' + (dur < 30 ? 'red' : '') + '" style="margin:6px 0"><i style="width:' + dur + '%"></i></div>' +
+            '<div class="tiny muted">耐久 ' + dur + '%</div>' : '') +
+          '<div class="row" style="margin-top:6px">' +
+          '<button class="btn sm" data-act="buyeq" data-id="' + id + '">購入</button>' +
+          (e && e.qty && dur < 100 ? '<button class="btn sm gold" data-act="repair" data-id="' + id + '">維修</button>' : '') +
+          '</div></div>';
+      }).join('');
+      return '<h3 style="margin:16px 0 8px;letter-spacing:2px">' + CATS[cat] + '</h3><div class="grid cols3">' + items + '</div>';
+    }).join('');
+
+    const sup = Object.keys(SUPPLY).map(id => {
+      const d = SUPPLY[id];
+      return '<div class="card" style="padding:10px"><div class="spread"><b>' + d.icon + ' ' + d.name + '</b>' +
+        '<span class="est">' + money(d.price) + '/' + d.unit + '</span></div>' +
+        '<div class="tiny muted">庫存 ' + (s.supply[id] || 0) + ' ' + d.unit + '</div>' +
+        '<div class="row" style="margin-top:6px">' +
+        [1, 10, 50].map(n => '<button class="btn sm" data-act="buysup" data-id="' + id + '" data-n="' + n + '">+' + n + '</button>').join('') +
+        '</div></div>';
+    }).join('');
+
+    return '<div class="card"><h3>補給站 <span class="sub">資金 ' + money(s.money) + '</span></h3>' +
+      '<div class="tiny muted">設備會磨損，耐久 0 就報廢不能用；維修比重買便宜。運輸工具受場口路況限制。</div></div>' +
+      '<h3 style="margin:16px 0 8px;letter-spacing:2px">消耗品</h3><div class="grid cols3">' + sup + '</div>' + blocks;
+  }
+
+  /* ---------------- 日誌 ---------------- */
+  function viewLog() {
+    const s = S();
+    return '<div class="grid cols2">' +
+      '<div class="card"><h3>經營數據</h3><table><tbody>' +
+      [['經營天數', s.stats.days], ['挖出原石', s.stats.mined + ' 顆'], ['成交', s.stats.sold + ' 件'],
+       ['總營收', money(s.stats.revenue)], ['單筆最高', money(s.stats.bestSale)], ['工安事故', s.stats.accidents + ' 次'],
+       ['名聲', s.rep], ['現金', money(s.money)]]
+        .map(r => '<tr><td class="muted">' + r[0] + '</td><td><b>' + r[1] + '</b></td></tr>').join('') +
+      '</tbody></table></div>' +
+      '<div class="card"><h3>山上存料</h3>' +
+      (Object.keys(s.stash).filter(k => s.stash[k].length).map(k =>
+        '<div class="tiny">' + SITES.find(x => x.id === k).name + '：' + s.stash[k].length + ' 顆（' +
+        s.stash[k].reduce((a, b) => a + b.kg, 0).toFixed(1) + 'kg）等著搬下山</div>').join('') || '<p class="tiny muted">沒有。</p>') +
+      '</div></div>' +
+      '<div class="card" style="margin-top:12px"><h3>工作日誌</h3>' +
+      s.log.map(l => '<div class="logline ' + l.cls + '"><span class="d">D' + l.day + '</span>' + esc(l.msg) + '</div>').join('') +
+      '</div>';
+  }
+
+  /* ---------------- 主渲染 ---------------- */
+  function render() {
+    const s = S();
+    header(); tabsBar();
+    if (s.over) {
+      $('#view').innerHTML = '<div class="card" style="text-align:center;padding:60px">' +
+        '<div class="big" style="color:var(--red)">遊戲結束</div><p>' + esc(s.over) + '</p>' +
+        '<p class="muted">經營 ' + s.stats.days + ' 天，總營收 ' + money(s.stats.revenue) + '</p>' +
+        '<button class="btn primary" data-act="reset">再開一局</button></div>';
+      return;
+    }
+    const v = { camp: viewCamp, mine: viewMine, shop: viewShop, market: viewMarket, crew: viewCrew, store: viewStore, log: viewLog }[tab];
+    $('#view').innerHTML = v();
+  }
+
+  function openModal(html) { $('#modalBox').innerHTML = html; $('#modal').classList.remove('hidden'); }
+  function closeModal() { $('#modal').classList.add('hidden'); sel.haulInit = false; }
+
+  /* ---------------- 事件 ---------------- */
+  document.addEventListener('click', e => {
+    const el = e.target.closest('[data-act]');
+    if (!el) return;
+    const a = el.dataset.act, id = el.dataset.id;
+    const s = S();
+
+    switch (a) {
+      case 'tab': tab = el.dataset.tab; render(); break;
+
+      case 'team':
+        if (sel.team[id]) delete sel.team[id]; else sel.team[id] = true;
+        render(); break;
+
+      case 'go': {
+        const ids = s.workers.filter(w => sel.team[w.id] && w.injury === 0).map(w => w.id);
+        const r = G.startMining(el.dataset.site, ids);
+        if (!r.ok) { toast(r.msg, 'bad'); break; }
+        tab = 'mine'; render(); break;
+      }
+
+      case 'active': s.session.active = id; render(); break;
+      case 'tool': s.session.tool = id; render(); break;
+      case 'pump': { const r = M.togglePump(s, s.session); toast(r.msg, r.ok ? '' : 'bad'); render(); break; }
+      case 'light': { const r = M.toggleLight(s, s.session); toast(r.msg, r.ok ? '' : 'bad'); render(); break; }
+      case 'timber': { const r = M.placeTimber(s, s.session); toast(r.msg, r.ok ? '' : 'bad'); render(); break; }
+
+      case 'enter3d': {
+        if (!s.session) { toast('隊伍不在山上', 'bad'); break; }
+        M.enter(s, () => { G.save(); render(); toast('回到坑口'); });
+        break;
+      }
+      case 'quit': sel.haulInit = false; openModal(haulModal()); break;
+      case 'haul':
+        if (sel.haul[id]) delete sel.haul[id]; else sel.haul[id] = true;
+        openModal(haulModal()); break;
+      case 'haul-ok': {
+        const r = G.endMining(Object.keys(sel.haul).filter(k => sel.haul[k]));
+        if (!r.ok) { toast(r.msg, 'bad'); break; }
+        closeModal(); sel.haul = {}; tab = 'shop'; G.save(); render(); break;
+      }
+      case 'close': closeModal(); render(); break;
+
+      case 'ws': {
+        const r = G.workshop(el.dataset.a, id);
+        toast(r.msg || '完成', r.ok ? (r.lose ? 'bad' : r.win ? 'gold' : '') : 'bad');
+        if (r.ok && el.dataset.a === 'cut') {
+          const st = s.stones.find(x => x.id === id);
+          const showResult = () => openModal('<h3>' + (r.win ? '🎉 切漲了！' : r.lose ? '💀 垮了' : '🔪 開了') + '</h3>' +
+            '<p>' + esc(r.msg) + '</p>' +
+            '<div class="spread"><span>切前估價</span><b>' + money(r.est) + '</b></div>' +
+            '<div class="spread"><span>實際價值</span><b class="est" style="font-size:20px">' + money(r.value) + '</b></div>' +
+            '<button class="btn primary" data-act="close" style="margin-top:12px">收下</button>');
+          if (st && global.FX) FX.cut(st, { win: r.win, lose: r.lose }, showResult); else showResult();
+        }
+        render(); break;
+      }
+
+      case 'wsall': {
+        let n = 0, fail = '';
+        s.stones.slice().forEach(st => {
+          if (st.state !== 'rough') return;
+          const r = G.workshop(el.dataset.a, st.id);
+          if (r.ok) n++; else fail = r.msg;
+        });
+        toast(n ? '處理了 ' + n + ' 顆' : (fail || '沒有可處理的料'), n ? '' : 'bad');
+        render(); break;
+      }
+
+      case 'sell': { const r = G.sell(id, +el.dataset.b);toast(r.ok ? '成交 ' + money(r.price) : r.msg, r.ok ? 'gold' : 'bad'); render(); break; }
+      case 'auction': {
+        const r = G.auction(Object.keys(sel.auct).filter(k => sel.auct[k]));
+        if (!r.ok) { toast(r.msg, 'bad'); break; }
+        sel.auct = {};
+        openModal('<h3>🏛 公盤結果</h3>' + r.lines.map(l => '<div class="tiny">' + esc(l) + '</div>').join('') +
+          '<hr><div class="spread"><span>淨收</span><b class="est" style="font-size:20px">' + money(r.total) + '</b></div>' +
+          '<button class="btn primary" data-act="close" style="margin-top:12px">好</button>');
+        render(); break;
+      }
+
+      case 'hire': { const r = G.hire(id); toast(r.ok ? '簽下了' : r.msg, r.ok ? '' : 'bad'); render(); break; }
+      case 'fire': { G.fire(id); render(); break; }
+      case 'train': { const r = G.train(id); toast(r.ok ? '訓練完成' : r.msg, r.ok ? '' : 'bad'); render(); break; }
+
+      case 'buyeq': { const r = G.buyEquip(id, 1); toast(r.ok ? '已購入 ' + EQUIP[id].name : r.msg, r.ok ? '' : 'bad'); render(); break; }
+      case 'repair': { const r = G.repairEquip(id); toast(r.ok ? '修好了 -' + money(r.cost) : r.msg, r.ok ? '' : 'bad'); render(); break; }
+      case 'buysup': { const r = G.buySupply(id, +el.dataset.n); toast(r.ok ? '補給入庫' : r.msg, r.ok ? '' : 'bad'); render(); break; }
+
+      case 'endday': {
+        const r = G.endDay();
+        if (!r.ok) { toast(r.msg, 'bad'); break; }
+        openModal('<h3>第 ' + (s.day - 1) + ' 天結算</h3>' +
+          r.notes.map(n => '<div class="tiny">· ' + esc(n) + '</div>').join('') +
+          '<hr><div class="spread"><span>現金</span><b class="est">' + money(s.money) + '</b></div>' +
+          '<div class="spread"><span>明天天氣</span><b>' + s.weather.icon + ' ' + s.weather.name + '</b></div>' +
+          '<div class="tiny muted">' + s.weather.desc + '</div>' +
+          '<button class="btn primary" data-act="close" style="margin-top:12px">開工</button>');
+        render(); break;
+      }
+      case 'save': G.save(); toast('已存檔'); break;
+      case 'reset':
+        if (confirm('確定要重新開始？目前進度會消失。')) { G.reset(); sel.team = {}; tab = 'camp'; closeModal(); render(); }
+        break;
+    }
+  });
+
+  document.addEventListener('change', e => {
+    const el = e.target.closest('[data-act="auct"]');
+    if (!el) return;
+    if (el.checked) sel.auct[el.dataset.id] = true; else delete sel.auct[el.dataset.id];
+  });
+
+  // 礦場快捷鍵 1~8 切工具
+  document.addEventListener('keydown', e => {
+    if (tab !== 'mine' || !S().session) return;
+    const n = parseInt(e.key, 10);
+    if (!n) return;
+    const ids = Object.keys(EQUIP).filter(id => EQUIP[id].tool);
+    const id = ids[n - 1];
+    if (!id) return;
+    const chk = M.canUse(S(), S().session, id);
+    if (!chk.ok) { toast(chk.why, 'bad'); return; }
+    S().session.tool = id; render();
+  });
+
+  $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+
+  /* ---------------- 啟動 ---------------- */
+  if (!G.load()) {
+    G.newGame();
+    openModal('<h3>開玉 — 你接手了一支採玉隊</h3>' +
+      '<p class="tiny">口袋裡 ' + money(260000) + '、三個工人、幾把手工具。目標很簡單：把這支隊伍做大，切出一塊足以翻身的料。</p>' +
+      '<div class="tiny muted"><b>一天的流程</b><br>' +
+      '① <b>營地</b>編隊、檢查裝備 → 選場口付礦權費上山<br>' +
+      '② <b>礦場</b>用工具敲開岩壁挖料（注意水線、照明、塌方）<br>' +
+      '③ <b>收工</b>依載重挑料下山，其餘留在山上<br>' +
+      '④ <b>工房</b>打燈、相裂、開窗，決定賣原石還是切開<br>' +
+      '⑤ <b>市場</b>賣給玉商或送公盤 → <b>結束這一天</b>發工資</div>' +
+      '<hr><div class="tiny muted">賭石的規則：資訊揭露越多，估價越準、但玉商也知道了，賭性溢價就沒了。' +
+      '要嘛賭運氣賣原石，要嘛一刀切開見真章。</div>' +
+      '<button class="btn primary" data-act="close" style="margin-top:12px">上山</button>');
+  }
+  render();
+  global.UI = { render, toast };
+})(window);
+
+</script>
+</body>
+</html>

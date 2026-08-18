@@ -202,45 +202,32 @@
         '</div>' +
       '</div>' +
       '<div>' +
-        '<canvas id="mineCanvas" width="900" height="600"></canvas>' +
-        '<div class="card" style="margin-top:10px">' +
-          '<div class="spread"><div class="cellinfo" id="cellinfo">在岩壁上點擊即可下手（只能從洞口或已開挖處往裡推進）</div>' +
-          '<button class="btn gold" data-act="quit">🎒 收工下山</button></div>' +
+        '<div class="card enter3d">' +
+          '<div class="e3-art"><span>⛏</span></div>' +
+          '<div class="big">' + ss.site.name + '　坑口</div>' +
+          '<p class="muted tiny">全螢幕第一人稱。頭燈只照得到前方，坑道深處看不見 —— <b>跟著地上的螢光導引線走</b>，走到底就是開採面。</p>' +
+          '<button class="btn primary big-btn" data-act="enter3d">▶ 進入坑道（全螢幕 3D）</button>' +
+          '<div class="keys">' +
+            '<span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 走動</span>' +
+            '<span><kbd>滑鼠</kbd> 環顧四周</span>' +
+            '<span><kbd>左鍵</kbd> 揮工具開挖</span>' +
+            '<span><kbd>1</kbd>~<kbd>8</kbd> 換工具</span>' +
+            '<span><kbd>T</kbd> 換人</span>' +
+            '<span><kbd>F</kbd> 燈　<kbd>P</kbd> 抽水　<kbd>G</kbd> 坑木</span>' +
+            '<span><kbd>M</kbd> 小地圖（只顯示走過的地方）</span>' +
+            '<span><kbd>Q</kbd> 離開坑道</span>' +
+          '</div>' +
+          '<button class="btn gold" data-act="quit" style="margin-top:10px">🎒 收工下山</button>' +
         '</div>' +
       '</div>' +
       '<div class="card"><h3>今日產出 <span class="sub">' + ss.stones.length + ' 顆</span></h3>' + found +
         '<hr><h3>提示</h3><div class="tiny muted">' +
         '· 帶綠紋的<b>玉脈帶</b>出料率最高，硬岩其次。<br>' +
-        '· 快挖穿時會透出<b>綠光</b>，那格有料 — 換<b>鑿子</b>取出來才不會震裂。<br>' +
+        '· 岩壁快被打穿時會透出<b>綠光</b>，那裡有料 — 換<b>鑿子</b>取出來才不會震裂。<br>' +
         '· 風鎬／挖土機／炸藥快，但傷玉率 50~85%，裂一多價格直接砍七成。<br>' +
-        '· 藍色虛線是水線，沒開抽水機下面幾乎挖不動。<br>' +
+        '· 積水區地面偏藍、走路變慢，開抽水機才挖得動。<br>' +
         '· 挖得越深越容易塌，記得架坑木。</div></div>' +
       '</div>';
-  }
-
-  function bindCanvas() {
-    const cv = $('#mineCanvas');
-    if (!cv) return;
-    const s = S(), ss = s.session;
-    const redraw = () => M.draw(cv, s, ss, sel.hover);
-    redraw();
-    cv.onmousemove = e => {
-      const r = cv.getBoundingClientRect();
-      const p = M.cellAt(cv, ss, (e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height);
-      sel.hover = p;
-      if (p) $('#cellinfo').textContent = '(' + p.x + ',' + p.y + ') ' + M.cellInfo(ss, p.x, p.y);
-      redraw();
-    };
-    cv.onmouseleave = () => { sel.hover = null; redraw(); };
-    cv.onclick = e => {
-      const r = cv.getBoundingClientRect();
-      const p = M.cellAt(cv, ss, (e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height);
-      if (!p) return;
-      const res = M.dig(s, ss, p.x, p.y);
-      if (!res.ok) toast(res.msg, 'bad');
-      else if (res.msg) toast(res.msg, res.msg.indexOf('⚠️') === 0 ? 'bad' : res.msg.indexOf('💎') === 0 ? 'gold' : '');
-      render();
-    };
   }
 
   /* ---------------- 收工／載運 ---------------- */
@@ -471,7 +458,6 @@
     }
     const v = { camp: viewCamp, mine: viewMine, shop: viewShop, market: viewMarket, crew: viewCrew, store: viewStore, log: viewLog }[tab];
     $('#view').innerHTML = v();
-    if (tab === 'mine') bindCanvas();
   }
 
   function openModal(html) { $('#modalBox').innerHTML = html; $('#modal').classList.remove('hidden'); }
@@ -504,6 +490,11 @@
       case 'light': { const r = M.toggleLight(s, s.session); toast(r.msg, r.ok ? '' : 'bad'); render(); break; }
       case 'timber': { const r = M.placeTimber(s, s.session); toast(r.msg, r.ok ? '' : 'bad'); render(); break; }
 
+      case 'enter3d': {
+        if (!s.session) { toast('隊伍不在山上', 'bad'); break; }
+        M.enter(s, () => { G.save(); render(); toast('回到坑口'); });
+        break;
+      }
       case 'quit': sel.haulInit = false; openModal(haulModal()); break;
       case 'haul':
         if (sel.haul[id]) delete sel.haul[id]; else sel.haul[id] = true;
@@ -519,11 +510,13 @@
         const r = G.workshop(el.dataset.a, id);
         toast(r.msg || '完成', r.ok ? (r.lose ? 'bad' : r.win ? 'gold' : '') : 'bad');
         if (r.ok && el.dataset.a === 'cut') {
-          openModal('<h3>' + (r.win ? '🎉 切漲了！' : r.lose ? '💀 垮了' : '🔪 開了') + '</h3>' +
+          const st = s.stones.find(x => x.id === id);
+          const showResult = () => openModal('<h3>' + (r.win ? '🎉 切漲了！' : r.lose ? '💀 垮了' : '🔪 開了') + '</h3>' +
             '<p>' + esc(r.msg) + '</p>' +
             '<div class="spread"><span>切前估價</span><b>' + money(r.est) + '</b></div>' +
             '<div class="spread"><span>實際價值</span><b class="est" style="font-size:20px">' + money(r.value) + '</b></div>' +
             '<button class="btn primary" data-act="close" style="margin-top:12px">收下</button>');
+          if (st && global.FX) FX.cut(st, { win: r.win, lose: r.lose }, showResult); else showResult();
         }
         render(); break;
       }
