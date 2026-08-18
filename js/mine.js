@@ -356,6 +356,19 @@
           '<div id="fp-tools"></div>' +
         '</div>' +
         '<div class="fp-help">滑鼠移動＝看　WASD＝走　左鍵/空白鍵＝挖　1~8＝換工具　T＝換人　F＝燈　P＝抽水　G＝架坑木　M＝地圖　Q＝收工</div>' +
+      '</div>' +
+      '<div id="fp-touch">' +
+        '<div id="joy"><i></i></div>' +
+        '<button id="btn-dig">⛏</button>' +
+        '<div id="fp-actions">' +
+          '<button data-k="tool">🔧工具</button>' +
+          '<button data-k="T">👷換人</button>' +
+          '<button data-k="F">💡燈</button>' +
+          '<button data-k="P">💧抽水</button>' +
+          '<button data-k="G">🪵坑木</button>' +
+          '<button data-k="M">🗺地圖</button>' +
+          '<button data-k="Q" class="quit">🎒收工</button>' +
+        '</div>' +
       '</div>';
     document.body.appendChild(wrap);
 
@@ -369,6 +382,9 @@
 
     let running = true, showMap = false, msgT = 0, msg = '';
     const keys = {};
+    const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    const joy = { f: 0, s: 0, id: null, ox: 0, oy: 0 };
+    let digHold = false, lookId = null, lookX = 0;
     const particles = [];
     const swing = { t: 1, dur: 0.42, hit: false };
 
@@ -407,6 +423,63 @@
     cv.addEventListener('click', () => { if (document.pointerLockElement !== cv) cv.requestPointerLock(); });
     const md = e => { if (document.pointerLockElement === cv && e.button === 0) doDig(); };
     document.addEventListener('mousedown', md);
+
+    /* ---- 觸控：左下搖桿走路、畫面拖曳轉頭、右下按住連挖 ---- */
+    const touchUI = wrap.querySelector('#fp-touch');
+    if (!isTouch) touchUI.style.display = 'none';
+    else {
+      wrap.querySelector('.fp-help').style.display = 'none';
+      const joyEl = wrap.querySelector('#joy'), knob = joyEl.querySelector('i');
+      const findT = (e, id) => { for (const t of e.changedTouches) if (t.identifier === id) return t; return null; };
+      joyEl.addEventListener('touchstart', e => {
+        e.preventDefault();
+        const t = e.changedTouches[0];
+        joy.id = t.identifier; joy.ox = t.clientX; joy.oy = t.clientY;
+      }, { passive: false });
+      joyEl.addEventListener('touchmove', e => {
+        e.preventDefault();
+        const t = findT(e, joy.id); if (!t) return;
+        const dx = Math.max(-1, Math.min(1, (t.clientX - joy.ox) / 45));
+        const dy = Math.max(-1, Math.min(1, (t.clientY - joy.oy) / 45));
+        joy.f = -dy; joy.s = dx;
+        knob.style.transform = 'translate(' + dx * 26 + 'px,' + dy * 26 + 'px)';
+      }, { passive: false });
+      const joyEnd = e => { const t = findT(e, joy.id); if (!t) return; joy.f = joy.s = 0; joy.id = null; knob.style.transform = ''; };
+      joyEl.addEventListener('touchend', joyEnd);
+      joyEl.addEventListener('touchcancel', joyEnd);
+
+      cv.addEventListener('touchstart', e => { const t = e.changedTouches[0]; lookId = t.identifier; lookX = t.clientX; }, { passive: true });
+      cv.addEventListener('touchmove', e => {
+        e.preventDefault();
+        const t = findT(e, lookId); if (!t) return;
+        sess.player.ang += (t.clientX - lookX) * 0.006;
+        lookX = t.clientX;
+      }, { passive: false });
+
+      const digBtn = wrap.querySelector('#btn-dig');
+      digBtn.addEventListener('touchstart', e => { e.preventDefault(); digHold = true; doDig(); }, { passive: false });
+      const digEnd = e => { e.preventDefault(); digHold = false; };
+      digBtn.addEventListener('touchend', digEnd);
+      digBtn.addEventListener('touchcancel', digEnd);
+
+      wrap.querySelector('#fp-actions').addEventListener('click', e => {
+        const b = e.target.closest('button'); if (!b) return;
+        const k = b.dataset.k;
+        if (k === 'tool') {
+          const ids = Object.keys(EQUIP).filter(id => EQUIP[id].tool && canUse(S, sess, id).ok);
+          if (!ids.length) { say('沒有能用的工具'); return; }
+          const i = ids.indexOf(sess.tool);
+          sess.tool = ids[(i + 1) % ids.length];
+          say('換上 ' + EQUIP[sess.tool].name); hud();
+        }
+        else if (k === 'T') nextWorker();
+        else if (k === 'F') say(toggleLight(S, sess).msg);
+        else if (k === 'P') say(togglePump(S, sess).msg);
+        else if (k === 'G') say(placeTimber(S, sess).msg);
+        else if (k === 'M') showMap = !showMap;
+        else if (k === 'Q') quit();
+      });
+    }
 
     function nextWorker() {
       const list = sess.team.filter(id => { const w = worker(S, id); return w && w.injury === 0; });
@@ -472,9 +545,10 @@
       if (keys.KeyS || keys.ArrowDown) fx -= 1;
       if (keys.KeyA) fy -= 1;
       if (keys.KeyD) fy += 1;
+      fx += joy.f; fy += joy.s;
       if (keys.ArrowLeft) p.ang -= 1.8 * dt;
       if (keys.ArrowRight) p.ang += 1.8 * dt;
-      if (!fx && !fy) { p.bob *= 0.9; return; }
+      if (Math.abs(fx) < 0.08 && Math.abs(fy) < 0.08) { p.bob *= 0.9; return; }
 
       const c = Math.cos(p.ang), s = Math.sin(p.ang);
       let dx = (c * fx - s * fy), dy = (s * fx + c * fy);
@@ -729,7 +803,7 @@
       if (swing.t < 1) {
         swing.t += dt / swing.dur;
         if (!swing.hit && swing.t >= 0.5) { swing.hit = true; applyHit(); }
-        if (swing.t >= 1 && (keys.Space)) doDig();
+        if (swing.t >= 1 && (keys.Space || digHold)) doDig();
       }
       render();
       drawArm();
@@ -782,7 +856,8 @@
 
   function enter(S, onExit) {
     const el = document.documentElement;
-    if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    const fs = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (fs) { try { const r = fs.call(el); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
     return FP(S, S.session, onExit);
   }
 

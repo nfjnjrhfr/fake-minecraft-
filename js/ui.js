@@ -217,6 +217,7 @@
             '<span><kbd>M</kbd> 小地圖（只顯示走過的地方）</span>' +
             '<span><kbd>Q</kbd> 離開坑道</span>' +
           '</div>' +
+          '<p class="tiny muted" style="margin-top:8px">📱 觸控裝置：左下搖桿走路、滑畫面轉頭、右下 ⛏ 按住連挖，右上按鈕換工具／收工。</p>' +
           '<button class="btn gold" data-act="quit" style="margin-top:10px">🎒 收工下山</button>' +
         '</div>' +
       '</div>' +
