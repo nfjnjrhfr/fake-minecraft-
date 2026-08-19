@@ -355,7 +355,7 @@
           '<div id="fp-worker"></div>' +
           '<div id="fp-tools"></div>' +
         '</div>' +
-        '<div class="fp-help">滑鼠移動＝看　WASD＝走　左鍵/空白鍵＝挖　1~8＝換工具　T＝換人　F＝燈　P＝抽水　G＝架坑木　M＝地圖　Z＝過夜　Q＝收工</div>' +
+        '<div class="fp-help">滑鼠移動＝看　WASD＝走　左鍵/空白鍵＝挖　1~8＝換工具　T＝換人　F＝燈　P＝抽水　G＝架坑木　M＝地圖　Z＝過夜　X＝威嚇（要有槍）　Q＝收工</div>' +
       '</div>' +
       '<div id="fp-touch">' +
         '<div id="joy"><i></i></div>' +
@@ -368,6 +368,7 @@
           '<button data-k="G">🪵坑木</button>' +
           '<button data-k="M">🗺地圖</button>' +
           '<button data-k="Z">😴過夜</button>' +
+          (hasWorking(S, 'shotgun') ? '<button data-k="X" class="quit">🔫威嚇</button>' : '') +
           '<button data-k="L">🔒固定</button>' +
           '<button data-k="FS">⛶全螢幕</button>' +
           '<button data-k="Q" class="quit">🎒收工</button>' +
@@ -385,6 +386,8 @@
 
     let running = true, showMap = false, msgT = 0, msg = '';
     let night = null;   // 過夜黑幕演出 { t, lines }
+    let flash = 0;      // 鳴槍白光
+    sess.fearT = sess.fearT || 0;   // 威嚇剩餘秒數
     const keys = {};
     const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
     const joy = { f: 0, s: 0, id: null, ox: 0, oy: 0 };
@@ -464,7 +467,17 @@
       for (const npc of sess.npcs) {
         const w = worker(S, npc.wid);
         if (!w) continue;
-        if (w.injury > 0 || w.stam < 10) { release(npc); npc.state = 'rest'; continue; }
+        const feared = sess.fearT > 0;
+        if (w.injury > 0 || w.stam < (feared ? 2 : 10)) {
+          if (feared && w.injury === 0 && w.stam <= 2) {
+            // 被槍逼到累垮
+            w.injury += 1;
+            w.morale = Math.max(0, w.morale - 8);
+            say('😵 ' + w.name + ' 撐不住，當場累垮了（傷 1 天）');
+            sess.log.push(w.name + ' 被逼到累垮');
+          }
+          release(npc); npc.state = 'rest'; continue;
+        }
         if (npc.state === 'rest') npc.state = 'idle';
         if (npc.state === 'idle') { findJob(npc); continue; }
 
@@ -495,7 +508,7 @@
           npc.phase += dt * 7;
           npc.cool -= dt;
           if (npc.cool > 0) continue;
-          npc.cool = 1.15 - Math.min(0.4, (w.skill.mine || 0) * 0.04);
+          npc.cool = (1.15 - Math.min(0.4, (w.skill.mine || 0) * 0.04)) * (sess.fearT > 0 ? 0.78 : 1);
           const hasNode = !!lv.nodes[ti];
           const careful = hasNode && lv.hp[ti] < 35;      // 快見料就改鑿子小心敲
           const T = TYPE[lv.map[ti]];
@@ -548,6 +561,7 @@
       if (e.code === 'KeyQ' || e.code === 'Escape') { if (e.code === 'KeyQ') quit(); return; }
       if (e.code === 'Space') doDig();
       if (e.code === 'KeyZ') doSleep();
+      if (e.code === 'KeyX') menace();
       if (e.code === 'KeyM') showMap = !showMap;
       if (e.code === 'KeyF') { const r = toggleLight(S, sess); say(r.msg); }
       if (e.code === 'KeyP') { const r = togglePump(S, sess); say(r.msg); }
@@ -625,6 +639,7 @@
         else if (k === 'G') say(placeTimber(S, sess).msg);
         else if (k === 'M') showMap = !showMap;
         else if (k === 'Z') doSleep();
+        else if (k === 'X') menace();
         else if (k === 'L') { if (global.UI && global.UI.toggleLock) { global.UI.toggleLock(); say('切換固定畫面'); } }
         else if (k === 'FS') { if (global.UI && global.UI.goFullscreen) global.UI.goFullscreen(); }
         else if (k === 'Q') quit();
@@ -653,6 +668,40 @@
     }
 
     function say(m) { if (!m) return; msg = m; msgT = 2.6; }
+
+    /* ---- 鳴槍威嚇 ---- */
+    function menace() {
+      if (night) return;
+      if (!hasWorking(S, 'shotgun')) { say('你沒有槍。'); return; }
+      S.equip.shotgun.dur = Math.max(0, S.equip.shotgun.dur - 2);
+      flash = 0.35;
+      sess.fearT = 45;
+      S.rep = Math.max(0, S.rep - 3);
+      S.morale = Math.max(0, S.morale - 6);
+      const lines = [];
+      sess.team.slice().forEach(id => {
+        const w = worker(S, id);
+        if (!w || id === sess.active) return;
+        w.morale = Math.max(0, w.morale - 15);
+        // 被逼急的人翻臉
+        if (w.morale < 25 && Math.random() < 0.5) {
+          sess.team = sess.team.filter(x => x !== id);
+          const ni = sess.npcs.findIndex(n => n.wid === id);
+          if (ni >= 0) { release(sess.npcs[ni]); sess.npcs.splice(ni, 1); }
+          S.workers = S.workers.filter(x => x.id !== id);
+          let stole = '';
+          if (sess.stones.length && Math.random() < 0.35) {
+            const st = sess.stones.splice(Math.floor(Math.random() * sess.stones.length), 1)[0];
+            stole = '，還順走一顆 ' + st.kg + 'kg 的料';
+          }
+          lines.push('💢 ' + w.name + ' 把鎬一摔：「開槍啊！」摸黑下山了' + stole + '。');
+        }
+      });
+      say('🔫 砰！槍聲在坑道裡炸開 — 沒人敢停手了（士氣 -15、名聲 -3）');
+      lines.forEach(l => { sess.log.push(l); S && global.GAME && global.GAME.log && global.GAME.log(l, 'bad'); });
+      if (lines.length) setTimeout(() => say(lines[0]), 1800);
+      hud();
+    }
 
     /* ---- 坑道過夜 ---- */
     function doSleep() {
@@ -863,7 +912,7 @@
         ctx.font = '600 13px "Noto Sans TC",sans-serif';
         ctx.textAlign = 'center';
         ctx.fillStyle = '#0009';
-        const icon = L.state === 'dig' ? '⛏' : L.state === 'walk' ? '👣' : L.state === 'rest' ? '😮‍💨' : '·';
+        const icon = sess.fearT > 0 ? '😨' : L.state === 'dig' ? '⛏' : L.state === 'walk' ? '👣' : L.state === 'rest' ? '😮‍💨' : '·';
         const txt = icon + ' ' + L.name;
         const tx2 = L.sx * kx, ty2 = L.top * ky;
         ctx.fillRect(tx2 - ctx.measureText(txt).width / 2 - 5, ty2 - 13, ctx.measureText(txt).width + 10, 17);
@@ -1034,7 +1083,8 @@
     function hud() {
       const w = worker(S, sess.active);
       const risk = collapseRisk(S, sess);
-      wrap.querySelector('#fp-depth').textContent = '深度 ' + Math.round(sess.player.x) + 'm　產出 ' + sess.stones.length + ' 顆';
+      wrap.querySelector('#fp-depth').textContent = '深度 ' + Math.round(sess.player.x) + 'm　產出 ' + sess.stones.length + ' 顆' +
+        (sess.fearT > 0 ? '　😨 威嚇中 ' + Math.ceil(sess.fearT) + 's' : '');
       wrap.querySelector('#fp-risk').innerHTML = '塌方 <b style="color:' +
         (risk > 0.3 ? '#ff6b6b' : '#3fd6a4') + '">' + (risk < 0.15 ? '低' : risk < 0.3 ? '中' : risk < 0.5 ? '高' : '極高') + '</b>' +
         '　坑木 ' + sess.timbers;
@@ -1103,6 +1153,13 @@
       } else tEl.style.display = 'none';
 
       if (showMap) { mapCv.style.display = 'block'; drawMap(); } else mapCv.style.display = 'none';
+
+      if (sess.fearT > 0) sess.fearT = Math.max(0, sess.fearT - dt);
+      if (flash > 0) {
+        ctx.fillStyle = 'rgba(255,240,210,' + (flash * 2) + ')';
+        ctx.fillRect(0, 0, cv.width, cv.height);
+        flash -= dt;
+      }
 
       // 過夜：黑幕淡入 → 顯示結算 → 淡出醒來
       if (night) {
