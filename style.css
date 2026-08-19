@@ -206,3 +206,7 @@ button,.btn,.tab,.checkrow,.wrk,.toolbtn,.site{touch-action:manipulation}
 body.locked{position:fixed;inset:0;width:100%;height:100%;overflow:hidden}
 body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 #lockBtn.on{border-color:var(--gold);color:var(--gold)}
+
+/* ---- 隊友狀態列 ---- */
+.fp-mate{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:1px 0}
+.fp-mate span:last-child{color:#8b9aa9}

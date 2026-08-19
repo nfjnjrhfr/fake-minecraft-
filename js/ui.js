@@ -208,7 +208,7 @@
         '<div class="card enter3d">' +
           '<div class="e3-art"><span>⛏</span></div>' +
           '<div class="big">' + ss.site.name + '　坑口</div>' +
-          '<p class="muted tiny">全螢幕第一人稱。頭燈只照得到前方，坑道深處看不見 —— <b>跟著地上的螢光導引線走</b>，走到底就是開採面。</p>' +
+          '<p class="muted tiny">全螢幕第一人稱。頭燈只照得到前方，坑道深處看不見 —— <b>跟著地上的螢光導引線走</b>，走到底就是開採面。<br>你帶的隊友會跟你一起下坑、<b>自動散開找玉開挖</b>；按 T 可以接手任何一個人的位置。</p>' +
           '<button class="btn primary big-btn" data-act="enter3d">▶ 進入坑道（全螢幕 3D）</button>' +
           '<div class="keys">' +
             '<span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 走動</span>' +

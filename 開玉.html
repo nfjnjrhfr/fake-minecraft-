@@ -214,6 +214,10 @@ body.locked{position:fixed;inset:0;width:100%;height:100%;overflow:hidden}
 body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 #lockBtn.on{border-color:var(--gold);color:var(--gold)}
 
+/* ---- 隊友狀態列 ---- */
+.fp-mate{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:1px 0}
+.fp-mate span:last-child{color:#8b9aa9}
+
 </style>
 </head>
 <body>
@@ -1053,6 +1057,147 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
     const particles = [];
     const swing = { t: 1, dur: 0.42, hit: false };
 
+    /* ---- 隊友 NPC：散開找料、自動開挖 ---- */
+    function mkNpc(wid, x, y) {
+      return { wid, x, y, ang: 0, phase: Math.random() * 6, state: 'idle', path: null, pi: 0, target: 0, claim: 0, cool: 0.5 + Math.random() };
+    }
+    sess.claims = sess.claims || {};
+    sess.npcs = sess.npcs || [];
+    (function syncNpcs() {
+      const lv = sess.lv;
+      const have = {};
+      sess.npcs.forEach(n => have[n.wid] = 1);
+      const spots = [[0, 1], [0, -1], [1, 0], [1, 1], [1, -1], [-1, 0], [0, 2], [2, 0]];
+      let si = 0;
+      sess.team.forEach(id => {
+        if (id === sess.active || have[id]) return;
+        let px = lv.spawn.x, py = lv.spawn.y;
+        while (si < spots.length) {
+          const cx = Math.floor(lv.spawn.x) + spots[si][0], cy = Math.floor(lv.spawn.y) + spots[si][1];
+          si++;
+          if (lv.map[idx(cx, cy)] === OPEN) { px = cx + 0.5; py = cy + 0.5; break; }
+        }
+        sess.npcs.push(mkNpc(id, px, py));
+      });
+      // 自己不該同時是 NPC（重複進出坑道時）
+      sess.npcs = sess.npcs.filter(n => n.wid !== sess.active);
+    })();
+
+    function release(npc) {
+      if (npc.claim) { delete sess.claims[npc.claim]; npc.claim = 0; }
+      npc.path = null; npc.target = 0;
+    }
+
+    // BFS：找最值錢又沒人認領的岩壁（有料 > 玉脈 > 一般），回傳走過去的路徑
+    function findJob(npc) {
+      const lv = sess.lv;
+      const sx = Math.floor(npc.x), sy = Math.floor(npc.y);
+      const start = idx(sx, sy);
+      if (lv.map[start] !== OPEN) return false;
+      const prev = new Map([[start, { p: -1, d: 0 }]]);
+      const q = [start];
+      let best = null, bestScore = -1;
+      for (let qi = 0; qi < q.length && qi < 900; qi++) {
+        const c = q[qi], cx = c % MS, cy = (c / MS) | 0, d = prev.get(c).d;
+        for (const [ddx, ddy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = cx + ddx, ny = cy + ddy;
+          if (nx < 1 || ny < 1 || nx >= MS - 1 || ny >= MS - 1) continue;
+          const ni = idx(nx, ny), t = lv.map[ni];
+          if (t === OPEN) {
+            if (!prev.has(ni)) { prev.set(ni, { p: c, d: d + 1 }); q.push(ni); }
+          } else if (t !== BED) {
+            if (sess.claims[ni] && sess.claims[ni] !== npc.wid) continue;
+            const sc = (lv.nodes[ni] ? 120 : 0) + (t === VEIN ? 8 : t === HARD ? 2 : 4) + nx * 0.15 - d * 0.6;
+            if (sc > bestScore) { bestScore = sc; best = { open: c, wall: ni }; }
+          }
+        }
+      }
+      if (!best) return false;
+      const path = [];
+      let c = best.open;
+      while (c !== -1 && c !== start) { path.push({ x: c % MS, y: (c / MS) | 0 }); c = prev.get(c).p; }
+      path.reverse();
+      npc.path = path; npc.pi = 0;
+      npc.target = best.wall; npc.claim = best.wall;
+      sess.claims[best.wall] = npc.wid;
+      npc.state = 'walk';
+      return true;
+    }
+
+    function npcStep(dt) {
+      const lv = sess.lv;
+      for (const npc of sess.npcs) {
+        const w = worker(S, npc.wid);
+        if (!w) continue;
+        if (w.injury > 0 || w.stam < 10) { release(npc); npc.state = 'rest'; continue; }
+        if (npc.state === 'rest') npc.state = 'idle';
+        if (npc.state === 'idle') { findJob(npc); continue; }
+
+        if (npc.state === 'walk') {
+          if (lv.map[npc.target] === OPEN) { release(npc); npc.state = 'idle'; continue; }
+          const tgt = npc.path && npc.path[npc.pi];
+          if (!tgt) { npc.state = 'dig'; npc.cool = 0.4; continue; }
+          const txc = tgt.x + 0.5, tyc = tgt.y + 0.5;
+          const dx = txc - npc.x, dy = tyc - npc.y, dlen = Math.hypot(dx, dy);
+          let sp = 2.2;
+          if (lv.wet[idx(Math.floor(npc.x), Math.floor(npc.y))] && !sess.pumpOn) sp *= 0.5;
+          if (dlen < 0.14) {
+            npc.pi++;
+            if (npc.pi >= npc.path.length) { npc.state = 'dig'; npc.cool = 0.4; }
+          } else {
+            npc.x += dx / dlen * sp * dt; npc.y += dy / dlen * sp * dt;
+            npc.ang = Math.atan2(dy, dx);
+            npc.phase += sp * dt * 3.2;
+          }
+          continue;
+        }
+
+        if (npc.state === 'dig') {
+          const ti = npc.target;
+          if (!ti || lv.map[ti] === OPEN || lv.map[ti] === BED) { release(npc); npc.state = 'idle'; continue; }
+          const tx = ti % MS, ty = (ti / MS) | 0;
+          npc.ang = Math.atan2(ty + 0.5 - npc.y, tx + 0.5 - npc.x);
+          npc.phase += dt * 7;
+          npc.cool -= dt;
+          if (npc.cool > 0) continue;
+          npc.cool = 1.15 - Math.min(0.4, (w.skill.mine || 0) * 0.04);
+          const hasNode = !!lv.nodes[ti];
+          const careful = hasNode && lv.hp[ti] < 35;      // 快見料就改鑿子小心敲
+          const T = TYPE[lv.map[ti]];
+          let dmg = (careful ? 13 : 24) * (1 + (w.skill.mine || 0) * 0.05) * S.weather.work / T.hard;
+          if (lv.wet[ti] && !sess.pumpOn) dmg *= 0.4;
+          lv.hp[ti] -= dmg * (0.85 + Math.random() * 0.3);
+          w.stam -= Math.max(2, 4 - (w.skill.mine || 0) * 0.1);
+          sess.actions++;
+          if (lv.hp[ti] <= 0) {
+            lv.map[ti] = OPEN; sess.dugCount++;
+            const st = lv.nodes[ti];
+            if (st) {
+              const add = (careful ? 0.05 : 0.22) * (0.5 + Math.random() * 0.8);
+              J.addMiningCrack(st, add);
+              st.note = add <= 0.05 ? '取料乾淨' : '';
+              sess.stones.push(st);
+              delete lv.nodes[ti];
+              say('💎 ' + w.name + ' 喊：出料了！' + st.kg + 'kg');
+              sess.log.push(w.name + ' 挖出 ' + st.kg + 'kg 原石');
+            }
+            release(npc); npc.state = 'idle';
+          }
+          if (Math.random() < collapseRisk(S, sess) * 0.018) {
+            const m = accident(S, sess, { danger: 0 }, w);
+            if (m) say(m);
+          }
+        }
+      }
+    }
+
+    let aiAcc = 0;
+    function aiTick(dt) {
+      aiAcc += dt;
+      while (aiAcc >= 0.12) { aiAcc -= 0.12; npcStep(0.12); }
+    }
+
+
     function resize() {
       cv.width = window.innerWidth; cv.height = window.innerHeight;
       ctx.imageSmoothingEnabled = false;
@@ -1147,13 +1292,25 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
       });
     }
 
+    // 換人＝身體交換：你去接手隊友的位置，原本操控的人留在原地繼續幫挖
     function nextWorker() {
       const list = sess.team.filter(id => { const w = worker(S, id); return w && w.injury === 0; });
-      if (!list.length) return;
+      if (list.length < 2) { say('沒有其他人能接手'); return; }
       const i = list.indexOf(sess.active);
-      sess.active = list[(i + 1) % list.length];
-      const w = worker(S, sess.active);
-      say('換 ' + w.name + ' 上工（體力 ' + Math.round(w.stam) + '）');
+      const nid = list[(i + 1) % list.length];
+      if (nid === sess.active) return;
+      const p = sess.player;
+      sess.npcs.push(mkNpc(sess.active, p.x, p.y));
+      const j = sess.npcs.findIndex(n => n.wid === nid);
+      if (j >= 0) {
+        const n = sess.npcs[j];
+        p.x = n.x; p.y = n.y;
+        if (n.claim) delete sess.claims[n.claim];
+        sess.npcs.splice(j, 1);
+      }
+      sess.active = nid;
+      const w = worker(S, nid);
+      say('接手 ' + w.name + '（體力 ' + Math.round(w.stam) + '）— 原本那位留在原地繼續挖');
     }
 
     function say(m) { if (!m) return; msg = m; msgT = 2.6; }
@@ -1317,7 +1474,88 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
       }
 
       offCtx.putImageData(buf, 0, 0);
+
+      // ---- 隊友（billboard，吃 zbuffer 遮擋與照明衰減） ----
+      const labels = [];
+      const order = sess.npcs
+        .map(n => ({ n, d: (n.x - p.x) * (n.x - p.x) + (n.y - p.y) * (n.y - p.y) }))
+        .sort((a, b) => b.d - a.d);
+      const invDet = 1 / (planeX * dirY - dirX * planeY);
+      for (const { n } of order) {
+        const w = worker(S, n.wid);
+        if (!w) continue;
+        const dx = n.x - p.x, dy = n.y - p.y;
+        const tX = invDet * (dirY * dx - dirX * dy);
+        const tY = invDet * (-planeY * dx + planeX * dy);
+        if (tY < 0.22) continue;
+        const sx = Math.floor((RW / 2) * (1 + tX / tY));
+        if (sx < -40 || sx > RW + 40) continue;
+        const col = Math.max(0, Math.min(RW - 1, sx));
+        if (tY >= zbuf[col] + 0.15) continue;                 // 被牆擋住
+        const a = Math.max(0, Math.min(1, 1 - tY / lightR));
+        if (a <= 0.04) continue;                              // 黑暗中看不見
+        const h = Math.min(RH / tY, RH * 1.15);
+        drawMiner(offCtx, sx, horizon, h, n, a);
+        labels.push({ sx, top: horizon - h * 0.42, name: w.name, a, state: n.state, tY });
+      }
+
       ctx.drawImage(off, 0, 0, RW, RH, 0, 0, cv.width, cv.height);
+
+      // 名牌（放大後畫，才不會糊）
+      const kx = cv.width / RW, ky = cv.height / RH;
+      for (const L of labels) {
+        if (L.tY > 7) continue;
+        ctx.globalAlpha = L.a;
+        ctx.font = '600 13px "Noto Sans TC",sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#0009';
+        const icon = L.state === 'dig' ? '⛏' : L.state === 'walk' ? '👣' : L.state === 'rest' ? '😮‍💨' : '·';
+        const txt = icon + ' ' + L.name;
+        const tx2 = L.sx * kx, ty2 = L.top * ky;
+        ctx.fillRect(tx2 - ctx.measureText(txt).width / 2 - 5, ty2 - 13, ctx.measureText(txt).width + 10, 17);
+        ctx.fillStyle = '#d9f5e8';
+        ctx.fillText(txt, tx2, ty2);
+        ctx.globalAlpha = 1;
+      }
+      ctx.textAlign = 'left';
+    }
+
+    // 迷你礦工人形：頭盔、身體、走路擺腿、挖掘揮臂
+    function drawMiner(c2, sx, horizon, h, n, a) {
+      const fy = horizon + h * 0.5;             // 腳踩地
+      const hb = h * 0.58, wb = hb * 0.3;
+      c2.save();
+      c2.globalAlpha = a;
+      c2.lineCap = 'round';
+      const walk = n.state === 'walk' ? Math.sin(n.phase) : 0;
+      // 腿
+      c2.strokeStyle = '#2b3138'; c2.lineWidth = Math.max(1.5, wb * 0.3);
+      c2.beginPath();
+      c2.moveTo(sx, fy - hb * 0.45); c2.lineTo(sx - walk * wb * 0.5, fy);
+      c2.moveTo(sx, fy - hb * 0.45); c2.lineTo(sx + walk * wb * 0.5, fy);
+      c2.stroke();
+      // 身體（工作背心）
+      c2.fillStyle = n.state === 'rest' ? '#4a4438' : '#33584a';
+      c2.fillRect(sx - wb / 2, fy - hb * 0.95, wb, hb * 0.52);
+      // 頭 + 安全帽
+      c2.fillStyle = '#a5745a';
+      c2.beginPath(); c2.arc(sx, fy - hb * 1.04, hb * 0.12, 0, 7); c2.fill();
+      c2.fillStyle = '#e8c46a';
+      c2.beginPath(); c2.arc(sx, fy - hb * 1.07, hb * 0.13, Math.PI, 0); c2.fill();
+      // 手臂（挖掘時掄鎬）
+      const dig = n.state === 'dig';
+      const armA = dig ? -0.7 + Math.abs(Math.sin(n.phase * 1.6)) * 1.5 : 0.5 + walk * 0.3;
+      const shX = sx + wb * 0.45, shY = fy - hb * 0.88;
+      const haX = shX + Math.cos(armA) * hb * 0.3, haY = shY + Math.sin(armA) * hb * 0.3;
+      c2.strokeStyle = '#8a6547'; c2.lineWidth = Math.max(1.5, wb * 0.24);
+      c2.beginPath(); c2.moveTo(shX, shY); c2.lineTo(haX, haY); c2.stroke();
+      if (dig) {   // 鎬子
+        c2.strokeStyle = '#c9d2da'; c2.lineWidth = Math.max(1, wb * 0.14);
+        c2.beginPath(); c2.moveTo(haX, haY);
+        c2.lineTo(haX + Math.cos(armA - 0.5) * hb * 0.34, haY + Math.sin(armA - 0.5) * hb * 0.34);
+        c2.stroke();
+      }
+      c2.restore();
     }
 
     /* ---- 手臂關節動畫 ---- */
@@ -1427,6 +1665,11 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
         mapCtx.fillStyle = t === OPEN ? (lv.path[k] ? '#2f8f6d' : '#20272e') : (t === VEIN ? '#2b4a3f' : '#3a4048');
         mapCtx.fillRect((i + R) * cell, (j + R) * cell, cell, cell);
       }
+      mapCtx.fillStyle = '#5db2ff';
+      for (const n of sess.npcs) {
+        const mx = 75 + (n.x - p.x) * cell, my = 75 + (n.y - p.y) * cell;
+        if (mx > 2 && my > 2 && mx < 148 && my < 148) { mapCtx.beginPath(); mapCtx.arc(mx, my, 2.2, 0, 7); mapCtx.fill(); }
+      }
       mapCtx.fillStyle = '#ffd76a';
       mapCtx.beginPath(); mapCtx.arc(75, 75, 3, 0, 7); mapCtx.fill();
       mapCtx.strokeStyle = '#ffd76a'; mapCtx.beginPath(); mapCtx.moveTo(75, 75);
@@ -1445,10 +1688,19 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
         '🛢' + Math.round(S.supply.diesel) + '　🔋' + S.supply.battery + '　🧨' + S.supply.dynamite + '　🪵' + S.supply.wood +
         (sess.pumpOn ? '　💧抽水中' : '') + (sess.lightOn ? '　💡燈亮' : '　🌑無燈');
       if (w) {
+        const stateTxt = { idle: '找目標', walk: '走向岩壁', dig: '⛏ 開挖中', rest: '沒力了' };
+        const mates = sess.npcs.map(n => {
+          const m = worker(S, n.wid);
+          if (!m) return '';
+          return '<div class="fp-mate"><span>' + m.name + '</span><span class="tiny">' +
+            (m.injury > 0 ? '🩹 養傷' : stateTxt[n.state] || n.state) +
+            '　' + Math.round(m.stam) + '</span></div>';
+        }).join('');
         wrap.querySelector('#fp-worker').innerHTML =
-          '<b>' + w.name + '</b> <span class="tiny">' + global.DATA.ROLES[w.role].name + '</span>' +
+          '<b>' + w.name + '</b> <span class="tiny">' + global.DATA.ROLES[w.role].name + '（你）</span>' +
           '<div class="fp-bar"><i style="width:' + Math.max(0, w.stam / w.maxStam * 100) + '%"></i></div>' +
-          '<span class="tiny">體力 ' + Math.round(w.stam) + '/' + w.maxStam + '　[T] 換人</span>';
+          '<span class="tiny">體力 ' + Math.round(w.stam) + '/' + w.maxStam + '　[T] 接手隊友</span>' +
+          (mates ? '<hr style="border-color:#26303d;margin:6px 0">' + mates : '');
       }
       const ids = Object.keys(EQUIP).filter(id => EQUIP[id].tool);
       wrap.querySelector('#fp-tools').innerHTML = ids.map((id, i) => {
@@ -1466,6 +1718,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
       const dt = Math.min(0.05, (now - last) / 1000); last = now; perf += dt;
 
       move(dt);
+      aiTick(dt);
       if (swing.t < 1) {
         swing.t += dt / swing.dur;
         if (!swing.hit && swing.t >= 0.5) { swing.hit = true; applyHit(); }
@@ -2454,7 +2707,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
         '<div class="card enter3d">' +
           '<div class="e3-art"><span>⛏</span></div>' +
           '<div class="big">' + ss.site.name + '　坑口</div>' +
-          '<p class="muted tiny">全螢幕第一人稱。頭燈只照得到前方，坑道深處看不見 —— <b>跟著地上的螢光導引線走</b>，走到底就是開採面。</p>' +
+          '<p class="muted tiny">全螢幕第一人稱。頭燈只照得到前方，坑道深處看不見 —— <b>跟著地上的螢光導引線走</b>，走到底就是開採面。<br>你帶的隊友會跟你一起下坑、<b>自動散開找玉開挖</b>；按 T 可以接手任何一個人的位置。</p>' +
           '<button class="btn primary big-btn" data-act="enter3d">▶ 進入坑道（全螢幕 3D）</button>' +
           '<div class="keys">' +
             '<span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 走動</span>' +
