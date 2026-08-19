@@ -355,7 +355,7 @@
           '<div id="fp-worker"></div>' +
           '<div id="fp-tools"></div>' +
         '</div>' +
-        '<div class="fp-help">滑鼠移動＝看　WASD＝走　左鍵/空白鍵＝挖　1~8＝換工具　T＝換人　F＝燈　P＝抽水　G＝架坑木　M＝地圖　Q＝收工</div>' +
+        '<div class="fp-help">滑鼠移動＝看　WASD＝走　左鍵/空白鍵＝挖　1~8＝換工具　T＝換人　F＝燈　P＝抽水　G＝架坑木　M＝地圖　Z＝過夜　Q＝收工</div>' +
       '</div>' +
       '<div id="fp-touch">' +
         '<div id="joy"><i></i></div>' +
@@ -367,6 +367,7 @@
           '<button data-k="P">💧抽水</button>' +
           '<button data-k="G">🪵坑木</button>' +
           '<button data-k="M">🗺地圖</button>' +
+          '<button data-k="Z">😴過夜</button>' +
           '<button data-k="L">🔒固定</button>' +
           '<button data-k="FS">⛶全螢幕</button>' +
           '<button data-k="Q" class="quit">🎒收工</button>' +
@@ -383,6 +384,7 @@
     const offCtx = off.getContext('2d');
 
     let running = true, showMap = false, msgT = 0, msg = '';
+    let night = null;   // 過夜黑幕演出 { t, lines }
     const keys = {};
     const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
     const joy = { f: 0, s: 0, id: null, ox: 0, oy: 0 };
@@ -526,6 +528,7 @@
 
     let aiAcc = 0;
     function aiTick(dt) {
+      if (night) return;
       aiAcc += dt;
       while (aiAcc >= 0.12) { aiAcc -= 0.12; npcStep(0.12); }
     }
@@ -544,6 +547,7 @@
       if (!down) return;
       if (e.code === 'KeyQ' || e.code === 'Escape') { if (e.code === 'KeyQ') quit(); return; }
       if (e.code === 'Space') doDig();
+      if (e.code === 'KeyZ') doSleep();
       if (e.code === 'KeyM') showMap = !showMap;
       if (e.code === 'KeyF') { const r = toggleLight(S, sess); say(r.msg); }
       if (e.code === 'KeyP') { const r = togglePump(S, sess); say(r.msg); }
@@ -620,6 +624,7 @@
         else if (k === 'P') say(togglePump(S, sess).msg);
         else if (k === 'G') say(placeTimber(S, sess).msg);
         else if (k === 'M') showMap = !showMap;
+        else if (k === 'Z') doSleep();
         else if (k === 'L') { if (global.UI && global.UI.toggleLock) { global.UI.toggleLock(); say('切換固定畫面'); } }
         else if (k === 'FS') { if (global.UI && global.UI.goFullscreen) global.UI.goFullscreen(); }
         else if (k === 'Q') quit();
@@ -649,8 +654,22 @@
 
     function say(m) { if (!m) return; msg = m; msgT = 2.6; }
 
+    /* ---- 坑道過夜 ---- */
+    function doSleep() {
+      if (night) return;
+      const r = global.GAME.sleepInMine();
+      if (!r.ok) { say(r.msg); return; }
+      night = {
+        t: 0,
+        lines: ['第 ' + S.day + ' 天　' + S.weather.icon + ' ' + S.weather.name]
+          .concat((r.notes || []).slice(0, 5))
+      };
+      hud();
+    }
+
     /* ---- 揮動：關節動畫 ---- */
     function doDig() {
+      if (night) return;
       if (swing.t < 1) return;                 // 上一下還沒揮完
       const eq = EQUIP[sess.tool];
       const c = canUse(S, sess, sess.tool);
@@ -690,6 +709,7 @@
 
     /* ---- 移動 ---- */
     function move(dt) {
+      if (night) return;
       const p = sess.player, lv = sess.lv;
       const w = worker(S, sess.active);
       let sp = 2.7 * (keys.ShiftLeft ? 1.6 : 1);
@@ -1083,6 +1103,28 @@
       } else tEl.style.display = 'none';
 
       if (showMap) { mapCv.style.display = 'block'; drawMap(); } else mapCv.style.display = 'none';
+
+      // 過夜：黑幕淡入 → 顯示結算 → 淡出醒來
+      if (night) {
+        night.t += dt;
+        const t = night.t;
+        const a = t < 0.9 ? t / 0.9 : t < 3.2 ? 1 : Math.max(0, (4.1 - t) / 0.9);
+        ctx.fillStyle = 'rgba(0,0,0,' + a + ')';
+        ctx.fillRect(0, 0, cv.width, cv.height);
+        if (t > 0.9 && t < 3.4) {
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#e8c46a';
+          ctx.font = '700 30px "Noto Sans TC",sans-serif';
+          ctx.fillText('😴 坑道裡的一夜', cv.width / 2, cv.height * 0.32);
+          ctx.font = '15px "Noto Sans TC",sans-serif';
+          night.lines.forEach((ln, i) => {
+            ctx.fillStyle = ln.indexOf('⚠️') === 0 ? '#ff8f8f' : '#cfe3da';
+            ctx.fillText(ln, cv.width / 2, cv.height * 0.42 + i * 26);
+          });
+          ctx.textAlign = 'left';
+        }
+        if (t >= 4.1) { night = null; say('天亮了，繼續開工。'); }
+      }
 
       if (msgT > 0) { msgT -= dt; const el = wrap.querySelector('#fp-msg'); el.textContent = msg; el.style.opacity = Math.min(1, msgT); }
       hudT += dt; if (hudT > 0.25) { hudT = 0; hud(); }

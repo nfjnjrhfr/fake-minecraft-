@@ -180,8 +180,8 @@
   }
 
   /* ---------------- 結束一天 ---------------- */
-  function endDay() {
-    if (S.session) return { ok: false, msg: '隊伍還在山上，先收工。' };
+  function endDay(inMine) {
+    if (S.session && !inMine) return { ok: false, msg: '隊伍還在山上，先收工。' };
     const notes = [];
 
     // 工資
@@ -212,10 +212,11 @@
       notes.push('⚠️ 糧食不足，全隊餓肚子，士氣重挫。');
     }
 
-    // 休息回復
-    const restBonus = has('tent') ? 10 : 0;
+    // 休息回復（坑道裡打地鋪恢復差很多）
+    const restBonus = has('tent') ? (inMine ? 5 : 10) : 0;
+    const restRate = inMine ? 0.38 : 0.55;
     S.workers.forEach(w => {
-      w.stam = Math.min(w.maxStam, w.stam + Math.round(w.maxStam * 0.55) + restBonus);
+      w.stam = Math.min(w.maxStam, w.stam + Math.round(w.maxStam * restRate) + restBonus);
       if (w.injury > 0) {
         w.injury--;
         if (S.supply.medicine > 0 && Math.random() < 0.6) { S.supply.medicine--; w.injury = Math.max(0, w.injury - 1); }
@@ -275,6 +276,50 @@
     if (r < 0.85) return WEATHER[2];
     if (r < 0.93) return WEATHER[4];
     return WEATHER[3];
+  }
+
+  /* ---------------- 坑道過夜 ---------------- */
+  function sleepInMine() {
+    if (!S.session) return { ok: false, msg: '不在坑裡' };
+    const sess = S.session, site = sess.site;
+    const owned = !!(S.owned && S.owned[site.id]);
+    if (!owned && S.money < site.fee) {
+      return { ok: false, msg: '付不出明天的礦權日費 ' + money(site.fee) + '，只能下山了' };
+    }
+    const r = endDay(true);
+    if (!r.ok) return r;
+    const notes = r.notes.slice();
+    const extra = [];
+
+    if (!owned) { S.money -= site.fee; extra.push('隔天礦權日費 ' + money(site.fee)); }
+    if (!has('tent')) {
+      S.workers.forEach(w => { if (sess.team.indexOf(w.id) >= 0) w.morale = Math.max(0, w.morale - 6); });
+      extra.push('沒有帳篷，全隊在坑道裡打地鋪，腰酸背痛（士氣 -6）。');
+    }
+
+    // 夜裡塌方：危險場口、壞天氣、坑木不足時最可怕
+    const risk = Math.min(0.35, M.collapseRisk(S, sess) * 0.55 * S.weather.danger);
+    if (Math.random() < risk) {
+      const crew = sess.team.map(id => S.workers.find(w => w.id === id)).filter(Boolean);
+      const w = crew[Math.floor(Math.random() * crew.length)];
+      if (w) {
+        const days = 1 + Math.floor(Math.random() * 3);
+        w.injury += days;
+        w.morale = Math.max(0, w.morale - 10);
+        S.stats.accidents++;
+        extra.push('⚠️ 睡到半夜塌了一角，' + w.name + ' 被砸傷，休養 ' + days + ' 天。');
+      }
+      if (sess.stones.length && Math.random() < 0.3) {
+        const lost = sess.stones.pop();
+        extra.push('一顆 ' + lost.kg + 'kg 的料被埋回土裡。');
+      }
+    } else if (Math.random() < 0.25) {
+      extra.push('一夜平安，坑木在頭頂吱呀作響。');
+    }
+
+    log('😴 全隊在 ' + site.name + ' 坑道裡過夜，醒來繼續開工。', 'go');
+    extra.forEach(n => log(n, n.indexOf('⚠️') === 0 ? 'bad' : ''));
+    return { ok: true, notes: notes.concat(extra) };
   }
 
   /* ---------------- 工房：相玉與加工 ---------------- */
@@ -546,7 +591,7 @@
     carryCapacity, startMining, endMining, haulOptions, endDay,
     workshop, offerFor, sell, auction, auctionReady, rollBuyers,
     buyEquip, repairEquip, buySupply, candidates, hire, fire, train,
-    buyoutSite, buyoutPrice,
+    buyoutSite, buyoutPrice, sleepInMine,
     skillLabel, newWorker
   };
 })(window);

@@ -1028,7 +1028,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
           '<div id="fp-worker"></div>' +
           '<div id="fp-tools"></div>' +
         '</div>' +
-        '<div class="fp-help">滑鼠移動＝看　WASD＝走　左鍵/空白鍵＝挖　1~8＝換工具　T＝換人　F＝燈　P＝抽水　G＝架坑木　M＝地圖　Q＝收工</div>' +
+        '<div class="fp-help">滑鼠移動＝看　WASD＝走　左鍵/空白鍵＝挖　1~8＝換工具　T＝換人　F＝燈　P＝抽水　G＝架坑木　M＝地圖　Z＝過夜　Q＝收工</div>' +
       '</div>' +
       '<div id="fp-touch">' +
         '<div id="joy"><i></i></div>' +
@@ -1040,6 +1040,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
           '<button data-k="P">💧抽水</button>' +
           '<button data-k="G">🪵坑木</button>' +
           '<button data-k="M">🗺地圖</button>' +
+          '<button data-k="Z">😴過夜</button>' +
           '<button data-k="L">🔒固定</button>' +
           '<button data-k="FS">⛶全螢幕</button>' +
           '<button data-k="Q" class="quit">🎒收工</button>' +
@@ -1056,6 +1057,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
     const offCtx = off.getContext('2d');
 
     let running = true, showMap = false, msgT = 0, msg = '';
+    let night = null;   // 過夜黑幕演出 { t, lines }
     const keys = {};
     const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
     const joy = { f: 0, s: 0, id: null, ox: 0, oy: 0 };
@@ -1199,6 +1201,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
 
     let aiAcc = 0;
     function aiTick(dt) {
+      if (night) return;
       aiAcc += dt;
       while (aiAcc >= 0.12) { aiAcc -= 0.12; npcStep(0.12); }
     }
@@ -1217,6 +1220,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
       if (!down) return;
       if (e.code === 'KeyQ' || e.code === 'Escape') { if (e.code === 'KeyQ') quit(); return; }
       if (e.code === 'Space') doDig();
+      if (e.code === 'KeyZ') doSleep();
       if (e.code === 'KeyM') showMap = !showMap;
       if (e.code === 'KeyF') { const r = toggleLight(S, sess); say(r.msg); }
       if (e.code === 'KeyP') { const r = togglePump(S, sess); say(r.msg); }
@@ -1293,6 +1297,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
         else if (k === 'P') say(togglePump(S, sess).msg);
         else if (k === 'G') say(placeTimber(S, sess).msg);
         else if (k === 'M') showMap = !showMap;
+        else if (k === 'Z') doSleep();
         else if (k === 'L') { if (global.UI && global.UI.toggleLock) { global.UI.toggleLock(); say('切換固定畫面'); } }
         else if (k === 'FS') { if (global.UI && global.UI.goFullscreen) global.UI.goFullscreen(); }
         else if (k === 'Q') quit();
@@ -1322,8 +1327,22 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
 
     function say(m) { if (!m) return; msg = m; msgT = 2.6; }
 
+    /* ---- 坑道過夜 ---- */
+    function doSleep() {
+      if (night) return;
+      const r = global.GAME.sleepInMine();
+      if (!r.ok) { say(r.msg); return; }
+      night = {
+        t: 0,
+        lines: ['第 ' + S.day + ' 天　' + S.weather.icon + ' ' + S.weather.name]
+          .concat((r.notes || []).slice(0, 5))
+      };
+      hud();
+    }
+
     /* ---- 揮動：關節動畫 ---- */
     function doDig() {
+      if (night) return;
       if (swing.t < 1) return;                 // 上一下還沒揮完
       const eq = EQUIP[sess.tool];
       const c = canUse(S, sess, sess.tool);
@@ -1363,6 +1382,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
 
     /* ---- 移動 ---- */
     function move(dt) {
+      if (night) return;
       const p = sess.player, lv = sess.lv;
       const w = worker(S, sess.active);
       let sp = 2.7 * (keys.ShiftLeft ? 1.6 : 1);
@@ -1757,6 +1777,28 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
 
       if (showMap) { mapCv.style.display = 'block'; drawMap(); } else mapCv.style.display = 'none';
 
+      // 過夜：黑幕淡入 → 顯示結算 → 淡出醒來
+      if (night) {
+        night.t += dt;
+        const t = night.t;
+        const a = t < 0.9 ? t / 0.9 : t < 3.2 ? 1 : Math.max(0, (4.1 - t) / 0.9);
+        ctx.fillStyle = 'rgba(0,0,0,' + a + ')';
+        ctx.fillRect(0, 0, cv.width, cv.height);
+        if (t > 0.9 && t < 3.4) {
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#e8c46a';
+          ctx.font = '700 30px "Noto Sans TC",sans-serif';
+          ctx.fillText('😴 坑道裡的一夜', cv.width / 2, cv.height * 0.32);
+          ctx.font = '15px "Noto Sans TC",sans-serif';
+          night.lines.forEach((ln, i) => {
+            ctx.fillStyle = ln.indexOf('⚠️') === 0 ? '#ff8f8f' : '#cfe3da';
+            ctx.fillText(ln, cv.width / 2, cv.height * 0.42 + i * 26);
+          });
+          ctx.textAlign = 'left';
+        }
+        if (t >= 4.1) { night = null; say('天亮了，繼續開工。'); }
+      }
+
       if (msgT > 0) { msgT -= dt; const el = wrap.querySelector('#fp-msg'); el.textContent = msg; el.style.opacity = Math.min(1, msgT); }
       hudT += dt; if (hudT > 0.25) { hudT = 0; hud(); }
 
@@ -2133,8 +2175,8 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
   }
 
   /* ---------------- 結束一天 ---------------- */
-  function endDay() {
-    if (S.session) return { ok: false, msg: '隊伍還在山上，先收工。' };
+  function endDay(inMine) {
+    if (S.session && !inMine) return { ok: false, msg: '隊伍還在山上，先收工。' };
     const notes = [];
 
     // 工資
@@ -2165,10 +2207,11 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
       notes.push('⚠️ 糧食不足，全隊餓肚子，士氣重挫。');
     }
 
-    // 休息回復
-    const restBonus = has('tent') ? 10 : 0;
+    // 休息回復（坑道裡打地鋪恢復差很多）
+    const restBonus = has('tent') ? (inMine ? 5 : 10) : 0;
+    const restRate = inMine ? 0.38 : 0.55;
     S.workers.forEach(w => {
-      w.stam = Math.min(w.maxStam, w.stam + Math.round(w.maxStam * 0.55) + restBonus);
+      w.stam = Math.min(w.maxStam, w.stam + Math.round(w.maxStam * restRate) + restBonus);
       if (w.injury > 0) {
         w.injury--;
         if (S.supply.medicine > 0 && Math.random() < 0.6) { S.supply.medicine--; w.injury = Math.max(0, w.injury - 1); }
@@ -2228,6 +2271,50 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
     if (r < 0.85) return WEATHER[2];
     if (r < 0.93) return WEATHER[4];
     return WEATHER[3];
+  }
+
+  /* ---------------- 坑道過夜 ---------------- */
+  function sleepInMine() {
+    if (!S.session) return { ok: false, msg: '不在坑裡' };
+    const sess = S.session, site = sess.site;
+    const owned = !!(S.owned && S.owned[site.id]);
+    if (!owned && S.money < site.fee) {
+      return { ok: false, msg: '付不出明天的礦權日費 ' + money(site.fee) + '，只能下山了' };
+    }
+    const r = endDay(true);
+    if (!r.ok) return r;
+    const notes = r.notes.slice();
+    const extra = [];
+
+    if (!owned) { S.money -= site.fee; extra.push('隔天礦權日費 ' + money(site.fee)); }
+    if (!has('tent')) {
+      S.workers.forEach(w => { if (sess.team.indexOf(w.id) >= 0) w.morale = Math.max(0, w.morale - 6); });
+      extra.push('沒有帳篷，全隊在坑道裡打地鋪，腰酸背痛（士氣 -6）。');
+    }
+
+    // 夜裡塌方：危險場口、壞天氣、坑木不足時最可怕
+    const risk = Math.min(0.35, M.collapseRisk(S, sess) * 0.55 * S.weather.danger);
+    if (Math.random() < risk) {
+      const crew = sess.team.map(id => S.workers.find(w => w.id === id)).filter(Boolean);
+      const w = crew[Math.floor(Math.random() * crew.length)];
+      if (w) {
+        const days = 1 + Math.floor(Math.random() * 3);
+        w.injury += days;
+        w.morale = Math.max(0, w.morale - 10);
+        S.stats.accidents++;
+        extra.push('⚠️ 睡到半夜塌了一角，' + w.name + ' 被砸傷，休養 ' + days + ' 天。');
+      }
+      if (sess.stones.length && Math.random() < 0.3) {
+        const lost = sess.stones.pop();
+        extra.push('一顆 ' + lost.kg + 'kg 的料被埋回土裡。');
+      }
+    } else if (Math.random() < 0.25) {
+      extra.push('一夜平安，坑木在頭頂吱呀作響。');
+    }
+
+    log('😴 全隊在 ' + site.name + ' 坑道裡過夜，醒來繼續開工。', 'go');
+    extra.forEach(n => log(n, n.indexOf('⚠️') === 0 ? 'bad' : ''));
+    return { ok: true, notes: notes.concat(extra) };
   }
 
   /* ---------------- 工房：相玉與加工 ---------------- */
@@ -2499,7 +2586,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
     carryCapacity, startMining, endMining, haulOptions, endDay,
     workshop, offerFor, sell, auction, auctionReady, rollBuyers,
     buyEquip, repairEquip, buySupply, candidates, hire, fire, train,
-    buyoutSite, buyoutPrice,
+    buyoutSite, buyoutPrice, sleepInMine,
     skillLabel, newWorker
   };
 })(window);
