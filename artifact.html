@@ -216,6 +216,14 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
 /* ---- 變異工人 ---- */
 .card.mutant{border-color:#4a6b32;box-shadow:inset 0 0 26px rgba(120,180,80,.08)}
 
+/* ---- 民兵警示條 ---- */
+.alertbar{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  background:linear-gradient(90deg,#3a1518,#241014);border:1px solid #6b2b2b;
+  border-radius:10px;padding:10px 14px;margin-bottom:12px;color:#ffb4b4;
+  animation:pulsebar 1.6s infinite}
+.alertbar.army{border-color:#8a5a1f;color:#ffd9a0;background:linear-gradient(90deg,#3a2a12,#241a0e)}
+@keyframes pulsebar{0%,100%{box-shadow:0 0 0 rgba(255,80,80,0)}50%{box-shadow:0 0 18px rgba(255,80,80,.25)}}
+
 </style>
 
 <div id="app">
@@ -3406,7 +3414,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
     return '<h3>🚨 民兵上門</h3>' +
       '<p class="tiny">帶頭的把槍托在桌上敲了敲：「山裡死了 ' + n + ' 個人。你知道規矩。」</p>' +
       '<div class="row" style="margin-top:14px">' +
-      '<button class="btn gold" data-act="militia-pay">掏錢壓下來（' + money(fine) + '）</button>' +
+      '<button class="btn gold" data-act="militia-pay">掏錢壓下來（' + money(fine) + (s.money < fine ? '，現金不夠會變欠債' : '') + '）</button>' +
       '<button class="btn danger" data-act="militia-fight"' + (G.has('shotgun') ? '' : ' disabled title="沒有槍"') + '>開打（勝率約 ' + chance + '%' + (mutants ? '，變異工人助陣' : '') + '）</button>' +
       '</div>' +
       '<p class="tiny muted" style="margin-top:8px">開打贏了不用繳錢，但你就正式跟山下翻臉了 — 打贏兩次，來的就不會只是民兵。輸了罰金加倍、全隊掛彩。</p>';
@@ -3445,8 +3453,16 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
     }
     const v = { camp: viewCamp, mine: viewMine, shop: viewShop, market: viewMarket, crew: viewCrew, store: viewStore, log: viewLog }[tab];
     $('#view').innerHTML = v();
-    if (s.pendingArmy) openModal(armyModal());
-    else if (s.pendingMilitia) openModal(militiaModal());
+    // 民兵／大部隊：改用警示條，不擋市場（你可能得先賣料湊罰款）
+    if (s.pendingArmy || s.pendingMilitia) {
+      const isArmy = s.pendingArmy;
+      $('#view').insertAdjacentHTML('afterbegin',
+        '<div class="alertbar' + (isArmy ? ' army' : '') + '"><span>' +
+        (isArmy
+          ? '🚁 大部隊在山下集結，這是最後一次選擇 — 上山與結束一天已被擋住。'
+          : '🚨 民兵在營地口等你回話 — 上山與結束一天被擋住了。缺錢的話，市場照常能賣料。') +
+        '</span><button class="btn sm danger" data-act="' + (isArmy ? 'army-open' : 'militia-open') + '">面對他們</button></div>');
+    }
   }
 
   /* ---------------- 全螢幕 ---------------- */
@@ -3527,6 +3543,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
       }
 
       case 'go': {
+        if (s.pendingMilitia || s.pendingArmy) { toast('營地口有人堵著，先給個交代再上山。', 'bad'); break; }
         const ids = s.workers.filter(w => sel.team[w.id] && w.injury === 0).map(w => w.id);
         const r = G.startMining(el.dataset.site, ids);
         if (!r.ok) { toast(r.msg, 'bad'); break; }
@@ -3597,13 +3614,17 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
         toast(r.ok ? '注射完成…他站起來的樣子不太一樣了' : r.msg, r.ok ? 'bad' : 'bad');
         render(); break;
       }
+      case 'militia-open': openModal(militiaModal()); break;
+      case 'army-open': openModal(armyModal()); break;
       case 'militia-pay': { const r = G.militiaPay(); closeModal(); toast(r.ok ? '錢送出去了，事情壓下來了' : '…', 'bad'); render(); break; }
       case 'militia-fight': {
         const r = G.militiaFight();
         closeModal();
         if (!r.ok) { toast(r.msg, 'bad'); render(); break; }
         openModal(r.win
-          ? '<h3>🔥 打贏了</h3><p class="tiny">民兵倒在營地口。' + (r.army ? '但山下已經在集結 — 下一批不會這麼好打。' : '短時間內不會有人再上來。') + '</p><button class="btn primary" data-act="close">繼續</button>'
+          ? '<h3>🔥 打贏了</h3><p class="tiny">民兵倒在營地口。' + (r.army ? '但山下已經在集結 — 下一批不會這麼好打。' : '短時間內不會有人再上來。') + '</p>' +
+            (r.army ? '<button class="btn danger" data-act="army-open">他們來了 →</button> ' : '') +
+            '<button class="btn primary" data-act="close">繼續</button>'
           : '<h3>💥 打輸了</h3><p class="tiny">你們被按在地上。罰金加倍、全隊掛彩，休養去吧。</p><button class="btn primary" data-act="close">繼續</button>');
         render(); break;
       }
@@ -3623,6 +3644,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
       case 'buysup': { const r = G.buySupply(id, +el.dataset.n); toast(r.ok ? '補給入庫' : r.msg, r.ok ? '' : 'bad'); render(); break; }
 
       case 'endday': {
+        if (s.pendingMilitia || s.pendingArmy) { toast('這一天結束不了 — 門口那群人還在等你回話。', 'bad'); break; }
         const r = G.endDay();
         if (!r.ok) { toast(r.msg, 'bad'); break; }
         openModal('<h3>第 ' + (s.day - 1) + ' 天結算</h3>' +
