@@ -5,7 +5,7 @@ root = pathlib.Path(__file__).resolve().parent.parent
 html = (root / 'index.html').read_text(encoding='utf-8')
 css = (root / 'style.css').read_text(encoding='utf-8')
 js = [(root / 'js' / f).read_text(encoding='utf-8')
-      for f in ['data.js', 'jade.js', 'mine.js', 'fx.js', 'game.js', 'ui.js']]
+      for f in ['data.js', 'jade.js', 'mine.js', 'fx.js', 'raid.js', 'game.js', 'ui.js']]
 
 html = html.replace('<link rel="stylesheet" href="style.css">',
                     '<style>\n' + css + '\n</style>')

@@ -233,6 +233,15 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
 .alertbar.army{border-color:#8a5a1f;color:#ffd9a0;background:linear-gradient(90deg,#3a2a12,#241a0e)}
 @keyframes pulsebar{0%,100%{box-shadow:0 0 0 rgba(255,80,80,0)}50%{box-shadow:0 0 18px rgba(255,80,80,.25)}}
 
+/* ---- 地下黑市 / 突襲夜 ---- */
+.card.black{background:linear-gradient(160deg,#151017,#0d0a10);border-color:#3a2b45}
+#raidwrap{position:fixed;inset:0;z-index:400;background:#000}
+#raidcv{width:100%;height:100%;display:block}
+#raidsub{position:absolute;left:0;right:0;bottom:14%;text-align:center;color:#ffe6c0;
+  font-size:20px;letter-spacing:2px;text-shadow:0 2px 8px #000;font-weight:600}
+#raidskip{position:absolute;right:20px;top:16px;color:#8b9aa9;font-size:13px}
+#raidbtns{position:absolute;left:0;right:0;bottom:5%;display:flex;gap:14px;justify-content:center}
+
 </style>
 </head>
 <body>
@@ -2243,6 +2252,258 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
 })(window);
 
 /* ============================================================
+   開玉 — 突襲夜（3D 過場）
+   躺在地下據點 → 炮彈聲驚醒 → 抓起 AK-47 → 門被炸開，是突襲隊
+   ============================================================ */
+(function (global) {
+  'use strict';
+
+  function play(S, done) {
+    const wrap = document.createElement('div');
+    wrap.id = 'raidwrap';
+    wrap.innerHTML = '<canvas id="raidcv"></canvas>' +
+      '<div id="raidsub"></div>' +
+      '<div id="raidskip">點擊快轉 ▸</div>' +
+      '<div id="raidbtns" style="display:none">' +
+        '<button class="btn danger big-btn" data-raid="fight">🔥 開火！</button>' +
+        '<button class="btn" data-raid="surrender">丟槍投降</button>' +
+      '</div>';
+    document.body.appendChild(wrap);
+    const cv = wrap.querySelector('#raidcv'), ctx = cv.getContext('2d');
+    const sub = wrap.querySelector('#raidsub');
+    const btns = wrap.querySelector('#raidbtns');
+    const rs = () => { cv.width = window.innerWidth; cv.height = window.innerHeight; };
+    rs(); window.addEventListener('resize', rs);
+    try { const el = document.documentElement, fs = el.requestFullscreen || el.webkitRequestFullscreen; if (fs) { const r = fs.call(el); if (r && r.catch) r.catch(() => {}); } } catch (e) {}
+
+    let t = 0, last = performance.now(), running = true, choiceShown = false;
+    const dust = [], flashes = [];
+    const BOOMS = [2.6, 3.5, 4.1];
+    let boomed = {};
+
+    function subtitle(txt) { sub.textContent = txt; }
+
+    wrap.addEventListener('click', e => {
+      if (e.target.closest('#raidbtns')) return;
+      if (t < 8.4) t = 8.4;
+    });
+    btns.addEventListener('click', e => {
+      const b = e.target.closest('[data-raid]');
+      if (!b) return;
+      cleanup();
+      done(b.dataset.raid);
+    });
+
+    function cleanup() {
+      running = false;
+      window.removeEventListener('resize', rs);
+      wrap.remove();
+    }
+
+    function frame(now) {
+      if (!running) return;
+      const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+      const w = cv.width, h = cv.height;
+
+      // 震動
+      let shake = 0;
+      for (const bt of BOOMS) {
+        const d = t - bt;
+        if (d > 0 && d < 0.6) shake = Math.max(shake, (0.6 - d) * 26);
+        if (d > 0 && !boomed[bt]) {
+          boomed[bt] = 1;
+          flashes.push({ life: 0.35 });
+          for (let i = 0; i < 40; i++) dust.push({
+            x: Math.random() * w, y: -10,
+            vy: 60 + Math.random() * 160, vx: (Math.random() - 0.5) * 40,
+            s: 1 + Math.random() * 3, life: 2 + Math.random() * 2
+          });
+        }
+      }
+      const sx = (Math.random() - 0.5) * shake, sy = (Math.random() - 0.5) * shake;
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.fillStyle = '#07090c';
+      ctx.fillRect(-30, -30, w + 60, h + 60);
+
+      // 站起來的過渡：0=躺著看天花板 1=站著看門口
+      const up = t < 4.5 ? 0 : t < 6 ? (t - 4.5) / 1.5 : 1;
+      const ease = up * up * (3 - 2 * up);
+
+      /* ---------- 躺視角：天花板 ---------- */
+      if (ease < 1) {
+        ctx.save();
+        ctx.globalAlpha = 1 - ease;
+        ctx.translate(0, -ease * h * 0.9);
+        // 天花板木樑
+        ctx.strokeStyle = '#241c12'; ctx.lineWidth = h * 0.06;
+        for (let i = 0; i < 6; i++) {
+          const y = h * 0.12 + i * h * 0.16;
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+        }
+        // 搖晃的燈泡
+        const sw = Math.sin(t * (shake ? 9 : 1.6)) * (0.12 + shake * 0.02);
+        const lx = w / 2 + Math.sin(sw) * h * 0.18, ly = h * 0.34;
+        ctx.strokeStyle = '#3a342a'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(w / 2, 0); ctx.lineTo(lx, ly); ctx.stroke();
+        const g = ctx.createRadialGradient(lx, ly, 4, lx, ly, h * 0.42);
+        g.addColorStop(0, 'rgba(255,214,140,.85)');
+        g.addColorStop(0.12, 'rgba(255,190,110,.28)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#ffd98c';
+        ctx.beginPath(); ctx.arc(lx, ly, 7, 0, 7); ctx.fill();
+        // 打呼
+        if (t < 2.4) {
+          ctx.fillStyle = 'rgba(180,200,220,' + (0.5 + 0.4 * Math.sin(t * 3)) + ')';
+          ctx.font = (24 + Math.sin(t * 2) * 6) + 'px sans-serif';
+          ctx.fillText('z', w * 0.62, h * 0.55 - (t % 1.6) * 40);
+          ctx.fillText('Z', w * 0.66, h * 0.62 - ((t + 0.8) % 1.6) * 40);
+        }
+        ctx.restore();
+      }
+
+      /* ---------- 站視角：據點內部與大門 ---------- */
+      if (ease > 0) {
+        ctx.save();
+        ctx.globalAlpha = ease;
+        ctx.translate(0, (1 - ease) * h * 0.7);
+        // 地板
+        ctx.fillStyle = '#151210';
+        ctx.fillRect(0, h * 0.62, w, h * 0.38);
+        // 兩側貨架（地下超市的架子）
+        for (const side of [-1, 1]) {
+          const bx = w / 2 + side * w * 0.34;
+          ctx.fillStyle = '#1d1812';
+          ctx.fillRect(bx - w * 0.09, h * 0.18, w * 0.18, h * 0.5);
+          ctx.strokeStyle = '#2c241a'; ctx.lineWidth = 4;
+          for (let i = 1; i < 4; i++) {
+            ctx.beginPath(); ctx.moveTo(bx - w * 0.09, h * 0.18 + i * h * 0.125);
+            ctx.lineTo(bx + w * 0.09, h * 0.18 + i * h * 0.125); ctx.stroke();
+          }
+          // 架上的貨（玉料箱）
+          ctx.fillStyle = '#26382c';
+          for (let i = 0; i < 3; i++) ctx.fillRect(bx - w * 0.07 + i * w * 0.05, h * 0.22, w * 0.035, h * 0.06);
+        }
+        // 大門
+        const doorW = w * 0.16, doorH = h * 0.34;
+        const dx0 = w / 2 - doorW / 2, dy0 = h * 0.3;
+        const breach = t > 6.2;
+        if (!breach) {
+          ctx.fillStyle = '#241d14';
+          ctx.fillRect(dx0, dy0, doorW, doorH);
+          ctx.strokeStyle = '#3a2f1e'; ctx.lineWidth = 5;
+          ctx.strokeRect(dx0, dy0, doorW, doorH);
+        } else {
+          // 門被炸開：白光、煙、突襲隊剪影
+          const bo = Math.min(1, (t - 6.2) / 0.5);
+          const g2 = ctx.createRadialGradient(w / 2, dy0 + doorH / 2, 6, w / 2, dy0 + doorH / 2, w * 0.5);
+          g2.addColorStop(0, 'rgba(255,250,230,' + (0.95 - bo * 0.35) + ')');
+          g2.addColorStop(0.25, 'rgba(255,220,160,' + (0.5 - bo * 0.2) + ')');
+          g2.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = g2;
+          ctx.fillRect(0, 0, w, h);
+          // 突襲隊剪影（逆光）
+          const squad = Math.min(1, Math.max(0, (t - 6.6) / 1.2));
+          for (let i = 0; i < 4; i++) {
+            const px2 = w / 2 + (i - 1.5) * doorW * 0.32;
+            const py2 = dy0 + doorH - squad * h * 0.05;
+            const sc = (0.5 + squad * 0.5) * h * 0.001;
+            ctx.fillStyle = 'rgba(8,8,10,.96)';
+            ctx.beginPath(); ctx.arc(px2, py2 - 150 * sc, 34 * sc, 0, 7); ctx.fill();   // 頭盔
+            ctx.fillRect(px2 - 40 * sc, py2 - 125 * sc, 80 * sc, 125 * sc);             // 身
+            ctx.fillRect(px2 - 62 * sc, py2 - 95 * sc, 124 * sc, 16 * sc);              // 持槍手臂
+            // 手電筒光束
+            ctx.fillStyle = 'rgba(255,244,200,.08)';
+            ctx.beginPath();
+            ctx.moveTo(px2, py2 - 100 * sc);
+            ctx.lineTo(px2 + (i - 1.5) * -120 * sc + (Math.sin(t * 2 + i) * 60) * sc, h);
+            ctx.lineTo(px2 + (i - 1.5) * -120 * sc + (Math.sin(t * 2 + i) * 60 + 220) * sc, h);
+            ctx.closePath(); ctx.fill();
+          }
+        }
+        ctx.restore();
+
+        /* ---- 手裡的 AK-47：從畫面下方舉起 ---- */
+        const rifle = Math.min(1, Math.max(0, (t - 4.9) / 0.9));
+        if (rifle > 0) {
+          ctx.save();
+          ctx.translate(w * 0.5, h * (1.35 - rifle * 0.38) + Math.sin(t * 7) * shake * 0.15);
+          ctx.rotate(-0.08);
+          const u = h * 0.001;
+          // 槍托
+          ctx.fillStyle = '#5a3a1e';
+          ctx.beginPath();
+          ctx.moveTo(150 * u, 40 * u); ctx.lineTo(300 * u, 90 * u); ctx.lineTo(300 * u, 150 * u); ctx.lineTo(160 * u, 90 * u);
+          ctx.closePath(); ctx.fill();
+          // 槍身
+          ctx.fillStyle = '#23262b';
+          ctx.fillRect(-260 * u, 30 * u, 430 * u, 46 * u);
+          // 護木（木色）
+          ctx.fillStyle = '#6b4a26';
+          ctx.fillRect(-260 * u, 34 * u, 150 * u, 38 * u);
+          // 槍管與準星
+          ctx.fillStyle = '#2c3036';
+          ctx.fillRect(-420 * u, 40 * u, 160 * u, 16 * u);
+          ctx.fillRect(-430 * u, 20 * u, 10 * u, 30 * u);
+          // 彎彈匣
+          ctx.fillStyle = '#3c342a';
+          ctx.beginPath();
+          ctx.moveTo(-60 * u, 76 * u); ctx.quadraticCurveTo(-80 * u, 190 * u, 10 * u, 210 * u);
+          ctx.lineTo(30 * u, 160 * u); ctx.quadraticCurveTo(-30 * u, 150 * u, -10 * u, 76 * u);
+          ctx.closePath(); ctx.fill();
+          // 握把手
+          ctx.fillStyle = '#8a6547';
+          ctx.beginPath(); ctx.arc(-180 * u, 86 * u, 34 * u, 0, 7); ctx.fill();
+          ctx.beginPath(); ctx.arc(90 * u, 96 * u, 36 * u, 0, 7); ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      // 爆炸白光
+      for (let i = flashes.length - 1; i >= 0; i--) {
+        const f = flashes[i];
+        f.life -= dt;
+        if (f.life <= 0) { flashes.splice(i, 1); continue; }
+        ctx.fillStyle = 'rgba(255,190,120,' + f.life * 1.6 + ')';
+        ctx.fillRect(-30, -30, w + 60, h + 60);
+      }
+      // 落塵
+      for (let i = dust.length - 1; i >= 0; i--) {
+        const d = dust[i];
+        d.life -= dt;
+        if (d.life <= 0) { dust.splice(i, 1); continue; }
+        d.y += d.vy * dt; d.x += d.vx * dt;
+        ctx.fillStyle = 'rgba(200,180,150,' + Math.min(0.5, d.life * 0.3) + ')';
+        ctx.fillRect(d.x, d.y, d.s, d.s);
+      }
+      ctx.restore();
+
+      // 字幕
+      if (t < 2.5) subtitle('地下據點的深夜。你守著最後一批貨，睡得正沉……');
+      else if (t < 4.5) subtitle('轟——！！炮彈聲！你被驚醒——');
+      else if (t < 6.2) subtitle('你摸黑抓起牆邊的 AK-47。');
+      else if (t < 8.4) subtitle('門被炸開 —— 手電筒的光柱裡站著人。是突襲隊！');
+      else {
+        subtitle('槍已經上膛。他們也是。');
+        if (!choiceShown) {
+          choiceShown = true;
+          btns.style.display = 'flex';
+          wrap.querySelector('#raidskip').style.display = 'none';
+        }
+      }
+
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    return { cleanup };
+  }
+
+  global.RAID = { play };
+})(window);
+
+/* ============================================================
    開玉 — 遊戲主邏輯
    狀態 / 工人 / 日循環 / 工房相玉 / 市場 / 補給站 / 存檔
    ============================================================ */
@@ -2290,6 +2551,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
       log: [],
       stats: { mined: 0, sold: 0, revenue: 0, bestSale: 0, days: 0, accidents: 0, deaths: 0 },
       heat: 0, warPath: 0, pendingMilitia: 0, pendingArmy: false,
+      hideouts: 3, raid: false,
       lastAuction: 0,
       over: null
     };
@@ -2488,6 +2750,22 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
       notes.push(shock > 0 ? '📈 邊境開盤消息熱，玉價指數跳漲。' : '📉 買家縮手，玉價指數走跌。');
     }
     if (S.day % 2 === 0) rollBuyers();
+
+    // 封鎖期間躲著不見：民兵一天抄一個地下據點
+    if (S.pendingMilitia) {
+      S.hideouts = (S.hideouts == null ? 3 : S.hideouts) - 1;
+      let lost = '';
+      if (S.stones.length && Math.random() < 0.5) {
+        const st = S.stones.splice(Math.floor(Math.random() * S.stones.length), 1)[0];
+        lost = '，抄走了一顆 ' + st.kg + 'kg 的料';
+      }
+      if (S.hideouts > 0) {
+        notes.push('🚨 你躲著不見。民兵搜到你 ' + (3 - S.hideouts) + ' 號地下據點' + lost + ' — 藏身處只剩 ' + S.hideouts + ' 個。');
+      } else {
+        S.raid = true;
+        notes.push('🚨 最後一個地下據點的位置也被摸清了' + lost + '。今晚，睡得不會安穩。');
+      }
+    }
 
     // 命案後果：民兵動身了，天亮就到（到營地畫面會攔住你做選擇）
     if (S.heat) {
@@ -2756,6 +3034,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
     S.rep = Math.max(0, S.rep - 15 * n);
     S.workers.forEach(w => { if (!w.mutant) w.morale = Math.max(0, w.morale - 20); });
     S.pendingMilitia = 0;
+    S.hideouts = 3;
     log('民兵收了 ' + money(fine) + '，把命案壓了下來。工人看你的眼神都變了。', 'bad');
     if (S.money < -120000 && !S.over) { S.over = '破產：債主上門，礦權被收回，隊伍就地解散。'; log('💀 ' + S.over, 'bad'); }
     save();
@@ -2767,6 +3046,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
     if (!n) return { ok: false };
     if (!has('shotgun')) return { ok: false, msg: '沒有槍，拿什麼打？' };
     S.pendingMilitia = 0;
+    S.hideouts = 3;
     const mutants = S.workers.filter(w => w.mutant).length;
     const chance = 0.45 + mutants * 0.08;
     if (Math.random() < chance) {
@@ -2815,6 +3095,68 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
     S.pendingArmy = false;
     S.overKind = 'jail';
     S.over = '你被銬上手銬帶下山。礦權沒收、隊伍解散，山裡的傳聞很快就沒人記得了。';
+    log('💀 ' + S.over, 'bad');
+    save();
+    return { ok: true };
+  }
+
+  /* ---------------- 地下黑市（封鎖期間） ---------------- */
+  const BLACK_NAMES = ['地道口的獨眼販子', '收黑貨的緬商', '不問來路的阿豪'];
+  function blackBuyers() {
+    if (S._blackDay !== S.day || !S._black) {
+      S._blackDay = S.day;
+      S._black = BLACK_NAMES.map(n => ({
+        name: n,
+        base: 0.5 + Math.random() * 0.18,
+        seed: Math.random(),
+        pref: { name: '什麼都收，不問來路', test: () => false, mult: 1 },
+        haggle: 0.2
+      }));
+    }
+    return S._black;
+  }
+
+  function sellBlack(stoneId, idx) {
+    const i = S.stones.findIndex(x => x.id === stoneId);
+    if (i < 0) return { ok: false, msg: '找不到料' };
+    const st = S.stones[i];
+    const b = blackBuyers()[idx];
+    const price = offerFor(st, b);
+    S.money += price;
+    S.stats.sold++; S.stats.revenue += price;
+    S.stones.splice(i, 1);
+    log('🕳 黑市出手：' + J.label(st) + ' 賣給' + b.name + ' → ' + money(price) + '（正常行情打了對折）', 'warn');
+    return { ok: true, price };
+  }
+
+  /* ---------------- 突襲夜結算 ---------------- */
+  function raidFight() {
+    if (!S.raid) return { ok: false };
+    S.raid = false;
+    const mutants = S.workers.filter(w => w.mutant).length;
+    const chance = 0.5 + mutants * 0.1;
+    if (Math.random() < chance) {
+      S.pendingMilitia = 0;
+      S.hideouts = 3;
+      S.overKind = 'warlord';
+      S.over = 'AK-47 的火舌壓過了整支突襲隊。天亮的時候，山下再沒有人敢接這個案子 — 這座山、這些地道，從此都姓你。';
+      log('🏴 血玉軍閥：' + S.over, 'bad');
+      save();
+      return { ok: true, win: true };
+    }
+    S.overKind = 'dead';
+    S.over = '突襲隊的火力壓了進來。你在自己的地下據點裡倒下，手裡還握著那把發燙的 AK。';
+    log('💀 ' + S.over, 'bad');
+    save();
+    return { ok: true, win: false };
+  }
+
+  function raidSurrender() {
+    if (!S.raid) return { ok: false };
+    S.raid = false;
+    S.pendingMilitia = 0;
+    S.overKind = 'jail';
+    S.over = '你把 AK 丟在地上，跟著突襲隊走出據點。身後是被翻得亂七八糟的貨架。';
     log('💀 ' + S.over, 'bad');
     save();
     return { ok: true };
@@ -2953,6 +3295,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
     buyEquip, repairEquip, buySupply, candidates, hire, fire, train,
     buyoutSite, buyoutPrice, sleepInMine,
     injectSerum, militiaPay, militiaFight, armyFight, armySurrender,
+    blackBuyers, sellBlack, raidFight, raidSurrender,
     skillLabel, newWorker
   };
 })(window);
@@ -3288,6 +3631,25 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
   /* ---------------- 市場 ---------------- */
   function viewMarket() {
     const s = S();
+    if (s.pendingMilitia) {
+      const dealers = G.blackBuyers();
+      const cards = dealers.map(b =>
+        '<div class="card black"><h3>' + esc(b.name) + ' <span class="sub">' + b.pref.name + '</span></h3>' +
+        '<div class="tiny muted">出價基準 ' + b.base.toFixed(2) + '× — 知道你急著出貨</div></div>').join('');
+      const rows = s.stones.map(st => {
+        const offers = dealers.map((b, i) =>
+          '<td><button class="btn sm" data-act="sellb" data-id="' + st.id + '" data-b="' + i + '">' + money(G.offerFor(st, b)) + '</button></td>').join('');
+        return '<tr><td><b>' + st.kg + 'kg</b> ' + (st.state === 'rough' ? st.siteName + '原石' : ZHONG[st.zhong].name + COLOR[st.color].name) + '</td>' + offers + '</tr>';
+      }).join('');
+      return '<div class="card black"><h3>🕳 地下黑市 <span class="sub">封鎖中 — 正規玉商不敢上山</span></h3>' +
+        '<p class="tiny muted">山被民兵堵住，貨走地道。這幾個販子什麼都收、不問來路 — 但價錢大概只有行情的一半。<br>' +
+        '剩餘地下據點 <b class="est">' + (s.hideouts == null ? 3 : s.hideouts) + ' / 3</b> — 每躲一天（結束一天）民兵就會抄掉一個；全被抄到，他們就會摸上門。</p></div>' +
+        '<div class="grid cols3" style="margin-top:12px">' + cards + '</div>' +
+        '<div class="card black" style="margin-top:12px">' +
+        (s.stones.length ? '<table><thead><tr><th>貨</th>' + dealers.map(b => '<th>' + esc(b.name) + '</th>').join('') + '</tr></thead><tbody>' + rows + '</tbody></table>'
+          : '<p class="muted">倉庫沒貨。地道裡的販子聳聳肩。</p>') +
+        '</div>';
+    }
     const buyers = s.buyers.map((b, i) =>
       '<div class="card"><h3>' + esc(b.name) + ' <span class="sub">' + b.pref.name + '</span></h3>' +
       '<div class="tiny muted">出價基準 ' + (b.base * s.market).toFixed(2) + '×　對口的貨加 ' +
@@ -3443,9 +3805,21 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
       '<p class="tiny muted" style="margin-top:8px">打贏，這座山從此姓你；打輸，就地終局。投降，戴著手銬下山。</p>';
   }
 
+  let raidPlaying = false;
   function render() {
     const s = S();
     header(); tabsBar();
+    if (!s.over && s.raid && !raidPlaying) {
+      raidPlaying = true;
+      closeModal();
+      RAID.play(s, choice => {
+        raidPlaying = false;
+        if (choice === 'fight') G.raidFight(); else G.raidSurrender();
+        if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+        render();
+      });
+      return;
+    }
     if (s.over) {
       if (s.overKind === 'warlord') {
         $('#view').innerHTML = '<div class="card" style="text-align:center;padding:60px;border-color:#7a6224">' +
@@ -3470,7 +3844,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
         '<div class="alertbar' + (isArmy ? ' army' : '') + '"><span>' +
         (isArmy
           ? '🚁 大部隊在山下集結，這是最後一次選擇 — 上山與結束一天已被擋住。'
-          : '🚨 民兵在營地口等你回話 — 上山與結束一天被擋住了。缺錢的話，市場照常能賣料。') +
+          : '🚨 民兵封山 — 上山被擋。市場轉入地下黑市（半價收貨）。你可以「結束一天」躲著，但民兵每天會抄掉一個地下據點（剩 ' + (s.hideouts == null ? 3 : s.hideouts) + '/3），全被抄到他們就會摸上門。') +
         '</span><button class="btn sm danger" data-act="' + (isArmy ? 'army-open' : 'militia-open') + '">面對他們</button></div>');
     }
   }
@@ -3624,6 +3998,11 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
         toast(r.ok ? '注射完成…他站起來的樣子不太一樣了' : r.msg, r.ok ? 'bad' : 'bad');
         render(); break;
       }
+      case 'sellb': {
+        const r = G.sellBlack(id, +el.dataset.b);
+        toast(r.ok ? '黑市成交 ' + money(r.price) : r.msg, r.ok ? 'gold' : 'bad');
+        render(); break;
+      }
       case 'militia-open': openModal(militiaModal()); break;
       case 'army-open': openModal(armyModal()); break;
       case 'militia-pay': { const r = G.militiaPay(); closeModal(); toast(r.ok ? '錢送出去了，事情壓下來了' : '…', 'bad'); render(); break; }
@@ -3654,7 +4033,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
       case 'buysup': { const r = G.buySupply(id, +el.dataset.n); toast(r.ok ? '補給入庫' : r.msg, r.ok ? '' : 'bad'); render(); break; }
 
       case 'endday': {
-        if (s.pendingMilitia || s.pendingArmy) { toast('這一天結束不了 — 門口那群人還在等你回話。', 'bad'); break; }
+        if (s.pendingArmy) { toast('大部隊就在山下 — 這一天躲不掉了。', 'bad'); break; }
         const r = G.endDay();
         if (!r.ok) { toast(r.msg, 'bad'); break; }
         openModal('<h3>第 ' + (s.day - 1) + ' 天結算</h3>' +

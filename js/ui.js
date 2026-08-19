@@ -329,6 +329,25 @@
   /* ---------------- 市場 ---------------- */
   function viewMarket() {
     const s = S();
+    if (s.pendingMilitia) {
+      const dealers = G.blackBuyers();
+      const cards = dealers.map(b =>
+        '<div class="card black"><h3>' + esc(b.name) + ' <span class="sub">' + b.pref.name + '</span></h3>' +
+        '<div class="tiny muted">出價基準 ' + b.base.toFixed(2) + '× — 知道你急著出貨</div></div>').join('');
+      const rows = s.stones.map(st => {
+        const offers = dealers.map((b, i) =>
+          '<td><button class="btn sm" data-act="sellb" data-id="' + st.id + '" data-b="' + i + '">' + money(G.offerFor(st, b)) + '</button></td>').join('');
+        return '<tr><td><b>' + st.kg + 'kg</b> ' + (st.state === 'rough' ? st.siteName + '原石' : ZHONG[st.zhong].name + COLOR[st.color].name) + '</td>' + offers + '</tr>';
+      }).join('');
+      return '<div class="card black"><h3>🕳 地下黑市 <span class="sub">封鎖中 — 正規玉商不敢上山</span></h3>' +
+        '<p class="tiny muted">山被民兵堵住，貨走地道。這幾個販子什麼都收、不問來路 — 但價錢大概只有行情的一半。<br>' +
+        '剩餘地下據點 <b class="est">' + (s.hideouts == null ? 3 : s.hideouts) + ' / 3</b> — 每躲一天（結束一天）民兵就會抄掉一個；全被抄到，他們就會摸上門。</p></div>' +
+        '<div class="grid cols3" style="margin-top:12px">' + cards + '</div>' +
+        '<div class="card black" style="margin-top:12px">' +
+        (s.stones.length ? '<table><thead><tr><th>貨</th>' + dealers.map(b => '<th>' + esc(b.name) + '</th>').join('') + '</tr></thead><tbody>' + rows + '</tbody></table>'
+          : '<p class="muted">倉庫沒貨。地道裡的販子聳聳肩。</p>') +
+        '</div>';
+    }
     const buyers = s.buyers.map((b, i) =>
       '<div class="card"><h3>' + esc(b.name) + ' <span class="sub">' + b.pref.name + '</span></h3>' +
       '<div class="tiny muted">出價基準 ' + (b.base * s.market).toFixed(2) + '×　對口的貨加 ' +
@@ -484,9 +503,21 @@
       '<p class="tiny muted" style="margin-top:8px">打贏，這座山從此姓你；打輸，就地終局。投降，戴著手銬下山。</p>';
   }
 
+  let raidPlaying = false;
   function render() {
     const s = S();
     header(); tabsBar();
+    if (!s.over && s.raid && !raidPlaying) {
+      raidPlaying = true;
+      closeModal();
+      RAID.play(s, choice => {
+        raidPlaying = false;
+        if (choice === 'fight') G.raidFight(); else G.raidSurrender();
+        if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+        render();
+      });
+      return;
+    }
     if (s.over) {
       if (s.overKind === 'warlord') {
         $('#view').innerHTML = '<div class="card" style="text-align:center;padding:60px;border-color:#7a6224">' +
@@ -511,7 +542,7 @@
         '<div class="alertbar' + (isArmy ? ' army' : '') + '"><span>' +
         (isArmy
           ? '🚁 大部隊在山下集結，這是最後一次選擇 — 上山與結束一天已被擋住。'
-          : '🚨 民兵在營地口等你回話 — 上山與結束一天被擋住了。缺錢的話，市場照常能賣料。') +
+          : '🚨 民兵封山 — 上山被擋。市場轉入地下黑市（半價收貨）。你可以「結束一天」躲著，但民兵每天會抄掉一個地下據點（剩 ' + (s.hideouts == null ? 3 : s.hideouts) + '/3），全被抄到他們就會摸上門。') +
         '</span><button class="btn sm danger" data-act="' + (isArmy ? 'army-open' : 'militia-open') + '">面對他們</button></div>');
     }
   }
@@ -665,6 +696,11 @@
         toast(r.ok ? '注射完成…他站起來的樣子不太一樣了' : r.msg, r.ok ? 'bad' : 'bad');
         render(); break;
       }
+      case 'sellb': {
+        const r = G.sellBlack(id, +el.dataset.b);
+        toast(r.ok ? '黑市成交 ' + money(r.price) : r.msg, r.ok ? 'gold' : 'bad');
+        render(); break;
+      }
       case 'militia-open': openModal(militiaModal()); break;
       case 'army-open': openModal(armyModal()); break;
       case 'militia-pay': { const r = G.militiaPay(); closeModal(); toast(r.ok ? '錢送出去了，事情壓下來了' : '…', 'bad'); render(); break; }
@@ -695,7 +731,7 @@
       case 'buysup': { const r = G.buySupply(id, +el.dataset.n); toast(r.ok ? '補給入庫' : r.msg, r.ok ? '' : 'bad'); render(); break; }
 
       case 'endday': {
-        if (s.pendingMilitia || s.pendingArmy) { toast('這一天結束不了 — 門口那群人還在等你回話。', 'bad'); break; }
+        if (s.pendingArmy) { toast('大部隊就在山下 — 這一天躲不掉了。', 'bad'); break; }
         const r = G.endDay();
         if (!r.ok) { toast(r.msg, 'bad'); break; }
         openModal('<h3>第 ' + (s.day - 1) + ' 天結算</h3>' +

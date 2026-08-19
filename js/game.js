@@ -46,6 +46,7 @@
       log: [],
       stats: { mined: 0, sold: 0, revenue: 0, bestSale: 0, days: 0, accidents: 0, deaths: 0 },
       heat: 0, warPath: 0, pendingMilitia: 0, pendingArmy: false,
+      hideouts: 3, raid: false,
       lastAuction: 0,
       over: null
     };
@@ -244,6 +245,22 @@
       notes.push(shock > 0 ? '📈 邊境開盤消息熱，玉價指數跳漲。' : '📉 買家縮手，玉價指數走跌。');
     }
     if (S.day % 2 === 0) rollBuyers();
+
+    // 封鎖期間躲著不見：民兵一天抄一個地下據點
+    if (S.pendingMilitia) {
+      S.hideouts = (S.hideouts == null ? 3 : S.hideouts) - 1;
+      let lost = '';
+      if (S.stones.length && Math.random() < 0.5) {
+        const st = S.stones.splice(Math.floor(Math.random() * S.stones.length), 1)[0];
+        lost = '，抄走了一顆 ' + st.kg + 'kg 的料';
+      }
+      if (S.hideouts > 0) {
+        notes.push('🚨 你躲著不見。民兵搜到你 ' + (3 - S.hideouts) + ' 號地下據點' + lost + ' — 藏身處只剩 ' + S.hideouts + ' 個。');
+      } else {
+        S.raid = true;
+        notes.push('🚨 最後一個地下據點的位置也被摸清了' + lost + '。今晚，睡得不會安穩。');
+      }
+    }
 
     // 命案後果：民兵動身了，天亮就到（到營地畫面會攔住你做選擇）
     if (S.heat) {
@@ -512,6 +529,7 @@
     S.rep = Math.max(0, S.rep - 15 * n);
     S.workers.forEach(w => { if (!w.mutant) w.morale = Math.max(0, w.morale - 20); });
     S.pendingMilitia = 0;
+    S.hideouts = 3;
     log('民兵收了 ' + money(fine) + '，把命案壓了下來。工人看你的眼神都變了。', 'bad');
     if (S.money < -120000 && !S.over) { S.over = '破產：債主上門，礦權被收回，隊伍就地解散。'; log('💀 ' + S.over, 'bad'); }
     save();
@@ -523,6 +541,7 @@
     if (!n) return { ok: false };
     if (!has('shotgun')) return { ok: false, msg: '沒有槍，拿什麼打？' };
     S.pendingMilitia = 0;
+    S.hideouts = 3;
     const mutants = S.workers.filter(w => w.mutant).length;
     const chance = 0.45 + mutants * 0.08;
     if (Math.random() < chance) {
@@ -571,6 +590,68 @@
     S.pendingArmy = false;
     S.overKind = 'jail';
     S.over = '你被銬上手銬帶下山。礦權沒收、隊伍解散，山裡的傳聞很快就沒人記得了。';
+    log('💀 ' + S.over, 'bad');
+    save();
+    return { ok: true };
+  }
+
+  /* ---------------- 地下黑市（封鎖期間） ---------------- */
+  const BLACK_NAMES = ['地道口的獨眼販子', '收黑貨的緬商', '不問來路的阿豪'];
+  function blackBuyers() {
+    if (S._blackDay !== S.day || !S._black) {
+      S._blackDay = S.day;
+      S._black = BLACK_NAMES.map(n => ({
+        name: n,
+        base: 0.5 + Math.random() * 0.18,
+        seed: Math.random(),
+        pref: { name: '什麼都收，不問來路', test: () => false, mult: 1 },
+        haggle: 0.2
+      }));
+    }
+    return S._black;
+  }
+
+  function sellBlack(stoneId, idx) {
+    const i = S.stones.findIndex(x => x.id === stoneId);
+    if (i < 0) return { ok: false, msg: '找不到料' };
+    const st = S.stones[i];
+    const b = blackBuyers()[idx];
+    const price = offerFor(st, b);
+    S.money += price;
+    S.stats.sold++; S.stats.revenue += price;
+    S.stones.splice(i, 1);
+    log('🕳 黑市出手：' + J.label(st) + ' 賣給' + b.name + ' → ' + money(price) + '（正常行情打了對折）', 'warn');
+    return { ok: true, price };
+  }
+
+  /* ---------------- 突襲夜結算 ---------------- */
+  function raidFight() {
+    if (!S.raid) return { ok: false };
+    S.raid = false;
+    const mutants = S.workers.filter(w => w.mutant).length;
+    const chance = 0.5 + mutants * 0.1;
+    if (Math.random() < chance) {
+      S.pendingMilitia = 0;
+      S.hideouts = 3;
+      S.overKind = 'warlord';
+      S.over = 'AK-47 的火舌壓過了整支突襲隊。天亮的時候，山下再沒有人敢接這個案子 — 這座山、這些地道，從此都姓你。';
+      log('🏴 血玉軍閥：' + S.over, 'bad');
+      save();
+      return { ok: true, win: true };
+    }
+    S.overKind = 'dead';
+    S.over = '突襲隊的火力壓了進來。你在自己的地下據點裡倒下，手裡還握著那把發燙的 AK。';
+    log('💀 ' + S.over, 'bad');
+    save();
+    return { ok: true, win: false };
+  }
+
+  function raidSurrender() {
+    if (!S.raid) return { ok: false };
+    S.raid = false;
+    S.pendingMilitia = 0;
+    S.overKind = 'jail';
+    S.over = '你把 AK 丟在地上，跟著突襲隊走出據點。身後是被翻得亂七八糟的貨架。';
     log('💀 ' + S.over, 'bad');
     save();
     return { ok: true };
@@ -709,6 +790,7 @@
     buyEquip, repairEquip, buySupply, candidates, hire, fire, train,
     buyoutSite, buyoutPrice, sleepInMine,
     injectSerum, militiaPay, militiaFight, armyFight, armySurrender,
+    blackBuyers, sellBlack, raidFight, raidSurrender,
     skillLabel, newWorker
   };
 })(window);
