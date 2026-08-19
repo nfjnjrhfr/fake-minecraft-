@@ -1,2 +1,56 @@
-# fake-minecraft-
-u8ujujujujujujujujujuujuujujujujuujujujujujjujjujujujuujjunjerivcfv dnds xdfbdehbhebhbdehbhbhrhbehebhderbhrvrdfgvfrfrevefvfegfhdevegdervgedryegehwrwehgerhwhrbhdbhdbdhbedbdiuheiuhur4ury4yeeyurheu4u44uyy56t4rueyrjdhjddbhdjebbhjejbhdwehjhejrhjedhjdjdndejndjnsdsjndsjndsjkkd.                                                                             67
+# 數學通道 · 嗶哩嗶哩觀看通道
+
+一個純前端的小網頁，把離線緩存裡那幾個數學片單集中成一個「通道」，
+直接用 B 站官方播放器內嵌播放，帶分 P 清單與觀看進度。
+
+![四個預設片單](https://img.shields.io/badge/預設片單-4-fb7299)
+
+## 內建片單
+
+| 片單 | 分 P |
+| --- | --- |
+| 【大师课】[中英字幕]数学天才 陶哲轩 Terence Tao 不再恐惧数学 学会新思维 | 12P |
+| 数学 · 四维之眼 | 4P |
+| 草履虫教学 · 草履虫都能听懂的微积分应用（PID 算法） | 3P |
+| 【加数】高中一课通 | 31P |
+
+## 怎麼用
+
+1. 直接用瀏覽器打開 `index.html`（雙擊即可，不需要伺服器、不需要安裝任何東西）。
+   想放到網路上就把整個資料夾丟上 GitHub Pages / 任何靜態空間。
+2. 第一次打開時每個片單都會標「未綁定 BV」——因為片單裡只有標題，沒有影片編號。
+   點進片單 → 按「貼上連結綁定」→ 把 B 站的網址（或 `BV` 號）貼進去 → 存檔，
+   之後就能在這個頁面裡直接看。
+3. 綁定的資訊、觀看進度、自訂片單都存在瀏覽器本機（localStorage），不會上傳。
+
+### 讓綁定變成預設值
+
+在頁尾按「匯出片單」會把目前的片單 JSON 複製到剪貼簿，
+貼進 `assets/data.js` 的 `collections` 之後，換一台裝置或清掉瀏覽器資料也還在。
+`assets/data.js` 最上面有每個欄位的說明。
+
+## 功能
+
+- 首頁卡片牆：封面、分 P 數、已看進度條、「繼續觀看」
+- 播放頁：官方 iframe 播放器、分 P 清單、上一 P / 下一 P（← → 方向鍵也可以）、標記已看、在 B 站開啟
+- 搜尋片單與分 P 標題
+- 設定：彈幕開關、自動播放、寬屏、按「下一 P」時自動把目前這集記成已看
+- 匯出 / 匯入片單 JSON、一鍵重置本機資料
+- 深色 / 淺色跟隨系統，手機版面自適應
+
+## 已知限制
+
+- 播放器是 B 站官方的跨網域 iframe，網頁沒辦法知道影片何時播完，
+  所以沒有真正的「播完自動跳下一 P」，要自己按「下一 P ›」。
+- 少數影片（番劇、付費課程、UP 主關閉了外站播放）不允許站外內嵌，
+  這種情況播放器會顯示錯誤，用「在 B 站開啟」看即可。
+- 大會員限定內容、需要登入的內容一樣受 B 站規則限制，這個頁面不會、也不能繞過。
+
+## 檔案
+
+```
+index.html        頁面骨架與對話框
+assets/style.css  樣式（深/淺色）
+assets/app.js     路由、播放器、進度、匯出入
+assets/data.js    預設片單資料 ← 想改片單改這裡
+```

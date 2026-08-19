@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>數學通道 · 嗶哩嗶哩</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📺</text></svg>">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="#/">
+    <span class="brand-logo">📺</span>
+    <span class="brand-text">數學通道<em>bilibili</em></span>
+  </a>
+  <div class="search-wrap">
+    <input id="search" type="search" placeholder="搜尋片單或分 P…" autocomplete="off">
+  </div>
+  <div class="topbar-actions">
+    <button class="btn ghost" id="btn-add">＋ 新增</button>
+    <button class="btn ghost" id="btn-settings" title="設定">⚙</button>
+  </div>
+</header>
+
+<main id="view"></main>
+
+<footer class="footer">
+  <span id="stats"></span>
+  <span class="dot">·</span>
+  <button class="linklike" id="btn-export">匯出片單</button>
+  <span class="dot">·</span>
+  <button class="linklike" id="btn-import">匯入片單</button>
+  <span class="dot">·</span>
+  <button class="linklike danger" id="btn-reset">重置本機資料</button>
+</footer>
+
+<!-- 綁定 / 編輯片單 -->
+<dialog id="dlg-edit">
+  <form method="dialog" class="dlg-body" id="form-edit">
+    <h2 id="edit-title">綁定影片</h2>
+    <label>片單名稱
+      <input name="title" required placeholder="例如：四维之眼">
+    </label>
+    <label>B 站連結或 BV 號
+      <input name="link" placeholder="https://www.bilibili.com/video/BV1... 或 BV1...">
+      <small>支援貼上完整網址、BV 號、av 號；網址帶 <code>?p=</code> 也會被讀取。</small>
+    </label>
+    <div class="row">
+      <label>分 P 數量
+        <input name="parts" type="number" min="1" max="500" value="1">
+      </label>
+      <label>標籤
+        <input name="tag" placeholder="例如：高中数学">
+      </label>
+    </div>
+    <label>封面網址（選填）
+      <input name="cover" placeholder="留空自動生成">
+    </label>
+    <p class="err" id="edit-err" hidden></p>
+    <menu>
+      <button type="button" class="btn ghost danger" id="edit-delete" hidden>刪除</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn ghost" id="edit-cancel">取消</button>
+      <button type="submit" class="btn primary">儲存</button>
+    </menu>
+  </form>
+</dialog>
+
+<!-- 設定 -->
+<dialog id="dlg-settings">
+  <div class="dlg-body">
+    <h2>播放設定</h2>
+    <label class="switch"><input type="checkbox" id="opt-danmaku"> 顯示彈幕</label>
+    <label class="switch"><input type="checkbox" id="opt-autoplay"> 自動播放</label>
+    <label class="switch"><input type="checkbox" id="opt-wide"> 寬屏模式</label>
+    <label class="switch"><input type="checkbox" id="opt-autonext"> 播完自動下一 P（需手動確認，見說明）</label>
+    <p class="hint">播放器由 B 站官方 iframe 提供，跨網域限制下網頁無法得知影片何時播完，
+      「自動下一 P」只會在你按下播放器下方的「下一 P」時記住位置。</p>
+    <menu><span class="spacer"></span><button class="btn primary" id="settings-close">完成</button></menu>
+  </div>
+</dialog>
+
+<!-- 匯入 -->
+<dialog id="dlg-import">
+  <form method="dialog" class="dlg-body" id="form-import">
+    <h2>匯入片單 JSON</h2>
+    <textarea name="json" rows="10" placeholder='{"collections":[...]}'></textarea>
+    <p class="err" id="import-err" hidden></p>
+    <menu><span class="spacer"></span>
+      <button type="button" class="btn ghost" id="import-cancel">取消</button>
+      <button type="submit" class="btn primary">匯入</button>
+    </menu>
+  </form>
+</dialog>
+
+<script src="assets/data.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
