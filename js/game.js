@@ -44,7 +44,8 @@
       market: 1.0,
       buyers: [],
       log: [],
-      stats: { mined: 0, sold: 0, revenue: 0, bestSale: 0, days: 0, accidents: 0 },
+      stats: { mined: 0, sold: 0, revenue: 0, bestSale: 0, days: 0, accidents: 0, deaths: 0 },
+      heat: 0,
       lastAuction: 0,
       over: null
     };
@@ -243,6 +244,16 @@
       notes.push(shock > 0 ? '📈 邊境開盤消息熱，玉價指數跳漲。' : '📉 買家縮手，玉價指數走跌。');
     }
     if (S.day % 2 === 0) rollBuyers();
+
+    // 命案後果：山下傳開了
+    if (S.heat) {
+      const fine = 250000 * S.heat;
+      S.money -= fine;
+      S.rep = Math.max(0, S.rep - 15 * S.heat);
+      S.workers.forEach(w => w.morale = Math.max(0, w.morale - 20));
+      notes.push('⚠️ 坑裡開槍打死人的事傳到山下。民兵半夜上門「處理」— 掏了 ' + money(fine) + ' 才壓下來。工人看你的眼神都變了。');
+      S.heat = 0;
+    }
 
     // 天氣
     S.weather = rollWeather();

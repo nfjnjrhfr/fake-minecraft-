@@ -435,7 +435,7 @@
     return '<div class="grid cols2">' +
       '<div class="card"><h3>經營數據</h3><table><tbody>' +
       [['經營天數', s.stats.days], ['挖出原石', s.stats.mined + ' 顆'], ['成交', s.stats.sold + ' 件'],
-       ['總營收', money(s.stats.revenue)], ['單筆最高', money(s.stats.bestSale)], ['工安事故', s.stats.accidents + ' 次'],
+       ['總營收', money(s.stats.revenue)], ['單筆最高', money(s.stats.bestSale)], ['工安事故', s.stats.accidents + ' 次'], ['命案', (s.stats.deaths || 0) + ' 人'],
        ['名聲', s.rep], ['現金', money(s.money)]]
         .map(r => '<tr><td class="muted">' + r[0] + '</td><td><b>' + r[1] + '</b></td></tr>').join('') +
       '</tbody></table></div>' +
