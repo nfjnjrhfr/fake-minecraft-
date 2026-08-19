@@ -464,6 +464,32 @@
     $('#view').innerHTML = v();
   }
 
+  /* ---------------- 全螢幕 ---------------- */
+  function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+  function goFullscreen() {
+    if (isFullscreen()) {
+      const ex = document.exitFullscreen || document.webkitExitFullscreen;
+      if (ex) { try { const r = ex.call(document); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+      return;
+    }
+    const el = document.documentElement;
+    const fs = el.requestFullscreen || el.webkitRequestFullscreen;
+    const hint = () => toast('瀏覽器擋住了全螢幕。iPad 可以用 Safari 的 分享 → 加入主畫面，從主畫面圖示打開就是全螢幕。', 'bad');
+    if (!fs) { hint(); return; }
+    try {
+      const r = fs.call(el);
+      if (r && r.catch) r.catch(hint);
+    } catch (e) { hint(); }
+  }
+  function fsLabel() {
+    const btn = $('#fsBtn');
+    if (btn) btn.textContent = isFullscreen() ? '🡼 離開全螢幕' : '⛶ 全螢幕';
+  }
+  document.addEventListener('fullscreenchange', fsLabel);
+  document.addEventListener('webkitfullscreenchange', fsLabel);
+
   /* ---------------- 固定畫面 ---------------- */
   let lockGuard = null;
   function setLock(on) {
@@ -600,6 +626,7 @@
           '<button class="btn primary" data-act="close" style="margin-top:12px">開工</button>');
         render(); break;
       }
+      case 'fullscreen': goFullscreen(); break;
       case 'lockscreen':
         toggleLock();
         toast(document.body.classList.contains('locked')
@@ -650,5 +677,5 @@
   }
   render();
   try { if (localStorage.getItem('kaiyu-lock')) setLock(true); } catch (e) {}
-  global.UI = { render, toast, setLock, toggleLock };
+  global.UI = { render, toast, setLock, toggleLock, goFullscreen };
 })(window);

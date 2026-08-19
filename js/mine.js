@@ -368,6 +368,7 @@
           '<button data-k="G">🪵坑木</button>' +
           '<button data-k="M">🗺地圖</button>' +
           '<button data-k="L">🔒固定</button>' +
+          '<button data-k="FS">⛶全螢幕</button>' +
           '<button data-k="Q" class="quit">🎒收工</button>' +
         '</div>' +
       '</div>';
@@ -620,6 +621,7 @@
         else if (k === 'G') say(placeTimber(S, sess).msg);
         else if (k === 'M') showMap = !showMap;
         else if (k === 'L') { if (global.UI && global.UI.toggleLock) { global.UI.toggleLock(); say('切換固定畫面'); } }
+        else if (k === 'FS') { if (global.UI && global.UI.goFullscreen) global.UI.goFullscreen(); }
         else if (k === 'Q') quit();
       });
     }

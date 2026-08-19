@@ -2,6 +2,10 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="開玉">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>開玉 — 上山採玉模擬</title>
 <style>
@@ -233,6 +237,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
     <div id="stats" class="stats"></div>
     <div class="topbtns">
       <button class="btn primary" data-act="endday">結束這一天 ⏭</button>
+      <button class="btn ghost" data-act="fullscreen" id="fsBtn">⛶ 全螢幕</button>
       <button class="btn ghost" data-act="lockscreen" id="lockBtn">🔓 固定畫面</button>
       <button class="btn ghost" data-act="save">存檔</button>
       <button class="btn ghost danger" data-act="reset">重新開始</button>
@@ -1036,6 +1041,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
           '<button data-k="G">🪵坑木</button>' +
           '<button data-k="M">🗺地圖</button>' +
           '<button data-k="L">🔒固定</button>' +
+          '<button data-k="FS">⛶全螢幕</button>' +
           '<button data-k="Q" class="quit">🎒收工</button>' +
         '</div>' +
       '</div>';
@@ -1288,6 +1294,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
         else if (k === 'G') say(placeTimber(S, sess).msg);
         else if (k === 'M') showMap = !showMap;
         else if (k === 'L') { if (global.UI && global.UI.toggleLock) { global.UI.toggleLock(); say('切換固定畫面'); } }
+        else if (k === 'FS') { if (global.UI && global.UI.goFullscreen) global.UI.goFullscreen(); }
         else if (k === 'Q') quit();
       });
     }
@@ -2963,6 +2970,32 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
     $('#view').innerHTML = v();
   }
 
+  /* ---------------- 全螢幕 ---------------- */
+  function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+  function goFullscreen() {
+    if (isFullscreen()) {
+      const ex = document.exitFullscreen || document.webkitExitFullscreen;
+      if (ex) { try { const r = ex.call(document); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+      return;
+    }
+    const el = document.documentElement;
+    const fs = el.requestFullscreen || el.webkitRequestFullscreen;
+    const hint = () => toast('瀏覽器擋住了全螢幕。iPad 可以用 Safari 的 分享 → 加入主畫面，從主畫面圖示打開就是全螢幕。', 'bad');
+    if (!fs) { hint(); return; }
+    try {
+      const r = fs.call(el);
+      if (r && r.catch) r.catch(hint);
+    } catch (e) { hint(); }
+  }
+  function fsLabel() {
+    const btn = $('#fsBtn');
+    if (btn) btn.textContent = isFullscreen() ? '🡼 離開全螢幕' : '⛶ 全螢幕';
+  }
+  document.addEventListener('fullscreenchange', fsLabel);
+  document.addEventListener('webkitfullscreenchange', fsLabel);
+
   /* ---------------- 固定畫面 ---------------- */
   let lockGuard = null;
   function setLock(on) {
@@ -3099,6 +3132,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
           '<button class="btn primary" data-act="close" style="margin-top:12px">開工</button>');
         render(); break;
       }
+      case 'fullscreen': goFullscreen(); break;
       case 'lockscreen':
         toggleLock();
         toast(document.body.classList.contains('locked')
@@ -3149,7 +3183,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
   }
   render();
   try { if (localStorage.getItem('kaiyu-lock')) setLock(true); } catch (e) {}
-  global.UI = { render, toast, setLock, toggleLock };
+  global.UI = { render, toast, setLock, toggleLock, goFullscreen };
 })(window);
 
 </script>
