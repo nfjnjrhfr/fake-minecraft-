@@ -210,3 +210,6 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
 /* ---- 隊友狀態列 ---- */
 .fp-mate{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:1px 0}
 .fp-mate span:last-child{color:#8b9aa9}
+
+/* ---- 變異工人 ---- */
+.card.mutant{border-color:#4a6b32;box-shadow:inset 0 0 26px rgba(120,180,80,.08)}

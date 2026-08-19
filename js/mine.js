@@ -468,8 +468,8 @@
         if (npc.state === 'flee') { fleeStep(npc, dt); continue; }
         const w = worker(S, npc.wid);
         if (!w) continue;
-        // 心灰意冷的人可能趁亂抓料就跑
-        if (sess.stones.length && w.morale < 20 && Math.random() < 0.0005) {
+        // 心灰意冷的人可能趁亂抓料就跑（變異者絕對服從）
+        if (!w.mutant && sess.stones.length && w.morale < 20 && Math.random() < 0.0005) {
           const n2 = defect(npc.wid, true, npc);
           if (n2) {
             const m = '💢 ' + n2.wname + ' 趁沒人注意' + (n2.stolen ? '抓了一顆 ' + n2.stolen.kg + 'kg 的料' : '') + '往洞口跑！';
@@ -523,15 +523,16 @@
           const careful = hasNode && lv.hp[ti] < 35;      // 快見料就改鑿子小心敲
           const T = TYPE[lv.map[ti]];
           let dmg = (careful ? 13 : 24) * (1 + (w.skill.mine || 0) * 0.05) * S.weather.work / T.hard;
+          if (w.mutant) dmg *= 1.8;
           if (lv.wet[ti] && !sess.pumpOn) dmg *= 0.4;
           lv.hp[ti] -= dmg * (0.85 + Math.random() * 0.3);
-          w.stam -= Math.max(2, 4 - (w.skill.mine || 0) * 0.1);
+          w.stam -= (w.mutant ? 0.5 : 1) * Math.max(2, 4 - (w.skill.mine || 0) * 0.1);
           sess.actions++;
           if (lv.hp[ti] <= 0) {
             lv.map[ti] = OPEN; sess.dugCount++;
             const st = lv.nodes[ti];
             if (st) {
-              const add = (careful ? 0.05 : 0.22) * (0.5 + Math.random() * 0.8);
+              const add = (careful ? 0.05 : (w.mutant ? 0.38 : 0.22)) * (0.5 + Math.random() * 0.8);
               J.addMiningCrack(st, add);
               st.note = add <= 0.05 ? '取料乾淨' : '';
               sess.stones.push(st);
@@ -740,28 +741,33 @@
       npc.ang = Math.atan2(dy, dx); npc.phase += sp * dt * 3.5;
     }
 
-    /* ---- 準星裡的逃跑者（有視線才打得到） ---- */
-    function thiefInSight() {
+    /* ---- 準星鎖定：逃跑者好瞄，自己人要瞄得很準才算數 ---- */
+    function npcInSight() {
       const p = sess.player, lv = sess.lv;
-      let best = null, bd = 14;
+      let best = null, bd = 99;
       for (const n of sess.npcs) {
-        if (n.state !== 'flee') continue;
+        const flee = n.state === 'flee';
+        const maxD = flee ? 14 : 8, cone = flee ? 0.16 : 0.09;
         const dx = n.x - p.x, dy = n.y - p.y;
         const d = Math.hypot(dx, dy);
-        if (d > bd || d < 0.3) continue;
+        if (d > maxD || d < 0.3) continue;
         let da = Math.atan2(dy, dx) - p.ang;
         while (da > Math.PI) da -= 2 * Math.PI;
         while (da < -Math.PI) da += 2 * Math.PI;
-        if (Math.abs(da) > 0.16) continue;
+        if (Math.abs(da) > cone) continue;
         let blocked = false;
         for (let t = 0.3; t < d; t += 0.25) {
           const cx = Math.floor(p.x + dx / d * t), cy = Math.floor(p.y + dy / d * t);
           if (lv.map[idx(cx, cy)] !== OPEN) { blocked = true; break; }
         }
-        if (!blocked) { best = n; bd = d; }
+        if (blocked) continue;
+        // 逃跑者優先鎖定
+        const score = (flee ? 0 : 50) + d;
+        if (score < bd) { bd = score; best = n; }
       }
       return best;
     }
+    function thiefInSight() { const n = npcInSight(); return n && n.state === 'flee' ? n : null; }
 
     /* ---- 擊斃：命案的代價全部到帳 ---- */
     function shootThief(npc) {
@@ -794,12 +800,50 @@
       hud();
     }
 
-    /* ---- 開槍：準星裡有逃跑者就是擊斃，否則對天威嚇 ---- */
+    /* ---- 射殺自己人：謀殺，或處理掉失控的實驗品 ---- */
+    function shootWorker(npc) {
+      const w = worker(S, npc.wid);
+      if (!w) return;
+      S.equip.shotgun.dur = Math.max(0, S.equip.shotgun.dur - 3);
+      flash = 0.5;
+      sess.npcs = sess.npcs.filter(n => n !== npc);
+      sess.team = sess.team.filter(x => x !== npc.wid);
+      S.workers = S.workers.filter(x => x.id !== npc.wid);
+      S.stats.deaths = (S.stats.deaths || 0) + 1;
+      const lines = [];
+      if (w.mutant) {
+        S.morale = Math.max(0, S.morale - 5);
+        lines.push('🔫 你放倒了 ' + w.name + '。實驗品不會留下屍體以外的麻煩。');
+      } else {
+        S.heat = (S.heat || 0) + 2;
+        S.rep = Math.max(0, S.rep - 30);
+        S.morale = Math.max(0, S.morale - 35);
+        lines.push('🔫 你朝自己的工人 ' + w.name + ' 開了槍。坑道裡死一般的安靜。');
+        sess.team.slice().forEach(id => {
+          const o = worker(S, id);
+          if (!o || id === sess.active || o.mutant) return;
+          o.morale = Math.max(0, o.morale - 50);
+          if (Math.random() < 0.8) {
+            const d2 = defect(id, false, { x: npc.x, y: npc.y });
+            if (d2) lines.push('😱 ' + d2.wname + ' 尖叫著逃出坑道。');
+          }
+        });
+      }
+      lines.forEach((l, i) => { sess.log.push(l); global.GAME.log(l, 'bad'); if (i === 0) say(l); });
+      for (let i = 0; i < 40; i++) particles.push({
+        x: cv.width / 2, y: cv.height / 2,
+        vx: (Math.random() - 0.5) * 500, vy: (Math.random() - 0.7) * 400,
+        life: 0.5 + Math.random() * 0.5, max: 1, size: 1 + Math.random() * 3, c: [180, 40, 40]
+      });
+      hud();
+    }
+
+    /* ---- 開槍：準星裡有人就是擊斃，否則對天威嚇 ---- */
     function menace() {
       if (night) return;
       if (!hasWorking(S, 'shotgun')) { say('你沒有槍。'); return; }
-      const thief = thiefInSight();
-      if (thief) { shootThief(thief); return; }
+      const tgt2 = npcInSight();
+      if (tgt2) { if (tgt2.state === 'flee') shootThief(tgt2); else shootWorker(tgt2); return; }
       S.equip.shotgun.dur = Math.max(0, S.equip.shotgun.dur - 2);
       flash = 0.35;
       sess.fearT = 45;
@@ -808,7 +852,7 @@
       const lines = [];
       sess.team.slice().forEach(id => {
         const w = worker(S, id);
-        if (!w || id === sess.active) return;
+        if (!w || id === sess.active || w.mutant) return;
         w.morale = Math.max(0, w.morale - 15);
         if (w.morale < 25 && Math.random() < 0.5) {
           const npc = defect(id, true, sess.player);
@@ -1017,8 +1061,8 @@
         const a = Math.max(0, Math.min(1, 1 - tY / lightR));
         if (a <= 0.04) continue;                              // 黑暗中看不見
         const h = Math.min(RH / tY, RH * 1.15);
-        drawMiner(offCtx, sx, horizon, h, n, a);
-        labels.push({ sx, top: horizon - h * 0.42, name: w ? w.name : (n.wname || '?'), a, state: n.state, tY });
+        drawMiner(offCtx, sx, horizon, h * (w && w.mutant ? 1.28 : 1), n, a, w && w.mutant);
+        labels.push({ sx, top: horizon - h * 0.42, name: w ? w.name : (n.wname || '?'), a, state: n.state, tY, mut: !!(w && w.mutant) });
       }
 
       ctx.drawImage(off, 0, 0, RW, RH, 0, 0, cv.width, cv.height);
@@ -1031,7 +1075,7 @@
         ctx.font = '600 13px "Noto Sans TC",sans-serif';
         ctx.textAlign = 'center';
         ctx.fillStyle = '#0009';
-        const icon = L.state === 'flee' ? '🏃💎' : sess.fearT > 0 ? '😨' : L.state === 'dig' ? '⛏' : L.state === 'walk' ? '👣' : L.state === 'rest' ? '😮‍💨' : '·';
+        const icon = L.state === 'flee' ? '🏃💎' : L.mut ? '🧟' : sess.fearT > 0 ? '😨' : L.state === 'dig' ? '⛏' : L.state === 'walk' ? '👣' : L.state === 'rest' ? '😮‍💨' : '·';
         const txt = icon + ' ' + L.name;
         const tx2 = L.sx * kx, ty2 = L.top * ky;
         ctx.fillRect(tx2 - ctx.measureText(txt).width / 2 - 5, ty2 - 13, ctx.measureText(txt).width + 10, 17);
@@ -1043,7 +1087,7 @@
     }
 
     // 迷你礦工人形：頭盔、身體、走路擺腿、挖掘揮臂
-    function drawMiner(c2, sx, horizon, h, n, a) {
+    function drawMiner(c2, sx, horizon, h, n, a, mut) {
       const fy = horizon + h * 0.5;             // 腳踩地
       const hb = h * 0.58, wb = hb * 0.3;
       c2.save();
@@ -1057,10 +1101,10 @@
       c2.moveTo(sx, fy - hb * 0.45); c2.lineTo(sx + walk * wb * 0.5, fy);
       c2.stroke();
       // 身體（工作背心）
-      c2.fillStyle = n.state === 'rest' ? '#4a4438' : '#33584a';
+      c2.fillStyle = mut ? '#4a6b32' : n.state === 'rest' ? '#4a4438' : '#33584a';
       c2.fillRect(sx - wb / 2, fy - hb * 0.95, wb, hb * 0.52);
       // 頭 + 安全帽
-      c2.fillStyle = '#a5745a';
+      c2.fillStyle = mut ? '#7da05e' : '#a5745a';
       c2.beginPath(); c2.arc(sx, fy - hb * 1.04, hb * 0.12, 0, 7); c2.fill();
       c2.fillStyle = '#e8c46a';
       c2.beginPath(); c2.arc(sx, fy - hb * 1.07, hb * 0.13, Math.PI, 0); c2.fill();
@@ -1253,8 +1297,9 @@
 
       // 準心與目標資訊
       const tgt = aim(sess, 2.0);
-      const marked = hasWorking(S, 'shotgun') && thiefInSight();
-      ctx.strokeStyle = marked ? 'rgba(255,70,70,.95)' : tgt ? 'rgba(255,220,120,.9)' : 'rgba(255,255,255,.35)';
+      const aimed = hasWorking(S, 'shotgun') ? npcInSight() : null;
+      const marked = aimed && aimed.state === 'flee';
+      ctx.strokeStyle = marked ? 'rgba(255,70,70,.95)' : aimed ? 'rgba(255,140,60,.9)' : tgt ? 'rgba(255,220,120,.9)' : 'rgba(255,255,255,.35)';
       ctx.lineWidth = 2;
       const cxp = cv.width / 2, cyp = cv.height / 2;
       ctx.beginPath();
@@ -1263,10 +1308,18 @@
       ctx.moveTo(cxp, cyp - 10); ctx.lineTo(cxp, cyp - 3);
       ctx.moveTo(cxp, cyp + 3); ctx.lineTo(cxp, cyp + 10);
       ctx.stroke();
-      if (marked) {
-        ctx.fillStyle = 'rgba(255,90,90,.95)';
+      if (aimed) {
+        const aw = worker(S, aimed.wid);
         ctx.font = '600 14px "Noto Sans TC",sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText('瞄準中 — [X] 開槍，或放他走', cxp, cyp + 34);
+        if (marked) {
+          ctx.fillStyle = 'rgba(255,90,90,.95)';
+          ctx.fillText('瞄準逃跑者 — [X] 開槍，或放他走', cxp, cyp + 34);
+        } else {
+          ctx.fillStyle = 'rgba(255,150,70,.95)';
+          ctx.fillText(aw && aw.mutant
+            ? '瞄準 ' + (aw ? aw.name : '') + '（實驗品）— [X] 處理掉'
+            : '瞄準自己人 ' + (aw ? aw.name : '') + ' — [X] 開槍（這是謀殺）', cxp, cyp + 34);
+        }
         ctx.textAlign = 'left';
       }
 

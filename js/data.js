@@ -182,7 +182,8 @@
     dynamite: { name: '炸藥', unit: '條', price: 1400, icon: '🧨' },
     wood: { name: '坑木', unit: '組', price: 600, icon: '🪵' },
     food: { name: '糧食', unit: '份', price: 130, icon: '🍚' },
-    medicine: { name: '藥品', unit: '份', price: 850, icon: '💊' }
+    medicine: { name: '藥品', unit: '份', price: 850, icon: '💊' },
+    serum: { name: '變異血清（黑市）', unit: '劑', price: 80000, icon: '🧪' }
   };
 
   /* ---------- 工人 ---------- */

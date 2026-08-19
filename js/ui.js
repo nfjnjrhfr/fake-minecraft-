@@ -367,9 +367,11 @@
     const s = S();
     const card = (w, hireMode) => {
       const cost = w.wage * 5;
-      return '<div class="card"><div class="spread"><h3>' + esc(w.name) +
+      return '<div class="card' + (w.mutant ? ' mutant' : '') + '"><div class="spread"><h3>' + esc(w.name) +
+        (w.mutant ? ' 🧟' : '') +
         ' <span class="sub">' + ROLES[w.role].name + '　Lv' + w.level + '</span></h3>' +
-        '<b class="est">' + money(w.wage) + '/天</b></div>' +
+        '<b class="est">' + (w.mutant ? '不支薪' : money(w.wage) + '/天') + '</b></div>' +
+        (w.mutant ? '<div class="tiny" style="color:#9fd06a">絕對服從．怪力（挖掘 ×1.8）．蠻力傷玉．暴食．剩 ' + w.mutDays + ' 天</div>' : '') +
         '<div class="tiny muted">' + ROLES[w.role].desc + '</div>' +
         '<div class="kv tiny" style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:8px 0">' +
         ['mine', 'blast', 'mech', 'eye'].map(k =>
@@ -380,8 +382,12 @@
         '<div class="row" style="margin-top:8px">' +
         (hireMode
           ? '<button class="btn primary" data-act="hire" data-id="' + w.id + '">僱用（簽約金 ' + money(cost) + '）</button>'
-          : '<button class="btn" data-act="train" data-id="' + w.id + '">訓練 ' + money(8000 + w.level * 4000) + '</button>' +
-            '<button class="btn danger sm" data-act="fire" data-id="' + w.id + '">辭退</button>') +
+          : (w.mutant
+              ? '<span class="tiny muted">他已經聽不懂訓練或辭退了。</span>'
+              : '<button class="btn" data-act="train" data-id="' + w.id + '">訓練 ' + money(8000 + w.level * 4000) + '</button>' +
+                '<button class="btn danger sm" data-act="fire" data-id="' + w.id + '">辭退</button>' +
+                '<button class="btn danger sm" data-act="serum" data-id="' + w.id + '"' +
+                ((s.supply.serum || 0) < 1 ? ' disabled title="沒有血清"' : '') + '>🧪 血清（存 ' + (s.supply.serum || 0) + '）</button>')) +
         '</div></div>';
     };
     return '<h3 style="letter-spacing:2px">我的隊伍（每天發薪 ' +
@@ -450,10 +456,46 @@
   }
 
   /* ---------------- 主渲染 ---------------- */
+  function militiaModal() {
+    const s = S();
+    const n = s.pendingMilitia;
+    const fine = 250000 * n;
+    const mutants = s.workers.filter(w => w.mutant).length;
+    const chance = Math.round((0.45 + mutants * 0.08) * 100);
+    return '<h3>🚨 民兵上門</h3>' +
+      '<p class="tiny">帶頭的把槍托在桌上敲了敲：「山裡死了 ' + n + ' 個人。你知道規矩。」</p>' +
+      '<div class="row" style="margin-top:14px">' +
+      '<button class="btn gold" data-act="militia-pay">掏錢壓下來（' + money(fine) + '）</button>' +
+      '<button class="btn danger" data-act="militia-fight"' + (G.has('shotgun') ? '' : ' disabled title="沒有槍"') + '>開打（勝率約 ' + chance + '%' + (mutants ? '，變異工人助陣' : '') + '）</button>' +
+      '</div>' +
+      '<p class="tiny muted" style="margin-top:8px">開打贏了不用繳錢，但你就正式跟山下翻臉了 — 打贏兩次，來的就不會只是民兵。輸了罰金加倍、全隊掛彩。</p>';
+  }
+
+  function armyModal() {
+    const s = S();
+    const mutants = s.workers.filter(w => w.mutant).length;
+    const chance = Math.round((0.25 + mutants * 0.12) * 100);
+    return '<h3>🚁 大部隊上山了</h3>' +
+      '<p class="tiny">凌晨，山下傳來引擎聲 — 警察、民兵、還有卡車。這次他們不是來收錢的。</p>' +
+      '<div class="row" style="margin-top:14px">' +
+      '<button class="btn danger" data-act="army-fight">決一死戰（勝率約 ' + chance + '%' + (mutants ? '，' + mutants + ' 個變異工人壓陣' : '') + '）</button>' +
+      '<button class="btn" data-act="army-surrender">放下槍投降</button>' +
+      '</div>' +
+      '<p class="tiny muted" style="margin-top:8px">打贏，這座山從此姓你；打輸，就地終局。投降，戴著手銬下山。</p>';
+  }
+
   function render() {
     const s = S();
     header(); tabsBar();
     if (s.over) {
+      if (s.overKind === 'warlord') {
+        $('#view').innerHTML = '<div class="card" style="text-align:center;padding:60px;border-color:#7a6224">' +
+          '<div class="big" style="color:var(--gold)">🏴 血玉軍閥</div><p>' + esc(s.over) + '</p>' +
+          '<p class="muted">經營 ' + s.stats.days + ' 天　總營收 ' + money(s.stats.revenue) + '　命喪此山 ' + (s.stats.deaths || 0) + ' 人</p>' +
+          '<p class="tiny muted">這是一種結局，但大概不是好的那種。</p>' +
+          '<button class="btn primary" data-act="reset">再開一局</button></div>';
+        return;
+      }
       $('#view').innerHTML = '<div class="card" style="text-align:center;padding:60px">' +
         '<div class="big" style="color:var(--red)">遊戲結束</div><p>' + esc(s.over) + '</p>' +
         '<p class="muted">經營 ' + s.stats.days + ' 天，總營收 ' + money(s.stats.revenue) + '</p>' +
@@ -462,6 +504,8 @@
     }
     const v = { camp: viewCamp, mine: viewMine, shop: viewShop, market: viewMarket, crew: viewCrew, store: viewStore, log: viewLog }[tab];
     $('#view').innerHTML = v();
+    if (s.pendingArmy) openModal(armyModal());
+    else if (s.pendingMilitia) openModal(militiaModal());
   }
 
   /* ---------------- 全螢幕 ---------------- */
@@ -606,6 +650,28 @@
           '<button class="btn primary" data-act="close" style="margin-top:12px">好</button>');
         render(); break;
       }
+
+      case 'serum': {
+        const r = G.injectSerum(id);
+        toast(r.ok ? '注射完成…他站起來的樣子不太一樣了' : r.msg, r.ok ? 'bad' : 'bad');
+        render(); break;
+      }
+      case 'militia-pay': { const r = G.militiaPay(); closeModal(); toast(r.ok ? '錢送出去了，事情壓下來了' : '…', 'bad'); render(); break; }
+      case 'militia-fight': {
+        const r = G.militiaFight();
+        closeModal();
+        if (!r.ok) { toast(r.msg, 'bad'); render(); break; }
+        openModal(r.win
+          ? '<h3>🔥 打贏了</h3><p class="tiny">民兵倒在營地口。' + (r.army ? '但山下已經在集結 — 下一批不會這麼好打。' : '短時間內不會有人再上來。') + '</p><button class="btn primary" data-act="close">繼續</button>'
+          : '<h3>💥 打輸了</h3><p class="tiny">你們被按在地上。罰金加倍、全隊掛彩，休養去吧。</p><button class="btn primary" data-act="close">繼續</button>');
+        render(); break;
+      }
+      case 'army-fight': {
+        const r = G.armyFight();
+        closeModal(); render();
+        break;
+      }
+      case 'army-surrender': { G.armySurrender(); closeModal(); render(); break; }
 
       case 'hire': { const r = G.hire(id); toast(r.ok ? '簽下了' : r.msg, r.ok ? '' : 'bad'); render(); break; }
       case 'fire': { G.fire(id); render(); break; }

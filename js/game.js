@@ -45,7 +45,7 @@
       buyers: [],
       log: [],
       stats: { mined: 0, sold: 0, revenue: 0, bestSale: 0, days: 0, accidents: 0, deaths: 0 },
-      heat: 0,
+      heat: 0, warPath: 0, pendingMilitia: 0, pendingArmy: false,
       lastAuction: 0,
       over: null
     };
@@ -187,7 +187,7 @@
 
     // 工資
     let wages = 0;
-    S.workers.forEach(w => { wages += w.injury > 0 ? Math.round(w.wage * 0.5) : w.wage; });
+    S.workers.forEach(w => { if (w.mutant) return; wages += w.injury > 0 ? Math.round(w.wage * 0.5) : w.wage; });
     S.money -= wages;
     notes.push('發工資 ' + money(wages));
     if (S.money < 0) {
@@ -197,7 +197,7 @@
     }
 
     // 糧食
-    let need = S.workers.length;
+    let need = S.workers.length + S.workers.filter(w => w.mutant).length * 4;
     if (has('stove')) need = Math.ceil(need * 0.8);
     for (const id in S.equip) {
       const def = EQUIP[id];
@@ -245,15 +245,25 @@
     }
     if (S.day % 2 === 0) rollBuyers();
 
-    // 命案後果：山下傳開了
+    // 命案後果：民兵動身了，天亮就到（到營地畫面會攔住你做選擇）
     if (S.heat) {
-      const fine = 250000 * S.heat;
-      S.money -= fine;
-      S.rep = Math.max(0, S.rep - 15 * S.heat);
-      S.workers.forEach(w => w.morale = Math.max(0, w.morale - 20));
-      notes.push('⚠️ 坑裡開槍打死人的事傳到山下。民兵半夜上門「處理」— 掏了 ' + money(fine) + ' 才壓下來。工人看你的眼神都變了。');
+      S.pendingMilitia = (S.pendingMilitia || 0) + S.heat;
       S.heat = 0;
+      notes.push('⚠️ 坑裡開槍打死人的事傳到山下 — 有一隊人正往你的營地來。');
     }
+
+    // 變異工人：不用薪水、絕對服從，但身體在倒數
+    S.workers.slice().forEach(w => {
+      if (!w.mutant) return;
+      w.morale = 100;
+      w.stam = w.maxStam;
+      if (--w.mutDays <= 0) {
+        S.workers = S.workers.filter(x => x.id !== w.id);
+        S.stats.deaths = (S.stats.deaths || 0) + 1;
+        notes.push('🧟 ' + w.name + ' 的心臟撐不住變異，天沒亮就倒在工寮外。');
+        S.workers.forEach(o => { if (!o.mutant) o.morale = Math.max(0, o.morale - 10); });
+      }
+    });
 
     // 天氣
     S.weather = rollWeather();
@@ -423,6 +433,7 @@
     if (buyer.pref.test(st)) m *= buyer.pref.mult;
     m *= 1 + Math.min(0.25, S.rep * 0.004);          // 名聲
     if (has('scale')) m *= 1.08;                      // 過磅精準，殺價空間小
+    if (S.workers.some(w => w.mutant)) m *= 0.92;     // 「那個礦場不乾淨」的傳聞
     m = Math.min(m, st.state === 'rough' ? 1.6 : 1.12); // 玉商不會做賠本生意
     return Math.max(300, Math.round(base * m));
   }
@@ -469,6 +480,100 @@
     S.rep += 4;
     log('🏛 公盤開標，' + lines.length + ' 件成交，淨收 ' + money(total), 'ok');
     return { ok: true, total, lines };
+  }
+
+  /* ---------------- 變異血清 ---------------- */
+  function injectSerum(id) {
+    const w = S.workers.find(x => x.id === id);
+    if (!w) return { ok: false, msg: '人不在' };
+    if (w.mutant) return { ok: false, msg: '已經變異了' };
+    if ((S.supply.serum || 0) < 1) return { ok: false, msg: '沒有血清 — 補給站的黑市貨架有' };
+    S.supply.serum--;
+    w.mutant = true;
+    w.mutDays = 6 + Math.floor(Math.random() * 5);
+    w.skill.mine += 6;
+    w.skill.eye = 0;
+    w.maxStam = Math.round(w.maxStam * 2.5);
+    w.stam = w.maxStam;
+    w.morale = 100;
+    w.wage = 0;
+    S.workers.forEach(o => { if (!o.mutant) o.morale = Math.max(0, o.morale - 12); });
+    S.morale = Math.max(0, S.morale - 8);
+    log('🧪 你把血清扎進 ' + w.name + ' 的脖子。他抽搐、嘶吼、肌肉撐裂了衣服 — 然後安靜下來，眼神空了，只等你的命令。', 'bad');
+    return { ok: true };
+  }
+
+  /* ---------------- 民兵上門：繳錢或開打 ---------------- */
+  function militiaPay() {
+    const n = S.pendingMilitia || 0;
+    if (!n) return { ok: false };
+    const fine = 250000 * n;
+    S.money -= fine;
+    S.rep = Math.max(0, S.rep - 15 * n);
+    S.workers.forEach(w => { if (!w.mutant) w.morale = Math.max(0, w.morale - 20); });
+    S.pendingMilitia = 0;
+    log('民兵收了 ' + money(fine) + '，把命案壓了下來。工人看你的眼神都變了。', 'bad');
+    if (S.money < -120000 && !S.over) { S.over = '破產：債主上門，礦權被收回，隊伍就地解散。'; log('💀 ' + S.over, 'bad'); }
+    save();
+    return { ok: true, fine };
+  }
+
+  function militiaFight() {
+    const n = S.pendingMilitia || 0;
+    if (!n) return { ok: false };
+    if (!has('shotgun')) return { ok: false, msg: '沒有槍，拿什麼打？' };
+    S.pendingMilitia = 0;
+    const mutants = S.workers.filter(w => w.mutant).length;
+    const chance = 0.45 + mutants * 0.08;
+    if (Math.random() < chance) {
+      S.warPath = (S.warPath || 0) + 1;
+      S.rep = Math.max(0, S.rep - 25);
+      S.stats.deaths += 2;
+      log('🔥 你們在營地口跟民兵開火，把他們全撂倒了。從這一刻起，沒有回頭路了。', 'bad');
+      if (S.warPath >= 2) {
+        S.pendingArmy = true;
+        log('山下已經在集結。這次來的，不會只是民兵。', 'bad');
+      }
+      save();
+      return { ok: true, win: true, army: !!S.pendingArmy };
+    }
+    S.workers.forEach(w => { w.injury += 2; if (!w.mutant) w.morale = Math.max(0, w.morale - 25); });
+    const fine = 500000 * n;
+    S.money -= fine;
+    log('你們打輸了，被按在地上。罰金加倍 ' + money(fine) + '，全隊掛彩。', 'bad');
+    if (S.money < -120000 && !S.over) { S.over = '破產：債主上門，礦權被收回，隊伍就地解散。'; log('💀 ' + S.over, 'bad'); }
+    save();
+    return { ok: true, win: false, fine };
+  }
+
+  /* ---------------- 大部隊上門：最終決戰 ---------------- */
+  function armyFight() {
+    if (!S.pendingArmy) return { ok: false };
+    S.pendingArmy = false;
+    const mutants = S.workers.filter(w => w.mutant).length;
+    const chance = 0.25 + mutants * 0.12;
+    if (Math.random() < chance) {
+      S.overKind = 'warlord';
+      S.over = '警察和民兵倒在你的營地前，槍管還在冒煙。再也沒有人敢上這座山 — 從今天起，這裡沒有王法，只有你。';
+      log('🏴 血玉軍閥：' + S.over, 'bad');
+      save();
+      return { ok: true, win: true };
+    }
+    S.overKind = 'dead';
+    S.over = '你們被壓制在坑口，一個一個倒下。槍聲停了以後，山又安靜了。';
+    log('💀 ' + S.over, 'bad');
+    save();
+    return { ok: true, win: false };
+  }
+
+  function armySurrender() {
+    if (!S.pendingArmy) return { ok: false };
+    S.pendingArmy = false;
+    S.overKind = 'jail';
+    S.over = '你被銬上手銬帶下山。礦權沒收、隊伍解散，山裡的傳聞很快就沒人記得了。';
+    log('💀 ' + S.over, 'bad');
+    save();
+    return { ok: true };
   }
 
   /* ---------------- 買斷礦權 ---------------- */
@@ -603,6 +708,7 @@
     workshop, offerFor, sell, auction, auctionReady, rollBuyers,
     buyEquip, repairEquip, buySupply, candidates, hire, fire, train,
     buyoutSite, buyoutPrice, sleepInMine,
+    injectSerum, militiaPay, militiaFight, armyFight, armySurrender,
     skillLabel, newWorker
   };
 })(window);
