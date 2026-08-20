@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyvpn"
+version = "1.0.0"
+description = "An encrypted IP tunnel that carries real traffic to the internet"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["cryptography>=41.0"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Internet",
+    "Topic :: Security :: Cryptography",
+    "Topic :: System :: Networking",
+]
+
+[project.scripts]
+pyvpn = "pyvpn.cli:main"
+
+[tool.setuptools]
+packages = ["pyvpn"]

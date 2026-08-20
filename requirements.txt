@@ -1,0 +1,4 @@
+# The only runtime dependency: X25519, ChaCha20-Poly1305 and their
+# constant-time implementations.  Everything else comes from the standard
+# library.
+cryptography>=41.0
