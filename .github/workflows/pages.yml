@@ -1,0 +1,48 @@
+# Publishes docs/ as a GitHub Pages site.
+#
+# configure-pages with enablement:true switches Pages on the first time this
+# runs, so the site comes up without anyone having to visit Settings.
+name: Deploy docs to Pages
+
+on:
+  push:
+    branches:
+      - main
+      - claude/vpn-encryption-tunnel-jrknfc
+    paths:
+      - "docs/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deployment finish rather than cancelling it half way.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the recommendation maths
+        run: node docs/logic.test.mjs
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
