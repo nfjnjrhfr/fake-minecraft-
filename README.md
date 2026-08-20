@@ -1,2 +1,30 @@
 # fake-minecraft-
-u8ujujujujujujujujujuujuujujujujuujujujujujjujjujujujuujjunjerivcfv dnds xdfbdehbhebhbdehbhbhrhbehebhderbhrvrdfgvfrfrevefvfegfhdevegdervgedryegehwrwehgerhwhrbhdbhdbdhbedbdiuheiuhur4ury4yeeyurheu4u44uyy56t4rueyrjdhjddbhdjebbhjejbhdwehjhejrhjedhjdjdndejndjnsdsjndsjndsjkkd.                                                                             67
+
+一個文字版的挖礦打怪小遊戲，用 Python 寫的。
+
+## 玩法
+
+```bash
+python3 game.py
+```
+
+每一關會隨機出現一隻怪物（殭屍、骷髏、蜘蛛、苦力怕），你可以：
+
+- `a` 攻擊 — 造成 2~5 點傷害
+- `e` 吃東西 — 恢復 4~7 點血，食物有限
+- `r` 逃跑 — 一半機率成功，失敗會被怪物打
+
+關卡越高怪物血越多。血量（hp）歸零就 Game Over，然後會問你 `Play one more game?`。
+
+## 核心邏輯
+
+遊戲的中心是 `hp` 這個變數：
+
+```python
+@property
+def die(self):
+    return self.hp <= 0      # 不是 hp = 0，那是賦值不是比較
+```
+
+用 `<=` 而不是 `==`，是因為一次傷害可能扣掉超過剩餘血量，
+血量只剩 5 時吃到 9 點傷害會變成 -4，用 `== 0` 就永遠死不了。
