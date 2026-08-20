@@ -57,6 +57,15 @@
     box-shadow: 0 2px 0 #999; margin: 0 2px;
   }
 
+  /* Toast (build status) */
+  #toast {
+    position: fixed; left: 50%; top: 70px; transform: translateX(-50%);
+    z-index: 8; background: rgba(16,32,20,.86); color: #d8f5cf; padding: 10px 16px;
+    border-radius: 10px; font-size: 14px; border: 1px solid #3f7a2b; display: none;
+    text-shadow: 0 1px 2px #000; box-shadow: 0 6px 20px rgba(0,0,0,.4); max-width: 80vw;
+  }
+  #toast b { color: #a6e58a; }
+
   /* Start overlay */
   #start {
     position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
@@ -151,6 +160,7 @@
 
 <div id="hotbar"></div>
 <div id="eprompt">走近了！按 <kbd>E</kbd> 與 <b>智能AI</b> 對話</div>
+<div id="toast"></div>
 
 <div id="start">
   <h1>FAKE <span>MINECRAFT</span></h1>
@@ -296,6 +306,107 @@ function buildCity(){
   AI_POS = { x: cx, y: plaza+2, z: cz };
 }
 genWorld();
+
+// ---- Block name resolution (for imported build files) ---------------------
+const NAME2ID = {};
+BLOCKS.forEach((b,i)=>{ if(b.name) NAME2ID[b.name.toLowerCase()] = i; });
+const ALIASES = {
+  "air":0,"空":0,"空氣":0,
+  "grass":1,"grass_block":1,"草":1,"草方塊":1,
+  "dirt":2,"soil":2,"泥":2,
+  "stone":3,"cobblestone":3,"cobble":3,"rock":3,"石":3,"石塊":3,"圓石":3,
+  "wood":4,"planks":4,"plank":4,"log":4,"oak":4,"oak_planks":4,"木":4,"木材":4,"木板":4,
+  "leaves":5,"leaf":5,"樹":5,"葉":5,"樹葉方塊":5,
+  "sand":6,"沙子":6,"砂":6,
+  "brick":7,"bricks":7,"brick_block":7,"紅磚":7,"磚塊":7,
+  "glass":8,"glass_block":8,"玻":8,"玻璃塊":8,
+  "metal":9,"iron":9,"iron_block":9,"steel":9,"鐵":9,"鐵塊":9,"金":9,"金屬塊":9,
+  "core":10,"ai":10,"核心":10
+};
+function resolveBlock(name){
+  if(typeof name === "number") return (name>=0 && name<BLOCKS.length) ? name : 3;
+  if(name==null) return 3;
+  let s = String(name).toLowerCase().trim().replace(/^minecraft:/,"");
+  if(NAME2ID[s]!=null) return NAME2ID[s];
+  if(ALIASES[s]!=null) return ALIASES[s];
+  s = s.replace(/\s+/g,"_");
+  if(ALIASES[s]!=null) return ALIASES[s];
+  return 3; // default: stone
+}
+function groundYAt(x,z){
+  x=Math.floor(x); z=Math.floor(z);
+  for(let y=SY-1;y>=0;y--){ if(getB(x,y,z)!==0) return y+1; }
+  return 0;
+}
+
+// ---- Build queue (animated construction by the AI) ------------------------
+let buildQueue = [];
+let buildTotal = 0;
+// place blocks in local coords with an origin; grows bottom-up for a nice effect
+function queueBuild(blocks, origin){
+  const sorted = blocks.slice().sort((a,b)=>
+    (a.y-b.y) || ((Math.abs(a.x)+Math.abs(a.z))-(Math.abs(b.x)+Math.abs(b.z))));
+  for(const b of sorted){
+    const wx = origin.x + b.x, wy = origin.y + b.y, wz = origin.z + b.z;
+    if(!inb(wx,wy,wz)) continue;
+    buildQueue.push({ x:wx, y:wy, z:wz, id:b.id });
+  }
+  buildTotal = buildQueue.length;
+}
+function processBuildQueue(){
+  if(!buildQueue.length) return;
+  const per = Math.max(3, Math.ceil(buildTotal/60)); // finish in ~1s at 60fps
+  let placed = 0;
+  while(buildQueue.length && placed < per){
+    const b = buildQueue.shift();
+    setB(b.x,b.y,b.z,b.id);
+    placed++;
+  }
+  if(placed) rebuildMesh();
+  if(buildQueue.length){
+    showToast(`🏗️ 智能AI 建造中… 剩 <b>${buildQueue.length}</b> 個方塊`);
+  } else {
+    showToast(`✅ 建造完成！智能AI 自備了 <b>${buildTotal}</b> 個方塊，沒跟你拿任何物資。`, 3500);
+  }
+}
+
+// ---- Toast ----------------------------------------------------------------
+let toastTimer = null;
+function showToast(html, hideAfter){
+  const t = document.getElementById("toast");
+  t.innerHTML = html; t.style.display = "block";
+  if(toastTimer){ clearTimeout(toastTimer); toastTimer=null; }
+  if(hideAfter){ toastTimer = setTimeout(()=>{ t.style.display="none"; }, hideAfter); }
+}
+
+// ---- Public API used by the AI feature (aifeature.js) ---------------------
+window.Game = {
+  resolveBlock,
+  BLOCKS,
+  // struct: { name, blocks:[{x,y,z,id}], size:[w,h,d] }  (local coords, id already resolved)
+  build(struct){
+    if(!struct || !struct.blocks || !struct.blocks.length) return { ok:false, reason:"沒有可建造的方塊" };
+    // footprint
+    let maxX=0,maxZ=0;
+    for(const b of struct.blocks){ if(b.x>maxX)maxX=b.x; if(b.z>maxZ)maxZ=b.z; }
+    // place it a few blocks in front of the player, on the ground
+    const fwdx = Math.sin(player.yaw), fwdz = -Math.cos(player.yaw);
+    const cx = Math.floor(player.x + fwdx*(4 + maxX/2)) - Math.floor(maxX/2);
+    const cz = Math.floor(player.z + fwdz*(4 + maxZ/2)) - Math.floor(maxZ/2);
+    const originX = Math.max(0, Math.min(SX-1-maxX, cx));
+    const originZ = Math.max(0, Math.min(SZ-1-maxZ, cz));
+    // ground = highest terrain under the footprint, so it doesn't float or bury
+    let gy = 0;
+    for(let x=originX;x<=originX+maxX;x++) for(let z=originZ;z<=originZ+maxZ;z++){
+      const g = groundYAt(x,z); if(g>gy) gy = g;
+    }
+    queueBuild(struct.blocks, { x:originX, y:gy, z:originZ });
+    if(typeof closeAI==="function") closeAI();
+    if(started) canvas.requestPointerLock();
+    showToast(`🏗️ 智能AI 開始建造 <b>${struct.name?String(struct.name):"你的建築"}</b>（自備 ${struct.blocks.length} 個方塊）…`);
+    return { ok:true, origin:{x:originX,y:gy,z:originZ}, count:struct.blocks.length };
+  }
+};
 
 // ---- Mesh building --------------------------------------------------------
 // Face definitions: for each of 6 dirs, the 4 corner offsets & shade & normal dir.
@@ -645,6 +756,7 @@ function frame(now){
   const dt = Math.min(0.05, (now-last)/1000); last = now;
   if(started && !aiOpen) updatePhysics(dt);
   checkNearAI();
+  processBuildQueue();
   corePulse += dt;
 
   // pulse the AI core color a bit

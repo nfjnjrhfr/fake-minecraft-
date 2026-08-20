@@ -1,0 +1,18 @@
+{
+  "name": "小木屋",
+  "format": "fmc-build",
+  "legend": {
+    "S": "石頭",
+    "W": "木頭",
+    "G": "玻璃",
+    "B": "磚",
+    ".": "空氣"
+  },
+  "layers": [
+    ["SSSSS", "SSSSS", "SSSSS", "SSSSS", "SSSSS"],
+    ["WWWWW", "W...W", "W...W", "W...W", "WW.WW"],
+    ["WWGWW", "W...W", "G...G", "W...W", "WW.WW"],
+    ["WWWWW", "W...W", "W...W", "W...W", "WWWWW"],
+    ["BBBBB", "BBBBB", "BBBBB", "BBBBB", "BBBBB"]
+  ]
+}

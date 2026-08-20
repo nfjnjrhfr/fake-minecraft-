@@ -154,6 +154,9 @@
   // ---------------------------------------------------------------------
   // LOCAL decomposition — read only the chosen files, in-browser
   // ---------------------------------------------------------------------
+  const pendingBuilds = {}; // buttonId -> struct
+  let buildSeq = 0;
+
   async function localDecompose(files){
     const res = document.getElementById("result");
     res.innerHTML = `<div class="bubble">正在就地分解 <b>${files.length}</b> 個檔案（內容不離開裝置）…</div>`;
@@ -162,6 +165,80 @@
       cards.push(await analyzeFile(f));
     }
     res.innerHTML = `<div class="bubble">分解完成 ✅ 共 <b>${files.length}</b> 個檔案。以下是它們的結構拆解：</div>` + cards.join("");
+    // wire up any "let the AI build it" buttons
+    Object.keys(pendingBuilds).forEach(id=>{
+      const btn = document.getElementById(id);
+      if(btn) btn.onclick = ()=>{
+        const struct = pendingBuilds[id];
+        if(window.Game && window.Game.build){
+          const r = window.Game.build(struct);
+          if(!r.ok) alert("無法建造：" + r.reason);
+          // Game.build closes the panel & re-locks the mouse so you can watch.
+        } else {
+          alert("找不到遊戲世界，無法建造。");
+        }
+      };
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Minecraft build-file detection & parsing
+  //   支援格式：
+  //   A) { "blocks": [[x,y,z,"石頭"], ...] }  或  [{x,y,z,block}]
+  //   B) { "size":[w,h,d], "palette":{...}, "data":[...] }  (x 最快、其次 z、再 y)
+  //   D) { "legend":{"#":"石頭","G":"玻璃"}, "layers":[ ["###","#.#",...], ... ] }
+  //      layers 由下往上為 y；每層是多列 (z)；每列字串逐字元為 x。
+  // ---------------------------------------------------------------------
+  function looksLikeBuildName(name){
+    return /\.(mcbuild|build|schem\.json|nbt\.json)$/i.test(name);
+  }
+  function parseBuildFile(name, text){
+    let obj;
+    try { obj = JSON.parse(text); } catch(e){ return null; }
+    const resolve = (window.Game && window.Game.resolveBlock) ? window.Game.resolveBlock : (v=>3);
+    const blocks = [];
+    let maxX=0,maxY=0,maxZ=0;
+    const push = (x,y,z,name)=>{
+      const id = resolve(name);
+      if(id===0 || id==null) return;      // skip air
+      x|=0; y|=0; z|=0;
+      if(x<0||y<0||z<0) return;
+      blocks.push({x,y,z,id});
+      if(x>maxX)maxX=x; if(y>maxY)maxY=y; if(z>maxZ)maxZ=z;
+    };
+
+    if(obj && obj.legend && Array.isArray(obj.layers)){
+      obj.layers.forEach((layer, y)=>{
+        const rows = Array.isArray(layer) ? layer : [layer];
+        rows.forEach((row, z)=>{
+          const s = String(row);
+          for(let x=0;x<s.length;x++){
+            const nm = obj.legend[s[x]];
+            if(nm==null) continue;
+            push(x,y,z,nm);
+          }
+        });
+      });
+    } else if(Array.isArray(obj) || Array.isArray(obj.blocks)){
+      const arr = Array.isArray(obj) ? obj : obj.blocks;
+      for(const b of arr){
+        if(Array.isArray(b)) push(b[0],b[1],b[2], b[3]);
+        else if(b && typeof b==="object") push(b.x, b.y, b.z, (b.block ?? b.id ?? b.name ?? b.type));
+      }
+    } else if(Array.isArray(obj.size) && Array.isArray(obj.data)){
+      const [w,,d] = obj.size.map(n=>n|0);
+      for(let i=0;i<obj.data.length;i++){
+        const v = obj.data[i];
+        if(v===0 || v==null || v==="" || v==="air") continue;
+        const x = i % w, z = Math.floor(i/w) % d, y = Math.floor(i/(w*d));
+        const nm = obj.palette ? (obj.palette[v] ?? v) : v;
+        push(x,y,z,nm);
+      }
+    } else {
+      return null;
+    }
+    if(!blocks.length) return null;
+    return { name: obj.name || name.replace(/\.[^.]+$/,""), blocks, size:[maxX+1,maxY+1,maxZ+1] };
   }
 
   function detectType(name, bytes){
@@ -206,12 +283,41 @@
     const entropy = shannon(buf);
     const looksText = type.family==="text" || (type.family==="unknown" && isProbablyText(buf));
 
+    const isBuildName = looksLikeBuildName(f.name);
     let structure = "";   // decomposition body per family
-    if(looksText){
+    let buildStruct = null;
+    if(looksText || isBuildName){
       const text = new TextDecoder("utf-8", {fatal:false}).decode(buf);
       structure = decomposeText(f.name, text);
+      // try to read it as a Minecraft build file
+      if(isBuildName || /"(blocks|layers|legend|palette|size)"\s*:/.test(text)){
+        buildStruct = parseBuildFile(f.name, text);
+      }
     } else {
       structure = decomposeBinary(buf, entropy);
+      if(/\.(schematic|nbt|litematic|schem)$/i.test(f.name)){
+        structure += `<div class="note" style="margin-top:6px">偵測到 Minecraft 建築檔（NBT 二進位格式）。此示範支援 <b>.mcbuild / JSON</b> 建築檔，可把它轉成 JSON 版本再交給我，我就會親自蓋出來。</div>`;
+      }
+    }
+
+    // If this is a build file we can construct: offer to have the AI build it.
+    let buildCallout = "";
+    if(buildStruct){
+      const bid = "buildbtn_" + (buildSeq++);
+      pendingBuilds[bid] = buildStruct;
+      buildCallout = `
+        <div class="consent" style="margin-top:12px;border-color:#3f7a2b;background:#141f16">
+          <h3>🏗️ 這是一個 Minecraft 建築檔！</h3>
+          <div class="note" style="color:#c9e6bd">
+            我讀出了 <b style="color:#a6e58a">${buildStruct.blocks.length}</b> 個方塊，
+            範圍約 <b>${buildStruct.size[0]}×${buildStruct.size[1]}×${buildStruct.size[2]}</b>（寬×高×深）。
+            我可以<b style="color:#a6e58a">親自把它蓋在你面前</b>——
+            所有方塊我自備，<b style="color:#a6e58a">不會跟你拿任何物資</b>。
+          </div>
+          <div class="row">
+            <button class="btn2 primary" id="${bid}">🏗️ 讓智能AI 親自蓋出來</button>
+          </div>
+        </div>`;
     }
 
     // byte-class distribution (universal decomposition view)
@@ -235,6 +341,7 @@
           </div>
           ${structure}
           <div class="bars"><div class="note" style="margin-bottom:4px">位元組分佈（分解檢視）</div>${dist}</div>
+          ${buildCallout}
         </div>
       </div>`;
   }
