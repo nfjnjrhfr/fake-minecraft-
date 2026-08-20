@@ -1,2 +1,42 @@
 # fake-minecraft-
-u8ujujujujujujujujujuujuujujujujuujujujujujjujjujujujuujjunjerivcfv dnds xdfbdehbhebhbdehbhbhrhbehebhderbhrvrdfgvfrfrevefvfegfhdevegdervgedryegehwrwehgerhwhrbhdbhdbdhbedbdiuheiuhur4ury4yeeyurheu4u44uyy56t4rueyrjdhjddbhdjebbhjejbhdwehjhejrhjedhjdjdndejndjnsdsjndsjndsjkkd.                                                                             67
+
+一個瀏覽器版的類 Minecraft 體素小遊戲（純 WebGL，無外部相依），城市中央住著一位
+**「智能AI · 分解者」**。你可以把電腦裡的檔案交給它做**結構分解分析**——但它一定會
+**先徵求你的同意、你答應了才會讀**。
+
+## 怎麼玩
+
+直接用瀏覽器打開 `index.html` 即可（不需安裝、不需伺服器）。
+
+| 操作 | 按鍵 |
+| --- | --- |
+| 移動 | `W` `A` `S` `D` |
+| 視角 | 滑鼠（點畫面鎖定，`Esc` 放開） |
+| 跳躍 / 飛行時上升 | 空白鍵 |
+| 飛行切換 | `F` |
+| 飛行時下降 | `Shift` |
+| 破壞 / 放置方塊 | 左鍵 / 右鍵 |
+| 選方塊 | `1`–`8` 或滾輪 |
+| 與 AI 對話 | 走近城市中央按 `E` |
+
+## 智能AI · 檔案分解單元
+
+走到城市中央、靠近會發光的 **AI核心**，按 `E` 開啟對話。這個功能刻意做成
+**誠實的同意流程**：
+
+1. AI 先自我介紹，並**如實說明**它會做什麼、讀什麼、送去哪——只讀你**親手選取**
+   的檔案，不掃描資料夾或硬碟，不背景讀取。
+2. 你必須主動點「**我同意**」才會進入檔案選擇。
+3. 分解方式二選一：
+   - **本地分解（預設）**：檔案**完全不離開這台裝置**，由瀏覽器就地拆解結構。
+   - **雲端 AI 深度分解**：把內容送到你自行設定的 API 端點；送出前會**再次明確確認**，
+     並清楚寫出「內容將離開裝置、送往哪個端點」。未設定端點時退回本地分析並如實告知。
+4. 分解結果會顯示檔案的：判定型別、MIME、熵值、內容形態、結構區塊（函式 / 類別 /
+   標籤 / 鍵值…）、高頻關鍵字、位元組分佈、以及文字預覽或十六進位傾印。
+
+任何一步都可取消。沒有隱藏的全碟掃描或背景讀取——**讀取範圍就是你看到、你選的那些檔案**。
+
+## 檔案
+
+- `index.html` — 遊戲主體：WebGL 體素引擎、世界生成、玩家控制、城市與 NPC。
+- `aifeature.js` — 智能AI 的同意流程與檔案分解邏輯。
