@@ -1,7 +1,11 @@
 # Publishes docs/ as a GitHub Pages site.
 #
-# configure-pages with enablement:true switches Pages on the first time this
-# runs, so the site comes up without anyone having to visit Settings.
+# Pages cannot be switched on from here: creating a Pages site is not
+# something the Actions token is allowed to do ("Resource not accessible by
+# integration"). So this checks first, and if Pages has not been enabled it
+# says so and stops, rather than failing every push over a repository
+# setting. Enable it once under Settings -> Pages, with Source set to
+# "GitHub Actions", and this deploys from then on.
 name: Deploy docs to Pages
 
 on:
@@ -36,13 +40,28 @@ jobs:
       - name: Check the recommendation maths
         run: node docs/logic.test.mjs
 
+      - name: Is Pages enabled for this repository?
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/pages" >/dev/null 2>&1; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Pages is not enabled::Open Settings -> Pages \
+              and set Source to \"GitHub Actions\". This workflow will then \
+              publish docs/ to https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+          fi
+
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
+        if: steps.pages.outputs.enabled == 'true'
 
       - uses: actions/upload-pages-artifact@v3
+        if: steps.pages.outputs.enabled == 'true'
         with:
           path: docs
 
       - id: deployment
+        if: steps.pages.outputs.enabled == 'true'
         uses: actions/deploy-pages@v4
