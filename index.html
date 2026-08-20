@@ -1,0 +1,885 @@
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fake Minecraft</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=IBM+Plex+Sans:wght@400;600&family=Noto+Sans+TC:wght@400;700&display=swap">
+
+<style>
+:root{
+  --soil:#12150f;
+  --panel:#1d2318;
+  --panel-2:#262e1f;
+  --edge:#3d4a31;
+  --edge-hi:#55663f;
+  --bone:#e9ead6;
+  --bone-dim:#9aa389;
+  --grass:#6ab04a;
+  --diamond:#3fd0c9;
+  --danger:#d1462f;
+  --gold:#e2b13c;
+  --display:"Silkscreen","Courier New",monospace;
+  --body:"IBM Plex Sans","Noto Sans TC",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--soil);
+  color:var(--bone);
+  font-family:var(--body);
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+  display:flex;
+  justify-content:center;
+  padding:18px 14px 40px;
+}
+.shell{width:100%;max-width:1000px;display:flex;flex-direction:column;gap:14px}
+
+/* ---------- header ---------- */
+.masthead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.wordmark{display:flex;flex-direction:column;gap:2px}
+.wordmark h1{
+  font-family:var(--display);
+  font-size:clamp(22px,4.6vw,34px);
+  letter-spacing:.02em;
+  margin:0;
+  line-height:1;
+  text-wrap:balance;
+  color:var(--bone);
+  text-shadow:0 3px 0 #0c0f09;
+}
+.wordmark h1 em{font-style:normal;color:var(--grass)}
+.wordmark p{margin:0;font-size:12.5px;color:var(--bone-dim);letter-spacing:.14em;text-transform:uppercase}
+.tally{display:flex;gap:10px}
+.stat{
+  background:var(--panel);border:2px solid var(--edge);
+  padding:6px 12px;min-width:92px;
+  display:flex;flex-direction:column;gap:2px;
+}
+.stat span{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--bone-dim)}
+.stat b{font-family:var(--display);font-size:19px;font-weight:400;font-variant-numeric:tabular-nums}
+#score b{color:var(--gold)}
+#best b{color:var(--diamond)}
+
+/* ---------- hud ---------- */
+.hud{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  background:var(--panel);border:2px solid var(--edge);padding:8px 12px;
+}
+.gauge{display:flex;align-items:center;gap:7px}
+.gauge>label{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--bone-dim)}
+.pips{display:flex;gap:2px}
+.pips svg{width:16px;height:16px;display:block}
+.depth{margin-left:auto;font-family:var(--display);font-size:13px;color:var(--bone-dim);font-variant-numeric:tabular-nums}
+.depth b{color:var(--bone);font-weight:400}
+
+/* ---------- stage ---------- */
+.stage{position:relative;border:2px solid var(--edge);background:#0a0d07;line-height:0;overflow:hidden}
+canvas{display:block;width:100%;height:auto;image-rendering:pixelated;touch-action:none;cursor:crosshair}
+canvas:focus-visible{outline:3px solid var(--diamond);outline-offset:-3px}
+
+.curtain{
+  position:absolute;inset:0;display:none;flex-direction:column;
+  align-items:center;justify-content:center;gap:14px;text-align:center;
+  background:rgba(8,11,6,.86);backdrop-filter:blur(2px);
+  padding:24px;line-height:1.5;
+}
+.curtain.on{display:flex}
+.curtain h2{
+  font-family:var(--display);font-size:clamp(20px,4vw,30px);margin:0;
+  letter-spacing:.02em;text-wrap:balance;
+}
+.curtain .lead{margin:0;max-width:46ch;font-size:14px;color:var(--bone-dim)}
+.curtain .prompt{margin:0;font-size:16px;color:var(--bone)}
+.tomb{font-family:var(--display);font-size:15px;color:var(--gold);font-variant-numeric:tabular-nums;margin:0}
+#over h2{color:var(--danger)}
+
+button{
+  font-family:var(--display);font-size:15px;color:var(--soil);
+  background:var(--grass);border:none;
+  border-bottom:4px solid #3f6d2b;
+  padding:11px 22px;cursor:pointer;letter-spacing:.03em;
+}
+button:hover{filter:brightness(1.09)}
+button:active{transform:translateY(2px);border-bottom-width:2px}
+button:focus-visible{outline:3px solid var(--diamond);outline-offset:3px}
+
+/* ---------- hotbar ---------- */
+.hotbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.slot{
+  width:60px;background:var(--panel);border:2px solid var(--edge);
+  padding:5px 4px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;
+  cursor:pointer;position:relative;
+}
+.slot.sel{border-color:var(--bone);background:var(--panel-2)}
+.slot canvas{width:26px;height:26px}
+.slot .n{font-family:var(--display);font-size:12px;font-variant-numeric:tabular-nums}
+.slot .k{position:absolute;top:2px;left:4px;font-family:var(--display);font-size:9px;color:var(--bone-dim)}
+.slot.empty{opacity:.42}
+
+/* ---------- touch pad ---------- */
+.pad{display:none;gap:10px;justify-content:space-between;align-items:center}
+.pad button{font-size:18px;padding:16px 20px;min-width:66px;background:var(--panel-2);color:var(--bone);border:2px solid var(--edge);border-bottom-width:4px}
+.pad button.act{background:var(--edge-hi);color:var(--soil)}
+.pad .grp{display:flex;gap:10px}
+@media (hover:none) and (pointer:coarse){.pad{display:flex}}
+
+/* ---------- legend ---------- */
+.legend{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 22px;
+  border-top:2px solid var(--edge);padding-top:14px;
+}
+.legend div{display:flex;gap:9px;align-items:baseline;font-size:13px;color:var(--bone-dim);line-height:1.45}
+.legend kbd{
+  font-family:var(--display);font-size:11px;background:var(--panel-2);
+  border:1px solid var(--edge-hi);padding:2px 6px;color:var(--bone);white-space:nowrap;flex:none;
+}
+.legend em{font-style:normal;color:var(--bone)}
+.foot{font-size:12px;color:var(--bone-dim);line-height:1.6}
+.foot code{font-family:var(--display);font-size:11px;color:var(--grass)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="shell">
+  <header class="masthead">
+    <div class="wordmark">
+      <h1>FAKE <em>MINECRAFT</em></h1>
+      <p>挖礦 · 蓋房 · 別死掉</p>
+    </div>
+    <div class="tally">
+      <div class="stat" id="score"><span>分數 Score</span><b>0</b></div>
+      <div class="stat" id="best"><span>最高 Best</span><b>0</b></div>
+    </div>
+  </header>
+
+  <div class="hud">
+    <div class="gauge"><label>HP</label><div class="pips" id="hearts"></div></div>
+    <div class="gauge"><label>飢餓</label><div class="pips" id="food"></div></div>
+    <div class="depth" id="depth">地表 · <b>白天</b></div>
+  </div>
+
+  <div class="stage">
+    <canvas id="cv" width="960" height="540" tabindex="0" aria-label="遊戲畫面：用鍵盤或觸控操作角色挖礦與躲避怪物"></canvas>
+
+    <div class="curtain on" id="intro">
+      <h2>方塊世界產生完成</h2>
+      <p class="lead">往下挖找鑽石，天黑前蓋個掩體。殭屍會咬人，肚子餓了會扣血，血歸零就結束這一局。</p>
+      <button id="startBtn">開始遊戲 Start</button>
+    </div>
+
+    <div class="curtain" id="over">
+      <h2>☠ 你死了 · You died</h2>
+      <p class="tomb" id="tomb">分數 0 · 挖了 0 個方塊 · 撐了 0 秒</p>
+      <p class="prompt">再玩一場嗎？ Play one more game?</p>
+      <button id="againBtn">再玩一場 (R)</button>
+    </div>
+  </div>
+
+  <div class="hotbar" id="hotbar"></div>
+
+  <div class="pad">
+    <div class="grp">
+      <button data-hold="left" aria-label="向左走">◀</button>
+      <button data-hold="right" aria-label="向右走">▶</button>
+    </div>
+    <div class="grp">
+      <button id="modeBtn" aria-label="切換挖掘或放置">⛏</button>
+      <button id="eatBtn" aria-label="吃蘋果">🍎</button>
+      <button data-hold="jump" class="act" aria-label="跳躍">▲</button>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div><kbd>A D / ← →</kbd><em>走路</em></div>
+    <div><kbd>W / Space</kbd><em>跳（連按兩下可跳上一格）</em></div>
+    <div><kbd>左鍵</kbd><em>挖方塊 · 打殭屍</em></div>
+    <div><kbd>右鍵 / Shift</kbd><em>放方塊</em></div>
+    <div><kbd>1 – 4</kbd><em>選方塊</em></div>
+    <div><kbd>E</kbd><em>吃蘋果（打樹葉會掉）</em></div>
+  </div>
+
+  <p class="foot">
+    血量的規則就是那三行虛擬碼變成的：<code>die = (hp &lt;= 0)</code> —— 用比較而不是指派，而且傷害會把血夾在 0 不變負數，死掉才會跳出「再玩一場嗎？」。
+  </p>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   Fake Minecraft — 一個 2D 側視角的挖礦生存小遊戲
+   核心規則（就是那段虛擬碼）：
+       hp 從 20 開始
+       die = (hp <= 0)      ← 是「比較」不是「指派」
+       hp <= 0 → 印出「再玩一場嗎？」
+   ============================================================ */
+
+const TILE = 24;
+const WORLD_W = 200, WORLD_H = 120;
+const MAX_HP = 20, MAX_FOOD = 20;
+const GRAVITY = 46, JUMP_V = -15.4, MOVE_V = 7.2;
+
+// --- 方塊種類 -------------------------------------------------
+const AIR=0, GRASS=1, DIRT=2, STONE=3, LOG=4, LEAF=5, COAL=6, IRON=7, DIAM=8, PLANK=9, BEDROCK=10;
+const BLOCK = {
+  [GRASS]:{name:"草地",  hard:.55, drop:DIRT,  score:1,  col:"#5d9440", col2:"#7a5136"},
+  [DIRT] :{name:"泥土",  hard:.5,  drop:DIRT,  score:1,  col:"#7a5136"},
+  [STONE]:{name:"石頭",  hard:1.2, drop:STONE, score:2,  col:"#7d8380"},
+  [LOG]  :{name:"原木",  hard:1.1, drop:LOG,   score:3,  col:"#6b4a2c", col2:"#8a6440"},
+  [LEAF] :{name:"樹葉",  hard:.3,  drop:LEAF,  score:1,  col:"#4a8036"},
+  [COAL] :{name:"煤礦",  hard:1.7, drop:COAL,  score:8,  col:"#7d8380", col2:"#22241f"},
+  [IRON] :{name:"鐵礦",  hard:2.2, drop:IRON,  score:20, col:"#7d8380", col2:"#c98a5e"},
+  [DIAM] :{name:"鑽石",  hard:2.8, drop:DIAM,  score:80, col:"#7d8380", col2:"#3fd0c9"},
+  [PLANK]:{name:"木板",  hard:.9,  drop:PLANK, score:1,  col:"#a3763f"},
+  [BEDROCK]:{name:"基岩",hard:Infinity, drop:AIR, score:0, col:"#3a3a3a", col2:"#1b1b1b"},
+};
+const SOLID = t => t !== AIR;
+
+// 手上可以放的四種方塊
+const HOTBAR = [DIRT, STONE, LOG, PLANK];
+
+// --- 亂數與雜訊 -----------------------------------------------
+let seed = 1;
+// 32 位元整數雜湊。一定要用 Math.imul：直接用 * 會超過 2^53，
+// 低位數字被浮點數吃掉，結果會嚴重偏一邊（洞穴和礦脈就都生不出來）。
+function hash2(x, y){
+  let n = Math.imul(x|0, 374761393) ^ Math.imul(y|0, 668265263) ^ Math.imul(seed|0, 1013904223);
+  n = Math.imul(n ^ (n >>> 13), 1274126177);
+  n ^= n >>> 16;
+  return (n >>> 0) / 4294967296;
+}
+const lerp = (a,b,t) => a + (b-a)*t;
+function noise2(x, y){
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x-xi, yf = y-yi;
+  const u = xf*xf*(3-2*xf), v = yf*yf*(3-2*yf);
+  return lerp(lerp(hash2(xi,yi), hash2(xi+1,yi), u),
+              lerp(hash2(xi,yi+1), hash2(xi+1,yi+1), u), v);
+}
+
+// --- 方塊材質（先畫好一次，之後直接貼）-------------------------
+const atlas = {};
+function bakeTiles(){
+  for (const id of Object.keys(BLOCK)){
+    const b = BLOCK[id];
+    const c = document.createElement("canvas");
+    c.width = c.height = TILE;
+    const g = c.getContext("2d");
+    g.fillStyle = b.col; g.fillRect(0,0,TILE,TILE);
+    // 顆粒
+    for (let i=0;i<46;i++){
+      const px = (i*7 % (TILE/3))*3, py = ((i*11) % (TILE/3))*3;
+      const v = hash2(px + id*31, py + id*17);
+      g.fillStyle = v > .5 ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.13)";
+      g.fillRect(px, py, 3, 3);
+    }
+    if (+id === GRASS){                       // 草皮蓋在泥土上
+      g.fillStyle = b.col2; g.fillRect(0,7,TILE,TILE-7);
+      for (let i=0;i<30;i++){
+        const px=(i*5)%TILE, py=7+((i*13)%(TILE-7));
+        g.fillStyle = hash2(px,py)>.5?"rgba(255,255,255,.06)":"rgba(0,0,0,.14)";
+        g.fillRect(px,py,3,3);
+      }
+      g.fillStyle="#4b7d34"; g.fillRect(0,6,TILE,2);
+    }
+    if (+id === LOG){                         // 年輪
+      g.fillStyle=b.col2; g.fillRect(5,0,TILE-10,TILE);
+      g.fillStyle="rgba(0,0,0,.2)"; g.fillRect(10,0,3,TILE);
+    }
+    if (+id === LEAF){                        // 葉子留缺口
+      for (let i=0;i<12;i++){
+        const px=(i*9)%TILE, py=(i*17)%TILE;
+        g.clearRect(px,py,3,3);
+      }
+    }
+    if (b.col2 && (+id===COAL || +id===IRON || +id===DIAM)){   // 礦脈
+      const spots = +id===DIAM ? 4 : +id===IRON ? 5 : 6;
+      for (let i=0;i<spots;i++){
+        const px = 3 + Math.floor(hash2(i+ +id*5, 1)*(TILE-9));
+        const py = 3 + Math.floor(hash2(i+ +id*5, 2)*(TILE-9));
+        g.fillStyle = b.col2; g.fillRect(px,py,6,6);
+        g.fillStyle = "rgba(255,255,255,.28)"; g.fillRect(px,py,3,3);
+      }
+    }
+    if (+id === BEDROCK){
+      for (let i=0;i<9;i++){
+        const px=(i*8)%TILE, py=(i*13)%TILE;
+        g.fillStyle=b.col2; g.fillRect(px,py,6,6);
+      }
+    }
+    g.strokeStyle="rgba(0,0,0,.22)"; g.lineWidth=2; g.strokeRect(1,1,TILE-2,TILE-2);
+    atlas[id] = c;
+  }
+}
+
+// --- 世界 -----------------------------------------------------
+let world, surface;
+const idx = (x,y) => y*WORLD_W + x;
+const inb = (x,y) => x>=0 && y>=0 && x<WORLD_W && y<WORLD_H;
+const getT = (x,y) => inb(x,y) ? world[idx(x,y)] : STONE;
+const setT = (x,y,v) => { if (inb(x,y)) world[idx(x,y)] = v; };
+
+function generate(){
+  world = new Uint8Array(WORLD_W*WORLD_H);
+  surface = new Int16Array(WORLD_W);
+  const base = 30;
+  for (let x=0;x<WORLD_W;x++){
+    const h = Math.round(base + 5*Math.sin(x/17+seed%7) + 3*Math.sin(x/6.5) + 6*(noise2(x/22,0)-.5)*2);
+    surface[x] = h;
+    for (let y=h;y<WORLD_H;y++){
+      let t = y===h ? GRASS : y < h+4 ? DIRT : STONE;
+      if (y > h+6 && t===STONE){
+        if (noise2(x/9, y/7) > .68) t = AIR;                      // 洞穴
+        else {
+          const d = y - h, r = hash2(x*3, y*5);
+          if (d>8  && r > .984) t = COAL;
+          if (d>26 && r > .988) t = IRON;
+          if (d>52 && r > .9955) t = DIAM;
+        }
+      }
+      setT(x,y,t);
+    }
+    setT(x, WORLD_H-1, BEDROCK);
+    if (hash2(x, 99) > .9 && x>3 && x<WORLD_W-4) tree(x, h-1);
+  }
+}
+function tree(x, y){
+  const h = 4 + Math.floor(hash2(x,7)*3);
+  for (let i=0;i<h;i++) setT(x, y-i, LOG);
+  for (let dx=-2;dx<=2;dx++) for (let dy=-2;dy<=1;dy++){
+    if (Math.abs(dx)===2 && dy>=1) continue;
+    const tx=x+dx, ty=y-h-dy+1;
+    if (inb(tx,ty) && getT(tx,ty)===AIR) setT(tx,ty,LEAF);
+  }
+}
+
+// --- 狀態 -----------------------------------------------------
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+let player, mobs, parts, drops;
+let running=false, dead=false, clock=0, dayT=0, mined=0, score=0, best=0;
+let spawnTimer=0, hungerT=0, regenT=0, shake=0;
+
+try{ best = +(localStorage.getItem("fmc_best")||0) || 0; }catch(e){}
+
+function newGame(){
+  seed = (Math.random()*1e9)>>>0 || 7;
+  generate();
+  // 出生點：找一根沒有樹的柱子，站在最上面那個實心方塊上
+  let sx = Math.floor(WORLD_W/2);
+  for (let i=0;i<40;i++){
+    const c = Math.floor(WORLD_W/2) + (i%2 ? i : -i);
+    if (c>2 && c<WORLD_W-3 && getT(c, surface[c]) === GRASS && getT(c, surface[c]-1) === AIR){ sx = c; break; }
+  }
+  for (let y=surface[sx]-1; y>surface[sx]-4; y--) setT(sx, y, AIR);   // 清出站的地方
+  player = {
+    x:sx+.2, y:surface[sx]-1.85, vx:0, vy:0, w:.62, h:1.8,
+    hp:MAX_HP, food:MAX_FOOD, face:1, ground:false, hurt:0, apples:2,
+    bag:{[DIRT]:0,[STONE]:0,[LOG]:0,[PLANK]:0,[COAL]:0,[IRON]:0,[DIAM]:0,[LEAF]:0},
+    sel:0, coyote:0, jumpBuf:0,
+  };
+  mobs=[]; parts=[]; drops=[];
+  clock=0; dayT=90; mined=0; score=0; dead=false; shake=0;
+  spawnTimer=3; hungerT=0; regenT=0;
+  mining=null;
+  syncHud();
+}
+
+/* ===== 這就是那段虛擬碼的正主 ==================================
+   die = (hp <= 0)
+   1) `hp = 0` 是指派，不是比較，要用 == / <=
+   2) 傷害可能大於剩血，hp 會變負數，所以 hurt() 把血夾在 0
+   ============================================================ */
+const isDead = p => p.hp <= 0;
+
+function hurt(amount, kbx){
+  if (dead || player.hurt > 0) return;
+  player.hp = Math.max(0, player.hp - amount);   // 不讓血變負數
+  player.hurt = .6;
+  player.vy = Math.min(player.vy, -6);
+  player.vx += (kbx||0) * 6;
+  shake = Math.min(10, 3 + amount);
+  burst(player.x, player.y-.8, "#d1462f", 14);
+  syncHud();
+  if (isDead(player)) gameOver();               // ← hp <= 0 → 問「再玩一場嗎？」
+}
+function heal(n){
+  player.hp = Math.min(MAX_HP, player.hp + n);
+  syncHud();
+}
+
+function gameOver(){
+  dead = true; running = false;
+  if (score > best){ best = score; try{ localStorage.setItem("fmc_best", best); }catch(e){} }
+  document.getElementById("tomb").textContent =
+    `分數 ${score} · 挖了 ${mined} 個方塊 · 撐了 ${Math.floor(clock)} 秒`;
+  document.getElementById("over").classList.add("on");
+  syncHud();
+}
+
+// --- 粒子 -----------------------------------------------------
+function burst(x, y, col, n){
+  for (let i=0;i<n;i++)
+    parts.push({x, y, vx:(Math.random()-.5)*7, vy:-Math.random()*7-1, life:.5+Math.random()*.4, col});
+}
+
+// --- 碰撞 -----------------------------------------------------
+function hits(x, y, w, h){
+  for (let tx=Math.floor(x); tx<=Math.floor(x+w-1e-6); tx++)
+    for (let ty=Math.floor(y); ty<=Math.floor(y+h-1e-6); ty++)
+      if (SOLID(getT(tx,ty))) return true;
+  return false;
+}
+function moveBody(b, dt){
+  b.vy = Math.min(b.vy + GRAVITY*dt, 34);
+  let nx = b.x + b.vx*dt;
+  if (!hits(nx, b.y, b.w, b.h)) b.x = nx;
+  else { b.x = b.vx>0 ? Math.ceil(b.x) - b.w - 1e-4 : Math.floor(b.x) + 1 + 1e-4; b.vx = 0; b.blocked = true; }
+  const wasFall = b.vy;
+  let ny = b.y + b.vy*dt;
+  b.ground = false;
+  if (!hits(b.x, ny, b.w, b.h)) b.y = ny;
+  else {
+    if (b.vy > 0){ b.y = Math.ceil(b.y + b.h) - b.h - 1e-4; b.ground = true; b.fell = wasFall; }
+    else b.y = Math.floor(b.y) + 1 + 1e-4;
+    b.vy = 0;
+  }
+  b.x = Math.max(0, Math.min(WORLD_W - b.w, b.x));
+}
+
+// --- 輸入 -----------------------------------------------------
+const keys = {};
+const held = {left:false, right:false, jump:false};
+let placeMode = false, mining = null, pointer = null, held0 = false, attackCd = 0;
+
+addEventListener("keydown", e => {
+  if (e.repeat) return;
+  const k = e.key.toLowerCase();
+  keys[k] = true;
+  if (k===" " || k==="w" || k==="arrowup"){ player && (player.jumpBuf = .16); e.preventDefault(); }
+  if (k>="1" && k<="4" && player){ player.sel = +k-1; drawHotbar(); }
+  if (k==="e") eat();
+  if (k==="r" && dead) start();
+});
+addEventListener("keyup", e => { keys[e.key.toLowerCase()] = false; });
+
+document.querySelectorAll("[data-hold]").forEach(b=>{
+  const on = e => { e.preventDefault(); held[b.dataset.hold]=true; if(b.dataset.hold==="jump"&&player) player.jumpBuf=.16; };
+  const off = e => { e.preventDefault(); held[b.dataset.hold]=false; };
+  b.addEventListener("pointerdown",on); b.addEventListener("pointerup",off);
+  b.addEventListener("pointercancel",off); b.addEventListener("pointerleave",off);
+});
+document.getElementById("modeBtn").onclick = e => {
+  placeMode = !placeMode;
+  e.currentTarget.textContent = placeMode ? "🧱" : "⛏";
+  e.currentTarget.classList.toggle("act", placeMode);
+};
+document.getElementById("eatBtn").onclick = eat;
+
+function canvasPos(e){
+  const r = cv.getBoundingClientRect();
+  return { x:(e.clientX-r.left)/r.width*cv.width, y:(e.clientY-r.top)/r.height*cv.height };
+}
+cv.addEventListener("contextmenu", e => e.preventDefault());
+cv.addEventListener("pointerdown", e => {
+  cv.setPointerCapture(e.pointerId); cv.focus();
+  pointer = canvasPos(e); held0 = true;
+  if (e.button === 2) placeMode = true;
+  act(true);
+});
+cv.addEventListener("pointermove", e => { if (held0) pointer = canvasPos(e); });
+const release = e => { held0=false; mining=null; if (e && e.button===2) placeMode=false; };
+cv.addEventListener("pointerup", release);
+cv.addEventListener("pointercancel", release);
+
+// --- 動作：挖 / 放 / 打 ---------------------------------------
+let cam = {x:0, y:0};
+const worldFromScreen = p => ({ x:(p.x + cam.x)/TILE, y:(p.y + cam.y)/TILE });
+
+function act(fresh){
+  if (!running || !pointer) return;
+  const w = worldFromScreen(pointer);
+  const tx = Math.floor(w.x), ty = Math.floor(w.y);
+  const px = player.x + player.w/2, py = player.y + player.h/2;
+  const reach = Math.hypot(w.x - px, w.y - py);
+  if (reach > 5.2){ mining = null; return; }
+
+  if (fresh){                                   // 先看看有沒有打到殭屍
+    for (const m of mobs){
+      if (m.dead) continue;
+      if (w.x > m.x-.3 && w.x < m.x+m.w+.3 && w.y > m.y-.3 && w.y < m.y+m.h+.3 && attackCd<=0){
+        m.hp -= 5; m.vx = (m.x < player.x ? -1 : 1) * 8; m.vy = -6; attackCd = .38;
+        burst(m.x+m.w/2, m.y+m.h/2, "#8ab24a", 8);
+        if (m.hp <= 0){ m.dead = true; score += 25; burst(m.x+m.w/2, m.y+m.h/2, "#4c6b33", 16); syncHud(); }
+        return;
+      }
+    }
+  }
+
+  const placing = placeMode || keys["shift"];
+  if (placing){
+    if (!fresh) return;
+    const id = HOTBAR[player.sel];
+    if (player.bag[id] <= 0 || getT(tx,ty) !== AIR) return;
+    if (tx+1 > player.x && tx < player.x+player.w && ty+1 > player.y && ty < player.y+player.h) return;
+    if (!(SOLID(getT(tx+1,ty))||SOLID(getT(tx-1,ty))||SOLID(getT(tx,ty+1))||SOLID(getT(tx,ty-1)))) return;
+    setT(tx,ty,id); player.bag[id]--; drawHotbar();
+    burst(tx+.5, ty+.5, BLOCK[id].col, 5);
+    return;
+  }
+
+  const t = getT(tx,ty);
+  if (t === AIR || t === BEDROCK){ mining = null; return; }
+  if (!mining || mining.x !== tx || mining.y !== ty) mining = {x:tx, y:ty, p:0};
+}
+
+function finishMine(tx, ty, t){
+  const b = BLOCK[t];
+  setT(tx, ty, AIR);
+  mined++; score += b.score;
+  if (t === LEAF && Math.random() < .28){ player.apples++; burst(tx+.5,ty+.5,"#d1462f",6); }
+  else if (b.drop !== AIR) player.bag[b.drop] = (player.bag[b.drop]||0) + 1;
+  if (t === LOG) player.bag[PLANK] = (player.bag[PLANK]||0) + 2;   // 原木自動做成木板
+  burst(tx+.5, ty+.5, b.col2 || b.col, 10);
+  mining = null;
+  drawHotbar(); syncHud();
+}
+
+function eat(){
+  if (!running || player.apples <= 0) return;
+  if (player.food >= MAX_FOOD && player.hp >= MAX_HP) return;
+  player.apples--;
+  player.food = Math.min(MAX_FOOD, player.food + 6);
+  heal(2);
+  burst(player.x+.3, player.y+.4, "#d1462f", 8);
+  drawHotbar(); syncHud();
+}
+
+// --- 殭屍 -----------------------------------------------------
+function spawnMob(){
+  if (mobs.length >= 7) return;
+  const side = Math.random() < .5 ? -1 : 1;
+  const x = Math.round(player.x + side * (16 + Math.random()*8));
+  if (x < 2 || x > WORLD_W-3) return;
+  const night = isNight();
+  let y = null;
+  if (night && getT(x, surface[x]-1) === AIR) y = surface[x]-2;    // 晚上地表刷怪
+  else {                                                          // 白天在洞穴刷
+    for (let d=surface[x]+10; d<WORLD_H-2; d++)
+      if (getT(x,d)===AIR && getT(x,d+1)!==AIR && getT(x,d-1)===AIR && Math.abs(d-player.y)<14){ y=d-1; break; }
+  }
+  if (y === null) return;
+  mobs.push({x, y, vx:0, vy:0, w:.68, h:1.8, hp:12, cd:0, dead:false});
+}
+const isNight = () => dayT > 150;
+
+function updateMobs(dt){
+  for (const m of mobs){
+    if (m.dead) continue;
+    const dx = (player.x - m.x);
+    m.vx = Math.sign(dx) * 2.9;
+    m.blocked = false;
+    moveBody(m, dt);
+    if (m.blocked && m.ground) m.vy = JUMP_V * .72;               // 遇到牆就跳
+    if (m.ground && Math.abs(dx) < 12 && Math.random() < dt*1.2 &&
+        !SOLID(getT(Math.floor(m.x + Math.sign(dx)), Math.floor(m.y + m.h)))) m.vy = JUMP_V*.7;
+    m.cd -= dt;
+    if (!isNight() && m.y < surface[Math.max(0,Math.min(WORLD_W-1,Math.round(m.x)))] &&
+        getT(Math.round(m.x), Math.round(m.y)-1) === AIR){
+      m.hp -= dt*4.5;                                             // 曬太陽會燒
+      if (Math.random() < dt*7) burst(m.x+.3, m.y+.3, "#e2b13c", 1);
+      if (m.hp <= 0){ m.dead = true; burst(m.x+.3,m.y+.6,"#e2b13c",10); }
+    }
+    if (m.cd <= 0 &&
+        m.x < player.x+player.w && m.x+m.w > player.x &&
+        m.y < player.y+player.h && m.y+m.h > player.y){
+      m.cd = 1;
+      hurt(3, m.x < player.x ? 1 : -1);
+    }
+  }
+  mobs = mobs.filter(m => !m.dead && Math.abs(m.x - player.x) < 42);
+}
+
+// --- 主迴圈 ---------------------------------------------------
+let last = 0;
+function frame(ts){
+  requestAnimationFrame(frame);
+  const dt = Math.min(.05, (ts - last)/1000 || 0);
+  last = ts;
+  if (running) step(dt);
+  render();
+}
+
+function step(dt){
+  clock += dt; dayT = (dayT + dt*3) % 300;
+  attackCd -= dt;
+  if (player.hurt > 0) player.hurt -= dt;
+
+  // 走路
+  const L = keys["a"]||keys["arrowleft"]||held.left;
+  const R = keys["d"]||keys["arrowright"]||held.right;
+  player.vx = (R?MOVE_V:0) - (L?MOVE_V:0);
+  if (R) player.face = 1; if (L) player.face = -1;
+
+  // 跳（有 coyote time 和預輸入，跳起來比較跟手）
+  player.coyote = player.ground ? .1 : player.coyote - dt;
+  player.jumpBuf -= dt;
+  if (player.jumpBuf > 0 && player.coyote > 0){ player.vy = JUMP_V; player.coyote = 0; player.jumpBuf = 0; }
+
+  player.fell = 0;
+  moveBody(player, dt);
+  if (player.fell > 24) hurt(Math.round((player.fell-24)*.9));     // 摔傷
+
+  // 挖礦進度
+  if (held0 && pointer) act(false);
+  if (mining){
+    const t = getT(mining.x, mining.y);
+    if (t === AIR){ mining = null; }
+    else {
+      mining.p += dt / BLOCK[t].hard;
+      if (Math.random() < dt*9) burst(mining.x+.5, mining.y+.5, BLOCK[t].col, 1);
+      if (mining.p >= 1) finishMine(mining.x, mining.y, t);
+    }
+  }
+
+  // 飢餓 → 沒血 → die
+  hungerT += dt * (Math.abs(player.vx) > .1 ? 1.6 : 1) * (mining ? 1.5 : 1);
+  if (hungerT > 7){ hungerT = 0; player.food = Math.max(0, player.food - 1); syncHud(); }
+  if (player.food === 0){
+    regenT += dt;
+    if (regenT > 3){ regenT = 0; player.hp = Math.max(0, player.hp - 1); syncHud(); if (isDead(player)) gameOver(); }
+  } else if (player.food > 14 && player.hp < MAX_HP){
+    regenT += dt;
+    if (regenT > 4){ regenT = 0; heal(1); player.food = Math.max(0, player.food-1); }
+  } else regenT = 0;
+
+  // 刷怪
+  spawnTimer -= dt;
+  if (spawnTimer <= 0){ spawnTimer = isNight() ? 2.6 : 5.5; spawnMob(); }
+  updateMobs(dt);
+
+  // 粒子
+  for (const p of parts){ p.vy += 26*dt; p.x += p.vx*dt; p.y += p.vy*dt; p.life -= dt; }
+  parts = parts.filter(p => p.life > 0);
+
+  if (shake > 0) shake = Math.max(0, shake - dt*26);
+  updateDepth();
+}
+
+// --- 畫面 -----------------------------------------------------
+const SKY_DAY = [111,168,214], SKY_NIGHT = [22,28,58], SKY_DUSK = [201,122,74];
+function skyColor(){
+  const t = dayT/300;
+  let a, b, k;
+  if (t < .42){ a=SKY_DAY; b=SKY_DAY; k=0; }
+  else if (t < .52){ a=SKY_DAY; b=SKY_DUSK; k=(t-.42)/.1; }
+  else if (t < .58){ a=SKY_DUSK; b=SKY_NIGHT; k=(t-.52)/.06; }
+  else if (t < .92){ a=SKY_NIGHT; b=SKY_NIGHT; k=0; }
+  else { a=SKY_NIGHT; b=SKY_DAY; k=(t-.92)/.08; }
+  return `rgb(${Math.round(lerp(a[0],b[0],k))},${Math.round(lerp(a[1],b[1],k))},${Math.round(lerp(a[2],b[2],k))})`;
+}
+
+function render(){
+  const W = cv.width, H = cv.height;
+  if (player){
+    cam.x = Math.max(0, Math.min(WORLD_W*TILE - W, (player.x+player.w/2)*TILE - W/2));
+    cam.y = Math.max(0, Math.min(WORLD_H*TILE - H, (player.y+player.h/2)*TILE - H/2));
+  }
+  const sx = shake ? (Math.random()-.5)*shake : 0, sy = shake ? (Math.random()-.5)*shake : 0;
+
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle = skyColor(); ctx.fillRect(0,0,W,H);
+
+  // 越深越看不到天空，換成岩層的黑
+  const feetDepth = player
+    ? (player.y + player.h - surface[Math.max(0,Math.min(WORLD_W-1,Math.round(player.x)))]) : 0;
+  const under = Math.max(0, Math.min(1, (feetDepth - 2) / 14));
+  ctx.globalAlpha = 1 - under;
+
+  // 星星 / 太陽
+  const night = dayT/300 > .5 && dayT/300 < .95;
+  if (night){
+    ctx.fillStyle = "rgba(255,255,255,.75)";
+    for (let i=0;i<60;i++){
+      const x = (hash2(i,1)*W*1.6 - cam.x*.12) % W, y = hash2(i,2)*H*.55;
+      ctx.fillRect((x+W)%W, y, 2, 2);
+    }
+  } else {
+    ctx.fillStyle = "rgba(255,244,200,.9)";
+    ctx.fillRect(W - 120 - cam.x*.05 % 60, 54, 34, 34);
+  }
+  // 遠山
+  ctx.fillStyle = night ? "rgba(20,26,20,.55)" : "rgba(40,66,40,.28)";
+  ctx.beginPath(); ctx.moveTo(0,H);
+  for (let i=0;i<=W;i+=16){
+    const wx = (i + cam.x*.35)/90;
+    ctx.lineTo(i, H*.42 + Math.sin(wx)*36 + Math.sin(wx*2.3)*18 - cam.y*.12);
+  }
+  ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = 1;
+  if (under > 0){ ctx.fillStyle = `rgba(10,12,17,${under})`; ctx.fillRect(0,0,W,H); }
+
+  ctx.translate(sx - cam.x, sy - cam.y);
+
+  // 方塊
+  const x0 = Math.max(0, Math.floor(cam.x/TILE)), x1 = Math.min(WORLD_W-1, Math.ceil((cam.x+W)/TILE));
+  const y0 = Math.max(0, Math.floor(cam.y/TILE)), y1 = Math.min(WORLD_H-1, Math.ceil((cam.y+H)/TILE));
+  for (let y=y0;y<=y1;y++) for (let x=x0;x<=x1;x++){
+    const t = world[idx(x,y)];
+    if (t === AIR) continue;
+    ctx.drawImage(atlas[t], x*TILE, y*TILE);
+  }
+
+  // 挖掘裂痕
+  if (mining){
+    const t = getT(mining.x, mining.y);
+    if (t !== AIR){
+      ctx.fillStyle = `rgba(0,0,0,${.14 + mining.p*.42})`;
+      ctx.fillRect(mining.x*TILE, mining.y*TILE, TILE, TILE);
+      ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = 2;
+      const n = Math.ceil(mining.p*4);
+      for (let i=0;i<n;i++){
+        ctx.beginPath();
+        ctx.moveTo(mining.x*TILE+3+i*5, mining.y*TILE+2);
+        ctx.lineTo(mining.x*TILE+7+i*5, mining.y*TILE+TILE-2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // 殭屍
+  for (const m of mobs){
+    const X = m.x*TILE, Y = m.y*TILE, w = m.w*TILE, h = m.h*TILE;
+    ctx.fillStyle = "#4c7a3f"; ctx.fillRect(X, Y+h*.28, w, h*.72);
+    ctx.fillStyle = "#3f5f9c"; ctx.fillRect(X, Y+h*.66, w, h*.34);
+    ctx.fillStyle = "#5d9450"; ctx.fillRect(X-1, Y, w+2, h*.3);
+    ctx.fillStyle = "#1b2416";
+    ctx.fillRect(X+3, Y+h*.11, 5, 5); ctx.fillRect(X+w-8, Y+h*.11, 5, 5);
+    ctx.fillStyle = "#4c7a3f";
+    const arm = Math.sin(clock*7)*3;
+    ctx.fillRect(player.x > m.x ? X+w : X-6, Y+h*.3+arm, 6, h*.18);
+  }
+
+  // 玩家（Steve 風格的小方塊人）
+  const P = player, X = P.x*TILE, Y = P.y*TILE, pw = P.w*TILE, ph = P.h*TILE;
+  const walk = Math.abs(P.vx) > .2 && P.ground ? Math.sin(clock*13)*4 : 0;
+  ctx.globalAlpha = P.hurt > 0 && Math.floor(P.hurt*14)%2 ? .45 : 1;
+  ctx.fillStyle = "#2f5fa8"; ctx.fillRect(X+1, Y+ph*.62, pw*.45, ph*.38-walk*.3);
+  ctx.fillStyle = "#26509a"; ctx.fillRect(X+pw*.5, Y+ph*.62, pw*.45, ph*.38+walk*.3);
+  ctx.fillStyle = "#2aa2a0"; ctx.fillRect(X, Y+ph*.3, pw, ph*.34);
+  ctx.fillStyle = "#c99566";
+  ctx.fillRect(P.face>0 ? X+pw-4 : X-2, Y+ph*.32+walk, 6, ph*.26);
+  ctx.fillStyle = "#c99566"; ctx.fillRect(X-1, Y, pw+2, ph*.3);
+  ctx.fillStyle = "#3d2a1c"; ctx.fillRect(X-1, Y, pw+2, ph*.09);
+  ctx.fillStyle = "#1b2416";
+  ctx.fillRect(P.face>0 ? X+pw*.5 : X+2, Y+ph*.14, 4, 4);
+  ctx.fillRect(P.face>0 ? X+pw*.8 : X+pw*.28, Y+ph*.14, 4, 4);
+  ctx.globalAlpha = 1;
+
+  // 粒子
+  for (const p of parts){
+    ctx.globalAlpha = Math.max(0, Math.min(1, p.life*2.4));
+    ctx.fillStyle = p.col;
+    ctx.fillRect(p.x*TILE, p.y*TILE, 4, 4);
+  }
+  ctx.globalAlpha = 1;
+
+  // 準心
+  if (pointer && running){
+    const w = worldFromScreen(pointer);
+    const tx = Math.floor(w.x), ty = Math.floor(w.y);
+    const px = P.x+P.w/2, py = P.y+P.h/2;
+    if (Math.hypot(w.x-px, w.y-py) <= 5.2){
+      ctx.strokeStyle = (placeMode||keys["shift"]) ? "rgba(106,176,74,.95)" : "rgba(255,255,255,.75)";
+      ctx.lineWidth = 2; ctx.strokeRect(tx*TILE+1, ty*TILE+1, TILE-2, TILE-2);
+    }
+  }
+
+  ctx.setTransform(1,0,0,1,0,0);
+
+  // 洞穴與夜晚的黑暗（玩家周圍一圈光）
+  const darkDepth = Math.max(0, Math.min(.82, (feetDepth-4)/26));
+  const darkNight = night ? .5 : 0;
+  const dark = Math.max(darkDepth, darkNight);
+  if (dark > .01){
+    const lx = (player.x+player.w/2)*TILE - cam.x + sx, ly = (player.y+player.h/2)*TILE - cam.y + sy;
+    const g = ctx.createRadialGradient(lx, ly, 20, lx, ly, 300);
+    g.addColorStop(0, `rgba(6,8,12,0)`);
+    g.addColorStop(.55, `rgba(6,8,12,${dark*.55})`);
+    g.addColorStop(1, `rgba(6,8,12,${dark})`);
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  }
+  if (player && player.hurt > 0){
+    ctx.fillStyle = `rgba(209,70,47,${player.hurt*.28})`;
+    ctx.fillRect(0,0,W,H);
+  }
+}
+
+// --- HUD ------------------------------------------------------
+const heartSVG = f =>
+  `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3h4v2h4V3h4v6h-2v2h-2v2H8v-2H6V9H4V7H2z" fill="${f?'#d1462f':'#3d4a31'}"/>${
+    f===.5?'<path d="M8 3h2v2h4v4h-2v2h-2v2H8z" fill="#3d4a31"/>':''}</svg>`;
+const foodSVG = f =>
+  `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6h10v3h-2v3H5V9H3z" fill="${f?'#c98a5e':'#3d4a31'}"/></svg>`;
+
+function pips(el, cur, max, svg){
+  let h = "";
+  for (let i=0;i<max/2;i++){
+    const v = cur/2 - i;
+    h += svg(v >= 1 ? 1 : v > 0 ? .5 : 0);
+  }
+  el.innerHTML = h;
+}
+function syncHud(){
+  if (!player) return;
+  pips(document.getElementById("hearts"), player.hp, MAX_HP, heartSVG);
+  pips(document.getElementById("food"), player.food, MAX_FOOD, foodSVG);
+  document.querySelector("#score b").textContent = score;
+  document.querySelector("#best b").textContent = Math.max(best, score);
+}
+function updateDepth(){
+  const sfc = surface[Math.max(0,Math.min(WORLD_W-1,Math.round(player.x)))];
+  const d = Math.round(player.y + player.h - sfc);   // 用腳底算深度
+  document.getElementById("depth").innerHTML =
+    (d > 2 ? `地下 <b>${d}</b> 格` : `地表`) + ` · <b>${isNight() ? "夜晚" : "白天"}</b>`;
+}
+
+// --- 快捷欄 ---------------------------------------------------
+const hotbarEl = document.getElementById("hotbar");
+function drawHotbar(){
+  hotbarEl.innerHTML = "";
+  HOTBAR.forEach((id, i) => {
+    const n = player ? (player.bag[id]||0) : 0;
+    const d = document.createElement("div");
+    d.className = "slot" + (player && player.sel===i ? " sel" : "") + (n?"":" empty");
+    d.innerHTML = `<span class="k">${i+1}</span>`;
+    const c = document.createElement("canvas");
+    c.width = c.height = TILE;
+    c.getContext("2d").drawImage(atlas[id], 0, 0);
+    d.appendChild(c);
+    const s = document.createElement("span");
+    s.className = "n"; s.textContent = n;
+    d.appendChild(s);
+    d.onclick = () => { if (player){ player.sel = i; drawHotbar(); } };
+    hotbarEl.appendChild(d);
+  });
+  const a = document.createElement("div");
+  a.className = "slot" + (player && player.apples ? "" : " empty");
+  a.innerHTML = `<span class="k">E</span><div style="font-size:20px;line-height:26px">🍎</div>
+                 <span class="n">${player ? player.apples : 0}</span>`;
+  a.onclick = eat;
+  hotbarEl.appendChild(a);
+}
+
+// --- 開始 -----------------------------------------------------
+function start(){
+  document.getElementById("intro").classList.remove("on");
+  document.getElementById("over").classList.remove("on");
+  newGame(); drawHotbar(); running = true; cv.focus();
+}
+document.getElementById("startBtn").onclick = start;
+document.getElementById("againBtn").onclick = start;
+
+bakeTiles();
+newGame();
+drawHotbar();
+requestAnimationFrame(frame);
+</script>
