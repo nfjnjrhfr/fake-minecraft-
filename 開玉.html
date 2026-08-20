@@ -1050,7 +1050,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
           '<div id="fp-worker"></div>' +
           '<div id="fp-tools"></div>' +
         '</div>' +
-        '<div class="fp-help">滑鼠移動＝看　WASD＝走　左鍵/空白鍵＝挖　1~8＝換工具　T＝換人　F＝燈　P＝抽水　G＝架坑木　M＝地圖　Z＝過夜　X＝開槍（威嚇／擊斃準星裡偷料逃跑的人）　Q＝收工</div>' +
+        '<div class="fp-help">滑鼠移動＝看　WASD＝走　左鍵/空白鍵＝挖　1~8＝換工具　T＝換人　F＝燈　P＝抽水　G＝架坑木　M＝地圖　Z＝過夜　X＝開槍（打岩壁、威嚇全場、擊斃準星裡的人）　Q＝收工</div>' +
       '</div>' +
       '<div id="fp-touch">' +
         '<div id="joy"><i></i></div>' +
@@ -1063,7 +1063,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
           '<button data-k="G">🪵坑木</button>' +
           '<button data-k="M">🗺地圖</button>' +
           '<button data-k="Z">😴過夜</button>' +
-          (hasWorking(S, 'shotgun') ? '<button data-k="X" class="quit">🔫威嚇</button>' : '') +
+          (hasWorking(S, 'shotgun') ? '<button data-k="X" class="quit">🔫開槍</button>' : '') +
           '<button data-k="L">🔒固定</button>' +
           '<button data-k="FS">⛶全螢幕</button>' +
           '<button data-k="Q" class="quit">🎒收工</button>' +
@@ -1442,7 +1442,8 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
       let best = null, bd = 99;
       for (const n of sess.npcs) {
         const flee = n.state === 'flee';
-        const maxD = flee ? 14 : 8, cone = flee ? 0.16 : 0.09;
+        const maxD = flee ? 14 : 8;
+        const cone = (flee ? 0.16 : 0.09) * (isTouch ? 1.9 : 1);
         const dx = n.x - p.x, dy = n.y - p.y;
         const d = Math.hypot(dx, dy);
         if (d > maxD || d < 0.3) continue;
@@ -1533,7 +1534,37 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
       hud();
     }
 
-    /* ---- 開槍：準星裡有人就是擊斃，否則對天威嚇 ---- */
+    /* ---- 槍擊岩壁：火花四濺、岩石碎裂，打出的料裂到不值錢 ---- */
+    function shootWall() {
+      const tgt = aim(sess, 10);
+      if (!tgt || tgt.t === BED) return false;
+      const lv = sess.lv, i = idx(tgt.x, tgt.y);
+      const T = TYPE[lv.map[i]];
+      lv.hp[i] -= 34 / T.hard;
+      // 彈著火花
+      for (let k = 0; k < 22; k++) particles.push({
+        x: cv.width / 2 + (Math.random() - 0.5) * 60,
+        y: cv.height / 2 + (Math.random() - 0.5) * 60,
+        vx: (Math.random() - 0.5) * 700, vy: (Math.random() - 0.8) * 500,
+        life: 0.25 + Math.random() * 0.4, max: 0.65,
+        size: 1 + Math.random() * 2.5, c: [255, 200, 110], glow: true
+      });
+      if (lv.hp[i] <= 0) {
+        lv.map[i] = OPEN; sess.dugCount++;
+        const st = lv.nodes[i];
+        if (st) {
+          J.addMiningCrack(st, 0.55 + Math.random() * 0.3);
+          st.note = '被槍打碎過';
+          sess.stones.push(st);
+          delete lv.nodes[i];
+          say('💥 一槍轟開岩壁 — 裡面有料！可惜被打得稀爛…');
+        } else say('💥 岩壁被轟開一個洞。');
+        markSeen(sess);
+      }
+      return true;
+    }
+
+    /* ---- 開槍：準星有人就擊斃；沒人就朝前方岩壁開火＋威嚇全場 ---- */
     function menace() {
       if (night) return;
       if (!hasWorking(S, 'shotgun')) { say('你沒有槍。'); return; }
@@ -1541,6 +1572,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
       if (tgt2) { if (tgt2.state === 'flee') shootThief(tgt2); else shootWorker(tgt2); return; }
       S.equip.shotgun.dur = Math.max(0, S.equip.shotgun.dur - 2);
       flash = 0.35;
+      const hitWall = shootWall();
       sess.fearT = 45;
       S.rep = Math.max(0, S.rep - 3);
       S.morale = Math.max(0, S.morale - 6);
@@ -1555,7 +1587,7 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
             (npc.stolen ? '抓起一顆 ' + npc.stolen.kg + 'kg 的料' : '') + '往洞口跑了！');
         }
       });
-      say('🔫 砰！槍聲在坑道裡炸開 — 沒人敢停手了（士氣 -15、名聲 -3）');
+      say('🔫 砰！' + (hitWall ? '彈丸打在岩壁上火花四濺' : '槍聲在坑道裡炸開') + ' — 沒人敢停手了（士氣 -15、名聲 -3）');
       lines.forEach(l => { sess.log.push(l); global.GAME.log(l, 'bad'); });
       if (lines.length) setTimeout(() => { if (running) say(lines[0]); }, 1800);
       hud();
