@@ -510,9 +510,14 @@
     if (!s.over && s.raid && !raidPlaying) {
       raidPlaying = true;
       closeModal();
-      RAID.play(s, choice => {
+      RAID.play(s, {
+        mode: 'raid',
+        onFight: () => G.raidFight(),
+        onSurrender: () => G.raidSurrender(),
+        winText: '🏴 AK 的火舌壓過整支突襲隊。天亮以後，這座山姓你。',
+        loseText: '💀 你在自己的據點裡倒下，手裡還握著發燙的 AK。'
+      }, () => {
         raidPlaying = false;
-        if (choice === 'fight') G.raidFight(); else G.raidSurrender();
         if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
         render();
       });
@@ -706,18 +711,38 @@
       case 'militia-pay': { const r = G.militiaPay(); closeModal(); toast(r.ok ? '錢送出去了，事情壓下來了' : '…', 'bad'); render(); break; }
       case 'militia-fight': {
         const r = G.militiaFight();
+        if (!r.ok) { toast(r.msg, 'bad'); break; }
         closeModal();
-        if (!r.ok) { toast(r.msg, 'bad'); render(); break; }
-        openModal(r.win
-          ? '<h3>🔥 打贏了</h3><p class="tiny">民兵倒在營地口。' + (r.army ? '但山下已經在集結 — 下一批不會這麼好打。' : '短時間內不會有人再上來。') + '</p>' +
-            (r.army ? '<button class="btn danger" data-act="army-open">他們來了 →</button> ' : '') +
-            '<button class="btn primary" data-act="close">繼續</button>'
-          : '<h3>💥 打輸了</h3><p class="tiny">你們被按在地上。罰金加倍、全隊掛彩，休養去吧。</p><button class="btn primary" data-act="close">繼續</button>');
-        render(); break;
+        raidPlaying = true;
+        RAID.play(s, {
+          mode: 'battle', foes: 4, win: r.win, foeName: '民兵',
+          introSub: '民兵端著槍上來了。你把槍頂在門後，屏住呼吸。',
+          winText: '🔥 民兵倒在營地口。' + (r.army ? '但山下已經在集結 — 下一批不會這麼好打。' : '短時間內不會有人再上來。'),
+          loseText: '💥 你們被按在地上打。罰金加倍、全隊掛彩。'
+        }, () => {
+          raidPlaying = false;
+          if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+          render();
+          if (r.win && r.army) openModal('<h3>🚁 他們來了</h3><p class="tiny">引擎聲已經在山下 — 這次不會只是民兵。</p>' +
+            '<button class="btn danger" data-act="army-open">面對他們 →</button> <button class="btn" data-act="close">再撐一下</button>');
+        });
+        break;
       }
       case 'army-fight': {
         const r = G.armyFight();
-        closeModal(); render();
+        if (!r.ok) break;
+        closeModal();
+        raidPlaying = true;
+        RAID.play(s, {
+          mode: 'battle', foes: 7, win: r.win, foeName: '警察和大部隊',
+          introSub: '引擎聲停在山下。他們列隊上來了 — 這是最後一仗。',
+          winText: '🏴 最後一個也倒下了。這座山，從今天起姓你。',
+          loseText: '💀 你們被壓制在坑口，一個一個倒下。'
+        }, () => {
+          raidPlaying = false;
+          if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+          render();
+        });
         break;
       }
       case 'army-surrender': { G.armySurrender(); closeModal(); render(); break; }

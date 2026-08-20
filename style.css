@@ -229,4 +229,4 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
 #raidsub{position:absolute;left:0;right:0;bottom:14%;text-align:center;color:#ffe6c0;
   font-size:20px;letter-spacing:2px;text-shadow:0 2px 8px #000;font-weight:600}
 #raidskip{position:absolute;right:20px;top:16px;color:#8b9aa9;font-size:13px}
-#raidbtns{position:absolute;left:0;right:0;bottom:5%;display:flex;gap:14px;justify-content:center}
+#raidbtns,#raidend{position:absolute;left:0;right:0;bottom:5%;display:flex;gap:14px;justify-content:center}
