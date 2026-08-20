@@ -2616,11 +2616,12 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
       over: null
     };
     // 起手設備
-    ['pickaxe', 'shovel', 'chisel', 'basket', 'headlamp', 'helmet', 'flashlight', 'loupe', 'tent'].forEach(id => addEquip(id));
+    ['pickaxe', 'shovel', 'chisel', 'basket', 'headlamp', 'helmet', 'flashlight', 'loupe', 'tent', 'shotgun'].forEach(id => addEquip(id));
     dedupeNames();
     rollBuyers();
     log('第 1 天。你接手了一支三個人的採玉隊，口袋裡 ' + money(S.money) + '。山就在那裡。');
     log('🏠 村裡長輩把會卡的一口老坑留給你 — 礦權是你的，上山不用再繳日費。', 'ok');
+    log('🔫 床底下還留著一把土製獵槍。「山裡不太平，」長輩只說了這句。', 'warn');
     return S;
   }
 
@@ -3340,6 +3341,10 @@ body.locked #app{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;ov
       d.weather = WEATHER.find(w => w.id === (d.weather && d.weather.id)) || WEATHER[0];
       d.session = null;
       d.owned = d.owned || { huika: true };
+      if (!d.equip.shotgun) {
+        const def = global.DATA.EQUIP.shotgun;
+        d.equip.shotgun = { qty: 1, dur: def.dur, max: def.dur };
+      }
       S = d;
       return true;
     } catch (e) { return false; }
