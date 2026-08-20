@@ -16,9 +16,10 @@
     <span class="brand-text">數學通道<em>bilibili</em></span>
   </a>
   <div class="search-wrap">
-    <input id="search" type="search" placeholder="搜尋片單或分 P…" autocomplete="off">
+    <input id="search" type="search" placeholder="搜尋片單或集數標題…" autocomplete="off">
   </div>
   <div class="topbar-actions">
+    <button class="btn ghost" id="btn-continuous" title="連續播放">▶ 連續播放</button>
     <button class="btn ghost" id="btn-add">＋ 新增</button>
     <button class="btn ghost" id="btn-settings" title="設定">⚙</button>
   </div>
@@ -48,7 +49,7 @@
       <small>支援貼上完整網址、BV 號、av 號；網址帶 <code>?p=</code> 也會被讀取。</small>
     </label>
     <div class="row">
-      <label>分 P 數量
+      <label>集數
         <input name="parts" type="number" min="1" max="500" value="1">
       </label>
       <label>標籤
@@ -75,9 +76,10 @@
     <label class="switch"><input type="checkbox" id="opt-danmaku"> 顯示彈幕</label>
     <label class="switch"><input type="checkbox" id="opt-autoplay"> 自動播放</label>
     <label class="switch"><input type="checkbox" id="opt-wide"> 寬屏模式</label>
-    <label class="switch"><input type="checkbox" id="opt-autonext"> 播完自動下一 P（需手動確認，見說明）</label>
-    <p class="hint">播放器由 B 站官方 iframe 提供，跨網域限制下網頁無法得知影片何時播完，
-      「自動下一 P」只會在你按下播放器下方的「下一 P」時記住位置。</p>
+    <label class="switch"><input type="checkbox" id="opt-continuous"> 連續播放（倒數結束自動跳下一集）</label>
+    <p class="hint">播放器是 B 站官方的跨網域 iframe，網頁沒辦法直接知道影片何時播完，
+      所以「連續播放」是用每一集的實際長度倒數計時來跳下一集。
+      中途暫停或拖動進度時，可以用播放器下方的「暫停倒數 / ＋30 秒」把倒數對回去。</p>
     <menu><span class="spacer"></span><button class="btn primary" id="settings-close">完成</button></menu>
   </div>
 </dialog>

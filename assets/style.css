@@ -166,3 +166,27 @@ code{background:var(--bg-3);padding:1px 4px;border-radius:4px;font-size:.92em}
 }
 .dot{opacity:.5}
 .empty{padding:60px 20px;text-align:center;color:var(--fg-dim)}
+
+/* ---------- 連續播放倒數 ---------- */
+.autoplay-bar{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin-top:12px;padding:9px 13px;border-radius:10px;
+  background:color-mix(in srgb,var(--pink) 12%, var(--bg-2));
+  border:1px solid color-mix(in srgb,var(--pink) 35%,transparent);
+  font-size:13.5px;
+}
+.autoplay-bar[hidden]{display:none}
+.ap-dot{
+  width:8px;height:8px;border-radius:50%;background:var(--pink);flex:none;
+  animation:apPulse 1.6s ease-in-out infinite;
+}
+.autoplay-bar.paused .ap-dot{animation:none;background:var(--fg-dim)}
+@keyframes apPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
+.ap-text{flex:1;min-width:150px}
+.ap-text b{font-variant-numeric:tabular-nums}
+.autoplay-bar .linklike{white-space:nowrap}
+#btn-continuous.on{background:var(--pink);color:#fff;border-color:var(--pink)}
+@media (max-width:560px){
+  #btn-continuous{padding:7px 10px}
+  .brand-text{display:none}
+}

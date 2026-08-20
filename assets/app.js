@@ -23,7 +23,7 @@ let overrides = store.get('overrides', {});   // { [id]: {bvid, title, parts, ta
 let custom    = store.get('custom', []);      // 自己新增的片單
 let progress  = store.get('progress', {});    // { [id]: { seen:[p], last:p } }
 let opts      = Object.assign(
-  { danmaku: false, autoplay: false, wide: true, autonext: true },
+  { danmaku: false, autoplay: true, wide: true, continuous: true },
   store.get('opts', {})
 );
 
@@ -44,8 +44,10 @@ function episodesOf(c) {
   for (let i = 1; i <= n; i++) {
     const e = listed[i - 1] || {};
     out.push({
-      p: Number(e.p) || i,
+      p: Number(e.p) || i,               // 片單裡的第幾集（路由與進度用）
+      vp: Number(e.p) || (e.bvid ? 1 : i), // 傳給播放器的 ?p=：獨立影片一律 1
       title: e.title || ('P' + i),
+      dur: Number(e.dur) || 0,          // 秒；連續播放靠它倒數
       bvid: e.bvid || c.bvid || '',
       aid: e.aid || c.aid || ''
     });
@@ -88,18 +90,58 @@ function playerSrc(ep) {
   const q = new URLSearchParams();
   if (ep.bvid) q.set('bvid', ep.bvid);
   else if (ep.aid) q.set('aid', ep.aid);
-  q.set('p', ep.p);
+  q.set('p', ep.vp || ep.p);
   q.set('autoplay', opts.autoplay ? '1' : '0');
   q.set('danmaku', opts.danmaku ? '1' : '0');
   q.set('high_quality', '1');
   q.set('as_wide', opts.wide ? '1' : '0');
   return 'https://player.bilibili.com/player.html?' + q.toString();
 }
+/* ---------------------------------------------------- 連續播放倒數計時器 */
+const GRACE = 6;                     // 播放器載入 / 緩衝的寬限秒數
+let timer = { id: 0, endsAt: 0, remain: 0, paused: false, onEnd: null };
+
+function stopTimer() {
+  if (timer.id) clearInterval(timer.id);
+  timer = { id: 0, endsAt: 0, remain: 0, paused: false, onEnd: null };
+}
+function startTimer(seconds, onEnd) {
+  stopTimer();
+  timer.onEnd = onEnd;
+  timer.endsAt = Date.now() + seconds * 1000;
+  timer.id = setInterval(tickTimer, 500);
+  tickTimer();
+}
+function timerLeft() {
+  return timer.paused ? timer.remain : Math.max(0, Math.round((timer.endsAt - Date.now()) / 1000));
+}
+function fmt(sec) {
+  const m = Math.floor(sec / 60), s2 = sec % 60;
+  return m + ':' + String(s2).padStart(2, '0');
+}
+function tickTimer() {
+  const bar = document.getElementById('auto-bar');
+  if (!bar) return stopTimer();
+  const left = timerLeft();
+  const label = document.getElementById('ap-text');
+  if (label) {
+    label.innerHTML = timer.paused
+      ? '倒數已暫停 · 剩 <b>' + fmt(left) + '</b>'
+      : '連續播放中 · <b>' + fmt(left) + '</b> 後跳下一集';
+  }
+  bar.classList.toggle('paused', timer.paused);
+  if (!timer.paused && left <= 0) {
+    const fn = timer.onEnd;
+    stopTimer();
+    fn && fn();
+  }
+}
+
 function biliUrl(ep) {
   const base = ep.bvid ? 'https://www.bilibili.com/video/' + ep.bvid
              : ep.aid  ? 'https://www.bilibili.com/video/av' + ep.aid
              : '';
-  return base ? base + '?p=' + ep.p : '';
+  return base ? base + '?p=' + (ep.vp || ep.p) : '';
 }
 
 /* ------------------------------------------------------------- 觀看進度 */
@@ -119,6 +161,7 @@ function seenCount(id) { return prog(id).seen.length; }
 
 /* ------------------------------------------------------------------ 路由 */
 function route() {
+  stopTimer();
   const hash = location.hash.replace(/^#\/?/, '');
   const [section, id, p] = hash.split('/');
   if (section === 'c' && id) renderPlayer(decodeURIComponent(id), Number(p) || undefined);
@@ -228,6 +271,13 @@ function renderPlayer(id, wantP) {
                         <button class="btn primary" id="btn-bind">貼上連結綁定</button>
                      </div>`}
         </div>
+        <div class="autoplay-bar" id="auto-bar" hidden>
+          <span class="ap-dot"></span>
+          <span class="ap-text" id="ap-text"></span>
+          <button class="linklike" id="ap-toggle">暫停倒數</button>
+          <button class="linklike" id="ap-plus">＋30 秒</button>
+          <button class="linklike" id="ap-off">關閉</button>
+        </div>
         <div class="player-tools">
           <button class="btn ghost" id="btn-prev" ${idx === 0 ? 'disabled' : ''}>‹ 上一 P</button>
           <button class="btn ghost" id="btn-next" ${idx === eps.length - 1 ? 'disabled' : ''}>下一 P ›</button>
@@ -238,7 +288,7 @@ function renderPlayer(id, wantP) {
         </div>
       </section>
       <aside class="ep-list">
-        <h3><span>分 P 清單</span><span style="color:var(--fg-dim);font-weight:400">${rec.seen.length}/${eps.length}</span></h3>
+        <h3><span>播放清單</span><span style="color:var(--fg-dim);font-weight:400">${rec.seen.length}/${eps.length}</span></h3>
         <div class="ep-scroll">
           ${eps.map((e, i) => `
             <div class="ep ${i === idx ? 'active' : ''}" data-p="${e.p}">
@@ -252,14 +302,8 @@ function renderPlayer(id, wantP) {
 
   const goto = np => { location.hash = `#/c/${encodeURIComponent(c.id)}/${np}`; };
   $$('.ep').forEach(el => el.addEventListener('click', () => goto(Number(el.dataset.p))));
-  $('#btn-prev')?.addEventListener('click', () => {
-    if (opts.autonext) markSeen(c.id, ep.p);
-    goto(eps[idx - 1].p);
-  });
-  $('#btn-next')?.addEventListener('click', () => {
-    if (opts.autonext) markSeen(c.id, ep.p);   // 按下「下一 P」時把目前這集記成已看
-    goto(eps[idx + 1].p);
-  });
+  $('#btn-prev')?.addEventListener('click', () => goto(eps[idx - 1].p));
+  $('#btn-next')?.addEventListener('click', () => { markSeen(c.id, ep.p); goto(eps[idx + 1].p); });
   $('#btn-seen')?.addEventListener('click', () => {
     markSeen(c.id, ep.p, !rec.seen.includes(ep.p));
     renderPlayer(c.id, ep.p);
@@ -268,8 +312,59 @@ function renderPlayer(id, wantP) {
   $('#btn-bind')?.addEventListener('click', () => openEdit(c));
   $('#btn-edit-this')?.addEventListener('click', () => openEdit(c));
 
+  setupCountdown(c, eps, idx, ep, goto);
+
   const activeEl = $('.ep.active');
   activeEl?.scrollIntoView({ block: 'nearest' });
+}
+
+/** 連續播放：用這一集的實際長度倒數，時間到就自動跳下一集 */
+function setupCountdown(c, eps, idx, ep, goto) {
+  const bar = $('#auto-bar');
+  if (!bar) return;
+  const bound = Boolean(ep.bvid || ep.aid);
+  const hasNext = idx < eps.length - 1;
+  if (!opts.continuous || !bound || !ep.dur || !hasNext) {
+    bar.hidden = true;
+    if (opts.continuous && bound && hasNext && !ep.dur) {
+      // 沒有長度資料就退回手動，並說清楚原因
+      bar.hidden = false;
+      $('#ap-text').textContent = '這一集沒有長度資料，無法自動跳下一集';
+      $('#ap-toggle').hidden = $('#ap-plus').hidden = true;
+      bar.classList.add('paused');
+    }
+    return;
+  }
+
+  bar.hidden = false;
+  startTimer(ep.dur + GRACE, () => {
+    markSeen(c.id, ep.p);
+    goto(eps[idx + 1].p);
+  });
+
+  $('#ap-toggle').addEventListener('click', e => {
+    if (timer.paused) {
+      timer.endsAt = Date.now() + timer.remain * 1000;
+      timer.paused = false;
+      e.target.textContent = '暫停倒數';
+    } else {
+      timer.remain = timerLeft();
+      timer.paused = true;
+      e.target.textContent = '繼續倒數';
+    }
+    tickTimer();
+  });
+  $('#ap-plus').addEventListener('click', () => {
+    if (timer.paused) timer.remain += 30; else timer.endsAt += 30000;
+    tickTimer();
+  });
+  $('#ap-off').addEventListener('click', () => {
+    opts.continuous = false;
+    store.set('opts', opts);
+    stopTimer();
+    bar.hidden = true;
+    syncContinuousBtn();
+  });
 }
 
 /* ------------------------------------------------------- 新增 / 編輯片單 */
@@ -396,14 +491,25 @@ function renderStats() {
   $('#stats').textContent = `${cols.length} 個片單 · ${seen}/${total} 集已看`;
 }
 
+function syncContinuousBtn() {
+  const btn = $('#btn-continuous');
+  if (!btn) return;
+  btn.classList.toggle('on', Boolean(opts.continuous));
+  btn.textContent = opts.continuous ? '▶ 連續播放' : '▷ 連續播放';
+  btn.title = opts.continuous ? '連續播放：開（點一下關閉）' : '連續播放：關（點一下開啟）';
+  const cb = $('#opt-continuous');
+  if (cb) cb.checked = Boolean(opts.continuous);
+}
+
 function bindSettings() {
-  const map = { 'opt-danmaku': 'danmaku', 'opt-autoplay': 'autoplay', 'opt-wide': 'wide', 'opt-autonext': 'autonext' };
+  const map = { 'opt-danmaku': 'danmaku', 'opt-autoplay': 'autoplay', 'opt-wide': 'wide', 'opt-continuous': 'continuous' };
   for (const [elId, key] of Object.entries(map)) {
     const el = document.getElementById(elId);
     el.checked = Boolean(opts[key]);
     el.addEventListener('change', () => {
       opts[key] = el.checked;
       store.set('opts', opts);
+      syncContinuousBtn();
       if (location.hash.startsWith('#/c/')) route();
     });
   }
@@ -420,10 +526,17 @@ window.addEventListener('hashchange', route);
 
 document.addEventListener('DOMContentLoaded', () => {
   bindSettings();
+  syncContinuousBtn();
   $('#search').addEventListener('input', e => {
     keyword = e.target.value.trim();
     if (!location.hash.startsWith('#/c/')) renderHome();
     else { location.hash = '#/'; }
+  });
+  $('#btn-continuous').addEventListener('click', () => {
+    opts.continuous = !opts.continuous;
+    store.set('opts', opts);
+    syncContinuousBtn();
+    if (location.hash.startsWith('#/c/')) route();
   });
   $('#btn-add').addEventListener('click', () => openEdit(null));
   $('#btn-settings').addEventListener('click', () => $('#dlg-settings').showModal());
@@ -439,8 +552,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!confirm('清除所有本機資料（綁定的 BV 號、觀看進度、自訂片單）？')) return;
     store.clearAll();
     overrides = {}; custom = []; progress = {};
-    opts = { danmaku: false, autoplay: false, wide: true, autonext: true };
+    opts = { danmaku: false, autoplay: true, wide: true, continuous: true };
     bindSettings();
+    syncContinuousBtn();
     location.hash = '#/';
     route();
   });
