@@ -213,6 +213,36 @@ sudo kill -USR1 $(pgrep -f 'pyvpn server')
 
 ---
 
+## 網頁版：該連哪一國？
+
+`docs/` 底下有一個單頁工具，可以在 **Safari 直接開、免登入、加到主畫面**。
+它量測你當下的網速與到各國的延遲，算出應該連哪一個國家的節點，並產生對應的
+客戶端設定。
+
+```bash
+cd docs && python3 -m http.server 8000   # 本機預覽
+node docs/logic.test.mjs                # 驗證建議演算法
+python3 docs/browser.test.py            # 瀏覽器端對端測試（需 playwright）
+```
+
+要拿到公開、免登入的網址，在 GitHub 的 **Settings → Pages** 選
+`Deploy from a branch`，資料夾選 `/docs`。詳見 [`docs/README.md`](docs/README.md)。
+
+判斷方式：
+
+```
+可容忍延遲 = 10 ms + min(下載速度, 100 Mbps) × 0.8
+```
+
+線路慢的時候這個窗口很窄（1 Mbps 約 11 ms），只有最近的節點堪用；
+線路快的時候窗口寬（100 Mbps 約 90 ms），就能依你想要的出口國家自由挑。
+
+> **網頁不能自己建立 VPN 連線。** iOS 只允許有 NetworkExtension 權限的原生
+> App 接管系統流量，Safari 沒有這個 API。這個頁面負責「選哪一國」，
+> 實際連線仍由上面的 `pyvpn` 客戶端執行。
+
+---
+
 ## 開發
 
 ```bash
