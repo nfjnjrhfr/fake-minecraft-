@@ -1,0 +1,21 @@
+{
+  "name": "snapmind",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SnapMind 拍讀 AI — 拍照識別完整訊息、即時對話，兼具生產力與娛樂的 AI 助手",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "ask": "node scripts/cli.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0"
+  }
+}

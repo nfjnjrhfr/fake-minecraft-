@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0b0d12" />
+<title>SnapMind 拍讀 AI</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📸</text></svg>" />
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">📸</span>
+    <div>
+      <h1>SnapMind<span class="sub">拍讀 AI</span></h1>
+      <p class="status" id="status">連線中…</p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button class="icon-btn" id="notes-btn" title="筆記本">🗒️<span class="badge" id="notes-count">0</span></button>
+    <button class="icon-btn" id="settings-btn" title="設定">⚙️</button>
+    <button class="icon-btn" id="reset-btn" title="開新對話">🧹</button>
+  </div>
+</header>
+
+<nav class="modes" id="modes"></nav>
+
+<main id="chat" class="chat">
+  <section class="welcome" id="welcome">
+    <h2>拍一張照片，我幫你把上面的訊息完整讀出來</h2>
+    <p>截圖、公文、白板、菜單、發票、作業題目都可以。讀完還能接著聊、整理成待辦、翻譯，或是拿它來玩。</p>
+    <div class="starter-grid" id="starters"></div>
+  </section>
+</main>
+
+<div class="camera-sheet" id="camera-sheet" hidden>
+  <video id="camera-video" playsinline autoplay muted></video>
+  <div class="camera-controls">
+    <button class="ghost" id="camera-close">取消</button>
+    <button class="shutter" id="camera-shot" title="拍照"></button>
+    <button class="ghost" id="camera-flip">切換鏡頭</button>
+  </div>
+  <p class="camera-tip" id="camera-tip">對準文字，盡量填滿畫面會辨識得更準</p>
+</div>
+
+<footer class="composer">
+  <div class="thumbs" id="thumbs" hidden></div>
+  <div class="composer-row">
+    <button class="icon-btn big" id="camera-btn" title="拍照">📷</button>
+    <button class="icon-btn big" id="upload-btn" title="從相簿選擇">🖼️</button>
+    <textarea id="input" rows="1" placeholder="說點什麼，或直接傳圖片…（Enter 送出、Shift+Enter 換行）"></textarea>
+    <button class="icon-btn big send" id="send-btn" title="送出">➤</button>
+  </div>
+  <div class="composer-row secondary">
+    <button class="chip-btn" id="extract-btn" title="把圖片轉成可匯出的結構化資料">⚡ 結構化擷取</button>
+    <button class="chip-btn" id="stop-btn" hidden>■ 停止</button>
+    <span class="usage" id="usage"></span>
+  </div>
+  <input type="file" id="file-input" accept="image/*" multiple hidden />
+  <input type="file" id="capture-input" accept="image/*" capture="environment" hidden />
+</footer>
+
+<dialog id="settings-dialog">
+  <form method="dialog" class="dialog-body">
+    <h3>設定</h3>
+    <label>API 金鑰
+      <input type="password" id="api-key" placeholder="sk-ant-…" autocomplete="off" />
+      <small id="key-note">只存在這台裝置的瀏覽器（localStorage），送到本機伺服器後直接呼叫 Claude API。</small>
+    </label>
+    <label>長期偏好（會加進系統提示）
+      <textarea id="user-note" rows="3" placeholder="例：我是專案經理，整理待辦時請一併標上負責人與期限。"></textarea>
+    </label>
+    <label class="row"><input type="checkbox" id="show-thinking" /> 顯示思考過程摘要</label>
+    <menu>
+      <button value="cancel" class="ghost">關閉</button>
+      <button value="save" id="settings-save">儲存</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="notes-dialog">
+  <div class="dialog-body">
+    <h3>筆記本 <small id="notes-hint"></small></h3>
+    <input type="search" id="notes-search" placeholder="搜尋筆記…" />
+    <div id="notes-list" class="notes-list"></div>
+    <menu>
+      <button class="ghost" id="notes-export">匯出全部 Markdown</button>
+      <button id="notes-close">關閉</button>
+    </menu>
+  </div>
+</dialog>
+
+<script src="/markdown.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
