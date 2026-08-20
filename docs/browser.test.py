@@ -369,6 +369,52 @@ def scenario_all_blocked(browser, base):
     page.close()
 
 
+IPHONE = {"viewport": {"width": 390, "height": 844}, "has_touch": True,
+          "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) "
+                        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"}
+# iPadOS reports itself as a Mac, so the touch screen is what gives it away.
+IPAD = {"viewport": {"width": 820, "height": 1180}, "has_touch": True,
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                      "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15"}
+IPAD_LANDSCAPE = dict(IPAD, viewport={"width": 1180, "height": 820})
+
+
+def scenario_devices(browser, base, stub_base):
+    """The page has to read correctly on a phone and on a tablet."""
+    print("\ndevices: phone and iPad")
+    for label, device, expected_hint, columns in [
+        ("iPhone portrait", IPHONE, "下方工具列", 1),
+        ("iPad portrait", IPAD, "右上角", 2),
+        ("iPad landscape", IPAD_LANDSCAPE, "右上角", 2),
+    ]:
+        page = browser.new_page(ignore_https_errors=True, **device)
+        install_routes(page, stub_base)
+        page.goto(base + "/index.html", wait_until="load")
+
+        hint = page.inner_text("#share-where")
+        check(f"{label}: points at the right share button",
+              expected_hint in hint,
+              f"{hint} (maxTouchPoints={page.evaluate('navigator.maxTouchPoints')})")
+        check(f"{label}: no sideways scrolling",
+              page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"),
+              f"content {page.evaluate('document.documentElement.scrollWidth')}px "
+              f"in {device['viewport']['width']}px")
+        actual = page.evaluate(
+            """() => {
+                 const grid = document.querySelector('.side-by-side');
+                 return getComputedStyle(grid).gridTemplateColumns.split(' ').length;
+               }"""
+        )
+        check(f"{label}: uses {columns} column(s) for the summary cards",
+              actual == columns, f"{actual}")
+        check(f"{label}: the wide config block scrolls inside its own box",
+              page.evaluate("""() => {
+                  const pre = document.querySelector('pre');
+                  return getComputedStyle(pre).overflowX === 'auto';
+              }"""))
+        page.close()
+
+
 def scenario_shell(browser, base, stub_base):
     print("\napp shell: home screen support")
     page = browser.new_page(viewport={"width": 390, "height": 844},
@@ -408,6 +454,7 @@ def main() -> int:
                 scenario_speed_blocked(browser, base)
                 scenario_all_blocked(browser, base)
                 scenario_shell(browser, shell_base, base)
+                scenario_devices(browser, shell_base, base)
             finally:
                 browser.close()
     finally:

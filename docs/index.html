@@ -58,6 +58,20 @@ body {
   margin-inline: auto;
   overflow-x: hidden;
 }
+
+/* An iPad has room for two columns of the short cards; a phone does not. */
+@media (min-width: 760px) {
+  body { max-width: 900px; padding-inline: 24px; }
+  .side-by-side {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+  .side-by-side > .card { margin-bottom: 0; }
+  .buttons { max-width: 320px; margin-inline: auto; }
+  h1 { font-size: 1.6rem; }
+}
 h1 { font-size: 1.35rem; margin: 0 0 2px; letter-spacing: -0.01em; }
 h2 { font-size: .82rem; margin: 0 0 12px; color: var(--muted);
      text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
@@ -163,6 +177,7 @@ kbd { background: var(--bg-sunken); border: 1px solid var(--line); border-radius
 <h1>連線節點建議</h1>
 <p class="sub">量測你現在的網速與各國延遲，算出應該連哪一國的節點。免登入，可加到主畫面。</p>
 
+<div class="side-by-side">
 <section class="card">
   <h2>你現在的連線</h2>
   <div class="facts">
@@ -186,6 +201,7 @@ kbd { background: var(--bg-sunken); border: 1px solid var(--line); border-radius
     <div class="metric"><b id="f-bytes">—</b><span>已下載 MB</span></div>
   </div>
 </section>
+</div>
 
 <section class="card">
   <h2>各國延遲</h2>
@@ -213,8 +229,9 @@ kbd { background: var(--bg-sunken); border: 1px solid var(--line); border-radius
 <footer>
   <section class="card" id="install">
     <h2>加到主畫面</h2>
-    <p class="note">在 Safari 按下方的分享鍵 <kbd>􀈂</kbd> → <strong>加入主畫面</strong>。
-    之後點桌面圖示就會直接全螢幕打開這一頁並自動開始量測，不經過 Safari 網址列，也不需要登入。</p>
+    <p class="note">在 Safari 按<span id="share-where">分享鍵</span> <kbd>􀈂</kbd>
+    → <strong>加入主畫面</strong>。之後點桌面圖示就會直接全螢幕打開這一頁並自動
+    開始量測，不經過 Safari 網址列，也不需要登入。</p>
   </section>
 
   <section class="card">
@@ -621,7 +638,24 @@ $("copy").addEventListener("click", async () => {
 // Only nag about the home screen when the page is not already launched from it.
 const standalone = window.navigator.standalone === true ||
                    window.matchMedia("(display-mode: standalone)").matches;
-if (!standalone) $("install").classList.add("show");
+if (!standalone) {
+  $("install").classList.add("show");
+  $("share-where").textContent = shareButtonLocation();
+}
+
+// The share button sits in different places, and pointing at the wrong one
+// is worse than not saying. An iPad reports itself as a Mac, so the giveaway
+// is that it has a touch screen; a real Mac has none.
+function shareButtonLocation() {
+  // A desktop Mac reports no touch points at all, so any Apple device that
+  // does report some is an iPhone or an iPad -- including an iPad claiming to
+  // be a Mac, which is what iPadOS does.
+  const touch = navigator.maxTouchPoints > 0;
+  const apple = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent);
+  if (!touch || !apple) return "分享鍵";
+  if (/iPhone|iPod/.test(navigator.userAgent)) return "下方工具列的分享鍵";
+  return "右上角網址列旁的分享鍵";
+}
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
