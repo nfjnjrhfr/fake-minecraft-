@@ -225,8 +225,10 @@ node docs/logic.test.mjs                # 驗證建議演算法
 python3 docs/browser.test.py            # 瀏覽器端對端測試（需 playwright）
 ```
 
-要拿到公開、免登入的網址，在 GitHub 的 **Settings → Pages** 選
-`Deploy from a branch`，資料夾選 `/docs`。詳見 [`docs/README.md`](docs/README.md)。
+要拿到公開、免登入的網址（`https://nfjnjrhfr.github.io/fake-minecraft-/`），
+在 GitHub 的 **Settings → Pages** 把 **Source** 設為 `GitHub Actions`——
+repo 裡的 workflow 就會自動發佈。這一步只能手動點：GitHub 不允許 Actions 的
+token 建立 Pages 站台。詳見 [`docs/README.md`](docs/README.md)。
 
 判斷方式：
 

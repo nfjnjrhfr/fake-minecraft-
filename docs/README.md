@@ -26,20 +26,35 @@ Safari 沒有這個 API，也沒有任何 JavaScript 介面可以建立隧道或
 
 ## 部署到 GitHub Pages（免登入的公開網址）
 
-1. 這個資料夾已經叫 `docs/`，GitHub Pages 認得這個名字。
-2. GitHub → **Settings** → **Pages**
-3. **Source** 選 `Deploy from a branch`
-4. **Branch** 選 `main`（或這個分支），資料夾選 **`/docs`**，按 Save
-5. 一兩分鐘後網址會長這樣：
+網址會是：
 
-   ```
-   https://<你的帳號>.github.io/<repo 名稱>/
-   ```
+```
+https://nfjnjrhfr.github.io/fake-minecraft-/
+```
 
-這個網址是公開的、**不需要登入**，用 Safari 直接開就會跑。
+**這一步只能由 repo 擁有者點一次**——GitHub 不允許 Actions 的預設 token 建立
+Pages 站台（會回 `Resource not accessible by integration`），所以沒辦法用
+workflow 自動開啟。
 
-> Pages 一定要走 HTTPS 才會生效：地理位置、Service Worker、以及
-> 「加入主畫面」的全螢幕模式都需要安全來源（`https://` 或 `localhost`）。
+### 方式一：交給 workflow（建議）
+
+1. GitHub → **Settings** → **Pages**
+2. **Source** 選 **`GitHub Actions`**，存檔
+
+這樣就好。repo 裡的 `.github/workflows/pages.yml` 會在每次 `docs/` 有變動時
+自動測試並發佈。在 Pages 啟用之前，它會留下一則提示然後正常結束，不會讓
+每次推送都亮紅燈。
+
+### 方式二：直接從分支發佈
+
+1. GitHub → **Settings** → **Pages**
+2. **Source** 選 `Deploy from a branch`
+3. Branch 選 `main` 或 `claude/vpn-encryption-tunnel-jrknfc`，資料夾選 **`/docs`**，Save
+
+兩種方式都會給你同一個公開網址，**不需要登入**，Safari 直接開就能跑。
+
+> Pages 一定要走 HTTPS 才會完整運作：Service Worker 與「加入主畫面」的
+> 全螢幕模式都需要安全來源（`https://` 或 `localhost`）。
 
 ## 加到主畫面
 
