@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "banlist"
+version = "1.0.0"
+description = "自己伺服器用的玩家／IP 封鎖名單管理工具"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = []
+
+[project.scripts]
+banlist = "banlist.cli:main"
+
+[tool.setuptools]
+packages = ["banlist"]

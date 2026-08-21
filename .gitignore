@@ -1,0 +1,5 @@
+banlist.json
+__pycache__/
+*.pyc
+*.egg-info/
+.tmp*
