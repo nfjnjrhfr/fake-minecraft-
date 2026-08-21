@@ -39,17 +39,49 @@ CHROME = os.environ.get("CHROME")
 # Round trip times to inject, in milliseconds. The order here is what the page
 # is expected to discover; it deliberately is not the order they are listed in.
 LATENCY = {
-    "ap-east-2": 20,        # 台灣
     "ap-northeast-1": 60,   # 日本
-    "ap-northeast-2": 70,   # 韓國
-    "ap-east-1": 85,        # 香港
-    "ap-southeast-1": 120,  # 新加坡
-    "us-west-2": 150,       # 美西
-    "us-east-1": 190,       # 美東
-    "eu-west-2": 240,       # 英國
-    "eu-central-1": 260,    # 德國
-    "ap-southeast-2": 280,  # 澳洲
+    "ap-southeast-1": 72,   # 新加坡 -- deliberately near Japan so the
+                        #   tolerance window has a second candidate to
+                        #   include, whatever speed the stub achieves
+    "us-west-2": 150,       # 美國西岸
+    "us-east-1": 190,       # 美國東岸
+    "mx-central-1": 200,    # 墨西哥
+    "ca-central-1": 215,    # 加拿大
+    "eu-central-2": 250,    # 瑞士
+    "eu-central-1": 260,    # 荷蘭、波蘭、羅馬尼亞 -- one endpoint, three countries
+    "eu-north-1": 275,      # 挪威
 }
+
+
+def app_regions():
+    """Read the country table out of the page.
+
+    Parsing it rather than restating it means the test cannot quietly drift
+    away from the list the page actually measures.
+    """
+    block = re.search(
+        r"const REGIONS = \[(.*?)\n\];",
+        (HERE / "index.html").read_text(encoding="utf-8"),
+        re.S,
+    ).group(1)
+    found = []
+    for line in block.splitlines():
+        fields = re.search(
+            r'key:\s*"([^"]+)".*?name:\s*"([^"]+)".*?city:\s*"([^"]+)".*?probe:\s*"([^"]+)"',
+            line,
+        )
+        if fields:
+            found.append({
+                "key": fields.group(1), "name": fields.group(2),
+                "city": fields.group(3), "probe": fields.group(4),
+                "approx": "approx: true" in line,
+            })
+    if not found:
+        raise SystemExit("could not read REGIONS out of index.html")
+    return found
+
+
+REGIONS = app_regions()
 TARGET_MBPS = 40.0
 TRACE_BODY = b"ip=203.0.113.42\nloc=TW\ncolo=TPE\nwarp=off\n"
 
@@ -246,6 +278,7 @@ def region_rows(page):
     return page.evaluate(
         """() => [...document.querySelectorAll('#regions li')].map(li => ({
              name: li.querySelector('.rname').textContent.trim(),
+             meta: li.querySelector('.rmeta').textContent.trim(),
              ms: li.querySelector('.rms').firstChild.textContent.trim(),
              cls: li.className,
            }))"""
@@ -277,29 +310,33 @@ def scenario_normal(browser, base):
           f"{speed} Mbps against {TARGET_MBPS:g}")
 
     rows = region_rows(page)
-    check("every region rendered", len(rows) == 10, str(len(rows)))
+    check("every country rendered", len(rows) == len(REGIONS), str(len(rows)))
     answered = [row for row in rows if row["ms"] != "無回應"]
-    check("every region answered", len(answered) == 10, str(len(answered)))
+    check("every country answered", len(answered) == len(REGIONS), str(len(answered)))
 
     values = [int(row["ms"]) for row in answered]
     check("listed fastest first", values == sorted(values), str(values))
-    check("fastest region is the one made fastest", "台灣" in rows[0]["name"],
-          rows[0]["name"])
-    check("slowest region is the one made slowest", "澳洲" in rows[-1]["name"],
-          rows[-1]["name"])
+    by_latency = sorted(REGIONS, key=lambda r: LATENCY[r["probe"]])
+    check("fastest country is the one made fastest",
+          by_latency[0]["name"] in rows[0]["name"], rows[0]["name"])
+    check("slowest country is the one made slowest",
+          by_latency[-1]["name"] in rows[-1]["name"], rows[-1]["name"])
 
     # Any fixed overhead in the harness shifts every reading equally, so
     # compare the spacing between regions rather than absolute numbers.
-    injected = sorted(LATENCY.values())
+    # One reading per country, so a shared endpoint contributes its value
+    # once for each country that borrows it.
+    injected = sorted(LATENCY[region["probe"]] for region in REGIONS)
     gaps = [value - values[0] for value in values]
     expected = [value - injected[0] for value in injected]
-    check("spacing between regions matches what was injected",
-          all(abs(gaps[i] - expected[i]) < 40 for i in range(10)),
+    check("spacing between countries matches what was injected",
+          all(abs(gaps[i] - expected[i]) < 40 for i in range(len(REGIONS))),
           f"{gaps} against {expected}")
 
     picked = [row for row in rows if "pick" in row["cls"]]
     check("exactly one region is recommended", len(picked) == 1)
-    check("the recommendation is the fastest", bool(picked) and "台灣" in picked[0]["name"])
+    check("the recommendation is the fastest",
+          bool(picked) and by_latency[0]["name"] in picked[0]["name"])
 
     # tolerance(40 Mbps) is 42 ms, so only regions within best + 42 qualify.
     usable = [row for row in rows if "pick" in row["cls"] or "ok" in row["cls"]]
@@ -311,12 +348,34 @@ def scenario_normal(browser, base):
           f"{len(usable)} usable")
 
     advice = page.inner_text("#advice-body")
-    check("advice names the recommended country", "台灣" in advice)
+    check("advice names the recommended country", by_latency[0]["name"] in advice)
     check("advice explains the window", "ms" in advice and "以內" in advice)
 
-    config = page.inner_text("#config")
-    check("config generated for the pick", "ap-east-2" in config,
+    # The config sits inside a collapsed <details>, so read the DOM text
+    # rather than what happens to be painted.
+    config = page.text_content("#config")
+    check("config generated for the pick", by_latency[0]["key"] + ".你的網域" in config,
           config.splitlines()[0])
+
+    action = page.inner_text("#action")
+    check("the actionable step names the country",
+          by_latency[0]["name"] in action, action)
+
+    # Countries with no endpoint of their own share a neighbour's reading.
+    shared = {}
+    for row in rows:
+        for region in REGIONS:
+            if region["name"] in row["name"]:
+                shared.setdefault(region["probe"], []).append(row["ms"])
+    for probe, readings in shared.items():
+        if len(readings) > 1:
+            check(f"countries sharing {probe} report the same latency",
+                  len(set(readings)) == 1, str(readings))
+    approx_names = [r["name"] for r in REGIONS if r["approx"]]
+    marked = [row for row in rows if "≈" in row["meta"]]
+    check("borrowed readings are marked approximate",
+          len(marked) == len(approx_names),
+          f"{len(marked)} marked, {len(approx_names)} expected")
     check("config is a client config",
           "AllowedIPs" in config and "0.0.0.0/0" in config)
     check("config carries no real private key", "<你的私鑰>" in config)
@@ -347,7 +406,7 @@ def scenario_speed_blocked(browser, base):
     check("advice says the speed test could not be reached", "測速服務連不上" in advice)
     usable = [row for row in rows if "pick" in row["cls"] or "ok" in row["cls"]]
     check("falls back to a cautious window", len(usable) <= 2, f"{len(usable)} usable")
-    check("config still generated", "AllowedIPs" in page.inner_text("#config"))
+    check("config still generated", "AllowedIPs" in page.text_content("#config"))
     page.close()
 
 

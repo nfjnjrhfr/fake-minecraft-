@@ -215,11 +215,15 @@ kbd { background: var(--bg-sunken); border: 1px solid var(--line); border-radius
 </section>
 
 <section class="card">
-  <h2>對應的 pyvpn 設定</h2>
-  <pre id="config"><span class="c"># 等待建議結果…</span></pre>
-  <div class="buttons" style="margin-top:12px">
-    <button class="ghost" id="copy">複製設定</button>
-  </div>
+  <h2>接下來怎麼做</h2>
+  <p id="action" class="note">等待建議結果…</p>
+  <details>
+    <summary>自己架伺服器時用的 pyvpn 設定</summary>
+    <pre id="config"><span class="c"># 等待建議結果…</span></pre>
+    <div class="buttons" style="margin-top:12px">
+      <button class="ghost" id="copy">複製設定</button>
+    </div>
+  </details>
 </section>
 
 <div class="buttons">
@@ -250,17 +254,24 @@ kbd { background: var(--bg-sunken); border: 1px solid var(--line); border-radius
 // Region probes. Each URL is an AWS S3 endpoint that is physically pinned to
 // that region, so the round trip time really does reflect the distance to
 // that country -- unlike an anycast host, which always answers from nearby.
+// The countries Proton VPN's free tier can actually connect to. Listing
+// anywhere else would recommend a node that cannot be selected.
+//
+// `probe` is the AWS region used to time the round trip. Several countries
+// have no AWS region of their own, so they borrow the nearest one and are
+// marked approximate -- they share a probe, and therefore a number.
 const REGIONS = [
-  { flag: "🇹🇼", name: "台灣",   city: "台北",     id: "ap-east-2" },
-  { flag: "🇯🇵", name: "日本",   city: "東京",     id: "ap-northeast-1" },
-  { flag: "🇰🇷", name: "韓國",   city: "首爾",     id: "ap-northeast-2" },
-  { flag: "🇭🇰", name: "香港",   city: "香港",     id: "ap-east-1" },
-  { flag: "🇸🇬", name: "新加坡", city: "新加坡",   id: "ap-southeast-1" },
-  { flag: "🇺🇸", name: "美國西岸", city: "奧勒岡", id: "us-west-2" },
-  { flag: "🇺🇸", name: "美國東岸", city: "維吉尼亞", id: "us-east-1" },
-  { flag: "🇬🇧", name: "英國",   city: "倫敦",     id: "eu-west-2" },
-  { flag: "🇩🇪", name: "德國",   city: "法蘭克福", id: "eu-central-1" },
-  { flag: "🇦🇺", name: "澳洲",   city: "雪梨",     id: "ap-southeast-2" },
+  { key: "jp",   flag: "🇯🇵", name: "日本",     city: "東京",       probe: "ap-northeast-1" },
+  { key: "sg",   flag: "🇸🇬", name: "新加坡",   city: "新加坡",     probe: "ap-southeast-1" },
+  { key: "us-w", flag: "🇺🇸", name: "美國西岸", city: "奧勒岡",     probe: "us-west-2" },
+  { key: "us-e", flag: "🇺🇸", name: "美國東岸", city: "維吉尼亞",   probe: "us-east-1" },
+  { key: "ca",   flag: "🇨🇦", name: "加拿大",   city: "蒙特婁",     probe: "ca-central-1" },
+  { key: "mx",   flag: "🇲🇽", name: "墨西哥",   city: "墨西哥市",   probe: "mx-central-1" },
+  { key: "ch",   flag: "🇨🇭", name: "瑞士",     city: "蘇黎世",     probe: "eu-central-2" },
+  { key: "nl",   flag: "🇳🇱", name: "荷蘭",     city: "法蘭克福",   probe: "eu-central-1", approx: true },
+  { key: "pl",   flag: "🇵🇱", name: "波蘭",     city: "法蘭克福",   probe: "eu-central-1", approx: true },
+  { key: "ro",   flag: "🇷🇴", name: "羅馬尼亞", city: "法蘭克福",   probe: "eu-central-1", approx: true },
+  { key: "no",   flag: "🇳🇴", name: "挪威",     city: "斯德哥爾摩", probe: "eu-north-1",   approx: true },
 ];
 
 const TRACE_URL = "https://speed.cloudflare.com/cdn-cgi/trace";
@@ -323,10 +334,10 @@ async function probeOnce(url) {
   return performance.now() - started;
 }
 
-async function probeRegion(region) {
+async function probeRegion(probe) {
   // A path that does not exist: the regional server answers 404 itself,
   // directly, with no redirect and no extra work.
-  const url = "https://s3." + region.id + ".amazonaws.com/latency-probe";
+  const url = "https://s3." + probe + ".amazonaws.com/latency-probe";
   await probeOnce(url); // warm up DNS and TLS so we time the round trip, not the setup
   const samples = [];
   for (let i = 0; i < PROBE_SAMPLES; i++) {
@@ -461,7 +472,7 @@ function renderRegions(results, advice) {
   list.innerHTML = "";
   const measured = results.filter((entry) => entry.ms !== null).map((entry) => entry.ms);
   const worst = measured.length ? Math.max(...measured) : 1;
-  const usableIds = new Set((advice?.usable ?? []).map((entry) => entry.region.id));
+  const usableKeys = new Set((advice?.usable ?? []).map((entry) => entry.region.key));
 
   const ordered = results.slice().sort((a, b) => {
     if (a.ms === null) return 1;
@@ -472,15 +483,16 @@ function renderRegions(results, advice) {
   for (const entry of ordered) {
     const item = document.createElement("li");
     if (entry.ms === null) item.className = "dead";
-    else if (advice?.pick && entry.region.id === advice.pick.region.id) item.className = "pick";
-    else if (usableIds.has(entry.region.id)) item.className = "ok";
+    else if (advice?.pick && entry.region.key === advice.pick.region.key) item.className = "pick";
+    else if (usableKeys.has(entry.region.key)) item.className = "ok";
     else item.className = "slow";
 
     const width = entry.ms === null ? 0 : Math.max(4, (entry.ms / worst) * 100);
     item.innerHTML =
       '<span class="flag">' + entry.region.flag + "</span>" +
       '<span><span class="rname">' + entry.region.name + "</span>" +
-      '<span class="rmeta"> · ' + entry.region.city + "</span></span>" +
+      '<span class="rmeta"> · ' + (entry.region.approx ? "≈" : "") +
+        entry.region.city + "</span></span>" +
       '<span class="rms">' + (entry.ms === null ? "無回應" : entry.ms) +
       (entry.ms === null ? "" : "<small>ms</small>") + "</span>" +
       '<span class="track"><i style="width:' + width + '%"></i></span>';
@@ -491,6 +503,15 @@ function renderRegions(results, advice) {
 function renderConfig(pick) {
   if (!pick) return;
   const region = pick.region;
+
+  // The step that works without owning a server: pick this country in
+  // whatever VPN app is installed.
+  $("action").innerHTML =
+    "在你的 VPN App 裡選 <strong>" + region.flag + " " + region.name + "</strong>。" +
+    (region.approx
+      ? "（這個數字是用鄰近的" + region.city + "節點估的，實際延遲會有出入。）"
+      : "");
+
   const text =
     "[Interface]\n" +
     "PrivateKey = <你的私鑰>          # python3 -m pyvpn genkey\n" +
@@ -501,7 +522,7 @@ function renderConfig(pick) {
     "\n" +
     "[Peer]\n" +
     "PublicKey           = <伺服器公鑰>\n" +
-    "Endpoint            = " + region.id + ".你的網域:51820\n" +
+    "Endpoint            = " + region.key + ".你的網域:51820\n" +
     "AllowedIPs          = 0.0.0.0/0\n" +
     "PersistentKeepalive = 25\n";
   const comment =
@@ -547,14 +568,22 @@ async function run() {
     //    compete with each other for bandwidth and inflate every number.
     const results = REGIONS.map((region) => ({ region, ms: null }));
     renderRegions(results, null);
-    for (let i = 0; i < results.length; i++) {
-      setText("status", "量測各國延遲 " + (i + 1) + " / " + results.length +
-                        "：" + results[i].region.name);
-      results[i].ms = await probeRegion(results[i].region);
+    // Countries with no AWS region of their own borrow a neighbour's, so
+    // measure each distinct endpoint once and hand the result to everyone
+    // using it rather than timing the same server repeatedly.
+    const probes = [...new Set(REGIONS.map((region) => region.probe))];
+    const measured = [];
+    for (let i = 0; i < probes.length; i++) {
+      const sharing = results.filter((entry) => entry.region.probe === probes[i]);
+      setText("status", "量測各國延遲 " + (i + 1) + " / " + probes.length +
+                        "：" + sharing.map((entry) => entry.region.name).join("、"));
+      const ms = await probeRegion(probes[i]);
+      for (const entry of sharing) entry.ms = ms;
+      // Count each endpoint once, or the shared ones would flatten the spread.
+      if (ms !== null) measured.push(ms);
       renderRegions(results, null);
     }
 
-    const measured = results.filter((entry) => entry.ms !== null).map((entry) => entry.ms);
     if (measured.length) {
       setText("f-latency", Math.min(...measured));
       const mean = measured.reduce((a, b) => a + b, 0) / measured.length;
