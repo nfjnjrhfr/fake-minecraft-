@@ -438,6 +438,62 @@ IPAD = {"viewport": {"width": 820, "height": 1180}, "has_touch": True,
 IPAD_LANDSCAPE = dict(IPAD, viewport={"width": 1180, "height": 820})
 
 
+def scenario_source_page(browser, base, stub_base):
+    """The source page has to stay readable on a tablet without a network."""
+    print("\nsource page: reading the code on a device")
+    for label, device, columns in [("iPhone", IPHONE, None), ("iPad", IPAD, None)]:
+        page = browser.new_page(ignore_https_errors=True, **device)
+        started = time.monotonic()
+        page.goto(base + "/server.html", wait_until="load")
+        elapsed = time.monotonic() - started
+
+        check(f"{label}: page loads", "原始碼" in page.title(), page.title())
+        if label == "iPhone":
+            check("loads in reasonable time for a big page", elapsed < 15,
+                  f"{elapsed:.1f}s")
+
+        modules = page.locator("details.mod")
+        check(f"{label}: every module listed", modules.count() == 18,
+              str(modules.count()))
+        check(f"{label}: no sideways scrolling with the code collapsed",
+              page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"),
+              f"{page.evaluate('document.documentElement.scrollWidth')}px "
+              f"in {device['viewport']['width']}px")
+
+        # Open the widest module and confirm the page still does not move.
+        page.locator("details.mod").nth(3).locator("summary").click()
+        page.wait_for_timeout(250)
+        check(f"{label}: code is revealed when expanded",
+              page.locator("details.mod").nth(3).locator("pre.code").is_visible())
+        check(f"{label}: still no sideways scrolling once expanded",
+              page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"),
+              f"{page.evaluate('document.documentElement.scrollWidth')}px")
+        # Whether the code happens to overflow depends on the viewport, so
+        # test that it is set up to scroll and that the page never does.
+        check(f"{label}: the code block is the thing that scrolls",
+              page.evaluate("""() => {
+                  const pre = document.querySelector('details.mod[open] pre.code');
+                  return getComputedStyle(pre).overflowX === 'auto'
+                         && getComputedStyle(pre.querySelector('code')).whiteSpace === 'pre';
+              }"""))
+        page.close()
+
+    page = browser.new_page(ignore_https_errors=True, **IPAD)
+    page.goto(base + "/server.html", wait_until="load")
+    check("syntax highlighting applied",
+          page.locator("span.k").count() > 100 and page.locator("span.s").count() > 50,
+          f"{page.locator('span.k').count()} keywords, "
+          f"{page.locator('span.s').count()} strings")
+    check("line numbers rendered",
+          page.evaluate("""() => {
+              const line = document.querySelector('.l');
+              return getComputedStyle(line, '::before').content !== 'none';
+          }"""))
+    check("links back to the advisor",
+          page.locator('a[href="./"]').count() > 0)
+    page.close()
+
+
 def scenario_devices(browser, base, stub_base):
     """The page has to read correctly on a phone and on a tablet."""
     print("\ndevices: phone and iPad")
@@ -514,6 +570,7 @@ def main() -> int:
                 scenario_all_blocked(browser, base)
                 scenario_shell(browser, shell_base, base)
                 scenario_devices(browser, shell_base, base)
+                scenario_source_page(browser, shell_base, base)
             finally:
                 browser.close()
     finally:

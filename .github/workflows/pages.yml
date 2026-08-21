@@ -36,13 +36,18 @@ jobs:
       - name: Check the recommendation maths
         run: node docs/logic.test.mjs
 
+      # Generated rather than committed, so the published source can never be
+      # a stale copy of what the package actually contains.
+      - name: Render the source page
+        run: python3 docs/build-source-page.py
+
       - name: Publish
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           site="$(mktemp -d)"
-          cp docs/index.html docs/manifest.webmanifest docs/sw.js "$site/"
+          cp docs/index.html docs/server.html docs/manifest.webmanifest docs/sw.js "$site/"
           cp docs/icon.svg docs/icon-180.png docs/icon-192.png docs/icon-512.png "$site/"
           # Without this, Pages runs the files through Jekyll.
           touch "$site/.nojekyll"

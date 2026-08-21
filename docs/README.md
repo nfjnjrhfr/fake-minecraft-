@@ -101,7 +101,9 @@ Service Worker 在 `localhost` 也算安全來源，所以離線快取一樣可�
 
 | 檔案 | 用途 |
 |---|---|
-| `index.html` | 整個 App，CSS 與 JS 都內嵌，沒有外部相依 |
+| `index.html` | 節點建議 App，CSS 與 JS 都內嵌，沒有外部相依 |
+| `build-source-page.py` | 從 `pyvpn/*.py` 產生 `server.html`，用 stdlib 的 `tokenize` 上色 |
+| `server.html` | 伺服器原始碼閱讀頁（產生物，不進版控，發佈時重新產生） |
 | `browser.test.py` | 真實瀏覽器的端對端測試，含 iPhone / iPad 版面檢查 |
 | `logic.test.mjs` | 建議演算法的測試，函式直接從 `index.html` 取用 |
 | `manifest.webmanifest` | PWA 設定：名稱、圖示、`display: standalone` |
