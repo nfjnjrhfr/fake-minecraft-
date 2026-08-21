@@ -1,0 +1,19 @@
+{
+  "name": "fake-minecraft-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A file-sync bridge between this repository and Roblox Studio.",
+  "main": "server/bridge.js",
+  "bin": {
+    "rbx-bridge": "server/bridge.js"
+  },
+  "scripts": {
+    "serve": "node server/bridge.js serve",
+    "build": "node server/bridge.js build",
+    "install-plugin": "bash scripts/install-plugin.sh",
+    "test": "node test/bridge.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

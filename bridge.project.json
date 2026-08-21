@@ -1,0 +1,9 @@
+{
+  "name": "fake-minecraft",
+  "servePort": 34873,
+  "tree": {
+    "ReplicatedStorage/FakeMinecraft": "src/shared",
+    "ServerScriptService/FakeMinecraft": "src/server",
+    "StarterPlayer/StarterPlayerScripts/FakeMinecraft": "src/client"
+  }
+}
