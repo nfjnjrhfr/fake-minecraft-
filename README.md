@@ -317,3 +317,21 @@ cryptography`）—— 它是 C 擴充模組，沒辦法打包進單一檔案裡
 
 執行伺服器需要 root（要建立 TUN 介面、設定路由與 NAT），而且那台機器必須
 有對外可連入的位址，以及開放的 UDP 埠。
+
+## 在 iPad 上執行（Pyto）
+
+```sh
+python3 build-ipad-file.py        # 產生 pyvpn-ipad.py，約 53 KB
+```
+
+存進 [Pyto](https://apps.apple.com/app/id1436650069)（完整版有內建
+`cryptography`）後按執行，不帶參數就會跑整套自我測試。
+
+模組原始碼壓縮後放在檔案裡，由一個小的 finder 餵給正常的 import 機制，
+所以相對匯入照常運作，不需要改寫任何一行程式。
+
+能跑的：金鑰協商、Noise 握手、封包加解密、重放拒絕、產生金鑰與設定檔。
+
+**不能跑的：隧道本身。** 建立 TUN 介面需要 `/dev/net/tun` 與 root，iOS 兩者
+都不給 App。要真的載送流量還是得有一台 Linux 機器。
+

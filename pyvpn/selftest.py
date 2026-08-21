@@ -230,7 +230,10 @@ def run_selftest(verbose: bool = True) -> int:
         client_sock.close()
 
     # 3. The kernel side, when we are allowed to touch it --------------------
-    if os.geteuid() == 0:
+    # Not every platform that can run the checks above has geteuid: iOS
+    # Python builds are the case that matters here, and there is certainly no
+    # root there, so treat its absence as "not privileged".
+    if getattr(os, "geteuid", lambda: -1)() == 0:
         from .tun import NetworkConfigError, TunDevice
 
         try:
