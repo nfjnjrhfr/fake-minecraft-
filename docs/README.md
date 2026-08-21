@@ -24,37 +24,26 @@ Safari 沒有這個 API，也沒有任何 JavaScript 介面可以建立隧道或
 
 實際的連線由本專案的 `pyvpn` 客戶端負責。
 
-## 部署到 GitHub Pages（免登入的公開網址）
+## 網址
 
-網址會是：
+站台已經上線，不需要登入就能開：
 
-```
-https://nfjnjrhfr.github.io/fake-minecraft-/
-```
+**https://nfjnjrhfr.github.io/fake-minecraft-/**
 
-**這一步只能由 repo 擁有者點一次**——GitHub 不允許 Actions 的預設 token 建立
-Pages 站台（會回 `Resource not accessible by integration`），所以沒辦法用
-workflow 自動開啟。
+### 它是怎麼發佈的
 
-### 方式一：交給 workflow（建議）
+Pages 從 `gh-pages` 分支的根目錄供應檔案。推出那個分支這件事本身就讓
+GitHub 啟用了 Pages，所以沒有人需要去改任何設定。
 
-1. GitHub → **Settings** → **Pages**
-2. **Source** 選 **`GitHub Actions`**，存檔
+`.github/workflows/pages.yml` 維持這個狀態：只要 `docs/` 有變動被推上
+`main` 或開發分支，它會先跑 `logic.test.mjs`，通過才把 `docs/` 的內容複製
+到 `gh-pages` 的根目錄並強制推送。那個分支只放產生出來的檔案，所以整個覆蓋
+就是原意。
 
-這樣就好。repo 裡的 `.github/workflows/pages.yml` 會在每次 `docs/` 有變動時
-自動測試並發佈。在 Pages 啟用之前，它會留下一則提示然後正常結束，不會讓
-每次推送都亮紅燈。
+改網站的時候改 `docs/`，不要直接動 `gh-pages` —— 下一次發佈會蓋掉它。
 
-### 方式二：直接從分支發佈
-
-1. GitHub → **Settings** → **Pages**
-2. **Source** 選 `Deploy from a branch`
-3. Branch 選 `main` 或 `claude/vpn-encryption-tunnel-jrknfc`，資料夾選 **`/docs`**，Save
-
-兩種方式都會給你同一個公開網址，**不需要登入**，Safari 直接開就能跑。
-
-> Pages 一定要走 HTTPS 才會完整運作：Service Worker 與「加入主畫面」的
-> 全螢幕模式都需要安全來源（`https://` 或 `localhost`）。
+> Pages 走 HTTPS，這是必要的：Service Worker 與「加入主畫面」的全螢幕模式
+> 在 `http://` 或 `file://` 底下都不會生效。
 
 ## 加到主畫面
 
