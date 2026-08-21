@@ -24,22 +24,33 @@ bridge.project.json   which directory maps to which place in the DataModel
 server/               the bridge server (Node, no dependencies)
 plugin/               the Roblox Studio plugin, one file
 scripts/              plugin installer
-src/shared/           modules replicated to both sides
-src/server/           world generation and block validation
-src/client/           block tools and hotbar
-test/                 end-to-end test of the bridge
+src/shared/           world model, registries, protocol
+src/server/           authoritative world, streaming, inventories, saves
+src/client/           meshing, rendering, tools, interface
+test/                 bridge end-to-end test, and the game logic suite
 ```
 
 ## The game
 
-`src/` holds a small voxel scaffold to sync: noise-generated terrain built out
-of parts, seven block types, and left/right click to break and place blocks
-with a hotbar on keys 1-7. The server owns the voxel data and validates every
-edit — reach distance, block id, and whether the target cell is free — so the
-client can only ask, never assert.
+An endless voxel world: five biomes over noise terrain with caves, ore veins and
+trees; twenty block types; mining with tools that matter; a 36-slot inventory
+with a 3x3 crafting grid; dropped items; a day/night cycle; and datastore saves
+of everything a player changed.
+
+Chunks are 16 x 64 x 16, stored a byte per block and streamed to each client
+run-length encoded — about 1.7 KB for a chunk of 16,384 blocks. The client
+culls every hidden block and greedily merges the rest into boxes, so a chunk
+draws as roughly 300 parts instead of 16,384. The server owns all block data and
+validates every change, down to timing break speed against the held tool.
+
+[docs/GAME.md](docs/GAME.md) is the architecture, module by module.
 
 ## Tests
 
 ```bash
-npm test
+npm test          # the bridge, end to end, plus the game logic suite
 ```
+
+The game suite runs the pure Luau modules headlessly against a stub of the
+Roblox API. It needs [luau](https://github.com/luau-lang/luau/releases) on your
+PATH and skips itself politely if it is missing.

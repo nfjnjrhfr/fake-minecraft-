@@ -26,19 +26,22 @@ const post = async (p, body) =>
   console.log('nodes:\n  ' + paths.join('\n  '));
   for (const expected of [
     'ReplicatedStorage/FakeMinecraft',
-    'ReplicatedStorage/FakeMinecraft/VoxelWorld',
+    'ReplicatedStorage/FakeMinecraft/Chunk',
     'ServerScriptService/FakeMinecraft',
     'StarterPlayer/StarterPlayerScripts/FakeMinecraft',
   ]) if (!paths.includes(expected)) fail('missing node ' + expected);
 
   if (paths.includes('StarterPlayer/StarterPlayerScripts')) fail('bridge should not own the container instance');
+  const nested = snap.nodes.find((n) => n.path.join('/') === 'ServerScriptService/FakeMinecraft/WorldService');
+  if (!nested || nested.className !== 'ModuleScript') fail('modules beside an init file should become its children');
+
   const serverNode = snap.nodes.find((n) => n.path.join('/') === 'ServerScriptService/FakeMinecraft');
   if (serverNode.className !== 'Script') fail('init.server.luau should map to a Script, got ' + serverNode.className);
   const clientNode = snap.nodes.find((n) => n.path.join('/') === 'StarterPlayer/StarterPlayerScripts/FakeMinecraft');
   if (clientNode.className !== 'LocalScript') fail('init.client.luau should map to a LocalScript');
-  const moduleNode = snap.nodes.find((n) => n.path.join('/') === 'ReplicatedStorage/FakeMinecraft/VoxelWorld');
+  const moduleNode = snap.nodes.find((n) => n.path.join('/') === 'ReplicatedStorage/FakeMinecraft/Chunk');
   if (moduleNode.className !== 'ModuleScript') fail('shared module should be a ModuleScript');
-  if (!moduleNode.source.includes('VoxelWorld')) fail('module source not delivered');
+  if (!moduleNode.source.includes('Chunk.new')) fail('module source not delivered');
 
   // Long poll must block while nothing changes, then fire on a file change.
   const started = Date.now();

@@ -1,7 +1,10 @@
 --!strict
 --[[
-	Generates the voxel world and applies the block edits players request.
-	Every change a player makes is validated here; the client is never trusted.
+	Server entry point: starts the services and owns the player lifecycle.
+
+	The terrain only exists as parts on each client, but a player's character is
+	simulated by that same client, so the blocks they see are the blocks they
+	stand on. The server keeps the block data and decides every change.
 ]]
 
 local Players = game:GetService("Players")
@@ -9,177 +12,170 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("FakeMinecraft")
-local BlockRegistry = require(Shared:WaitForChild("BlockRegistry"))
+local Coordinates = require(Shared:WaitForChild("Coordinates"))
+local ItemRegistry = require(Shared:WaitForChild("ItemRegistry"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
-local VoxelWorld = require(Shared:WaitForChild("VoxelWorld"))
+local TerrainGenerator = require(Shared:WaitForChild("TerrainGenerator"))
 local WorldConfig = require(Shared:WaitForChild("WorldConfig"))
 
-local world = VoxelWorld.new()
-local parts: { [string]: BasePart } = {}
+local BlockService = require(script.BlockService)
+local ChunkStreamer = require(script.ChunkStreamer)
+local DayNightService = require(script.DayNightService)
+local DropService = require(script.DropService)
+local InventoryService = require(script.InventoryService)
+local PersistenceService = require(script.PersistenceService)
+local WorldService = require(script.WorldService)
 
-local container = Instance.new("Folder")
-container.Name = "VoxelWorld"
-container.Parent = Workspace
+local SPAWN_RADIUS = 24 -- studs of jitter, so players do not stack up
+local READY_TIMEOUT = 12
 
-local function partKey(x: number, y: number, z: number): string
-	return string.format("%d,%d,%d", x, y, z)
-end
-
-local function renderBlock(x: number, y: number, z: number, blockId: number)
-	local block = BlockRegistry.get(blockId)
-	if not block then
-		return
-	end
-
-	local index = partKey(x, y, z)
-	local part = parts[index]
-
-	if not part then
-		local created = Instance.new("Part")
-		created.Name = block.name
-		created.Anchored = true
-		created.Size = Vector3.one * WorldConfig.BlockSize
-		created.Position = VoxelWorld.toWorld(x, y, z)
-		created.TopSurface = Enum.SurfaceType.Smooth
-		created.BottomSurface = Enum.SurfaceType.Smooth
-		created:SetAttribute("Voxel", index)
-		created.Parent = container
-		parts[index] = created
-		part = created
-	end
-
-	part.Name = block.name
-	part.Color = block.color
-	part.Material = block.material
-	part.Transparency = block.transparency
-end
-
-local function unrenderBlock(x: number, y: number, z: number)
-	local index = partKey(x, y, z)
-	local part = parts[index]
-	if part then
-		part:Destroy()
-		parts[index] = nil
-	end
-end
-
-local function heightAt(x: number, z: number): number
-	local scale = 0.08
-	local noise = math.noise(x * scale, z * scale, WorldConfig.Seed)
-	local normalised = math.clamp((noise + 1) / 2, 0, 1)
-	local span = WorldConfig.MaxHeight - WorldConfig.MinHeight
-	return WorldConfig.MinHeight + math.floor(normalised * span + 0.5)
-end
-
-local function surfaceBlock(height: number): number
-	if height <= WorldConfig.MinHeight + 1 then
-		return assert(BlockRegistry.fromName("Sand")).id
-	end
-	return assert(BlockRegistry.fromName("Grass")).id
-end
-
-local function generateWorld()
-	local radius = WorldConfig.WorldRadius
-	local dirt = assert(BlockRegistry.fromName("Dirt")).id
-	local stone = assert(BlockRegistry.fromName("Stone")).id
-
-	for x = -radius, radius do
-		for z = -radius, radius do
-			local height = heightAt(x, z)
-			local lowest = math.max(height - WorldConfig.RenderDepth + 1, 0)
-
-			for y = lowest, height do
-				local blockId = if y == height
-					then surfaceBlock(height)
-					elseif y >= height - 1 then dirt
-					else stone
-
-				world:set(x, y, z, blockId)
-				renderBlock(x, y, z, blockId)
-			end
-		end
-
-		-- Yield now and then so world generation does not stall the heartbeat.
-		if x % 8 == 0 then
-			task.wait()
-		end
-	end
-
-	print(string.format("[FakeMinecraft] Generated %d blocks", world.count))
-end
-
-local function characterPosition(player: Player): Vector3?
-	local character = player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart")
-	return if root then (root :: BasePart).Position else nil
-end
-
-local function withinReach(player: Player, x: number, y: number, z: number): boolean
-	local origin = characterPosition(player)
-	if not origin then
-		return false
-	end
-	return (VoxelWorld.toWorld(x, y, z) - origin).Magnitude <= WorldConfig.MaxReach
-end
-
-local function isCoordinate(value: any): boolean
-	return typeof(value) == "number" and value == math.floor(value) and math.abs(value) <= 512
-end
-
-local placeBlock = Remotes.get("PlaceBlock")
-local breakBlock = Remotes.get("BreakBlock")
 local worldReady = Remotes.get("WorldReady")
+local clientReady = Remotes.get("ClientReady")
+local readyPlayers: { [Player]: boolean } = {}
 
-placeBlock.OnServerEvent:Connect(function(player, x, y, z, blockId)
-	if not (isCoordinate(x) and isCoordinate(y) and isCoordinate(z)) then
-		return
-	end
-	if typeof(blockId) ~= "number" or not BlockRegistry.isPlaceable(blockId) then
-		return
-	end
-	if y < 0 or world:isOccupied(x, y, z) or not withinReach(player, x, y, z) then
-		return
-	end
+local STARTER_KIT = {
+	{ "WoodenPickaxe", 1 },
+	{ "WoodenAxe", 1 },
+	{ "WoodenShovel", 1 },
+	{ "Planks", 16 },
+	{ "CraftingTable", 1 },
+}
 
-	world:set(x, y, z, blockId)
-	renderBlock(x, y, z, blockId)
-end)
-
-breakBlock.OnServerEvent:Connect(function(player, x, y, z)
-	if not (isCoordinate(x) and isCoordinate(y) and isCoordinate(z)) then
-		return
+--[[ The template baseplate would sit in the middle of the world. ]]
+local function clearTemplateGeometry()
+	for _, child in Workspace:GetChildren() do
+		if child:IsA("BasePart") and (child.Name == "Baseplate" or child.Name == "SpawnLocation") then
+			child:Destroy()
+			print("[FakeMinecraft] removed the template " .. child.Name)
+		end
+		if child:IsA("SpawnLocation") then
+			child:Destroy()
+		end
 	end
-	if not world:isOccupied(x, y, z) or not withinReach(player, x, y, z) then
-		return
-	end
+end
 
-	world:set(x, y, z, 0)
-	unrenderBlock(x, y, z)
-end)
+local function spawnPointFor(player: Player): Vector3
+	local angle = (player.UserId % 360) * math.pi / 180
+	local offsetX = math.floor(math.cos(angle) * SPAWN_RADIUS / WorldConfig.BlockSize)
+	local offsetZ = math.floor(math.sin(angle) * SPAWN_RADIUS / WorldConfig.BlockSize)
+	local height = TerrainGenerator.spawnHeight(offsetX, offsetZ)
+	return Coordinates.voxelToWorld(offsetX, height, offsetZ)
+end
 
-local function spawnAboveTerrain(player: Player)
-	local character = player.Character or player.CharacterAdded:Wait()
+--[[
+	Hold the character still until its client has the chunks under it, otherwise
+	the player falls through a world that has not been meshed yet.
+]]
+local function placeCharacter(player: Player, character: Model)
 	local root = character:WaitForChild("HumanoidRootPart", 10) :: BasePart?
 	if not root then
 		return
 	end
 
-	local height = heightAt(0, 0)
-	root.CFrame = CFrame.new(VoxelWorld.toWorld(0, height + 3, 0))
-end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local position = spawnPointFor(player)
 
-Players.PlayerAdded:Connect(function(player)
-	player.CharacterAdded:Connect(function()
-		spawnAboveTerrain(player)
-	end)
-	if player.Character then
-		spawnAboveTerrain(player)
+	root.Anchored = true
+	root.CFrame = CFrame.new(position)
+
+	ChunkStreamer.preload(player, position)
+	worldReady:FireClient(player)
+
+	local deadline = os.clock() + READY_TIMEOUT
+	while not readyPlayers[player] and os.clock() < deadline and player.Parent do
+		task.wait(0.2)
 	end
-	worldReady:FireClient(player)
-end)
 
-generateWorld()
-
-for _, player in Players:GetPlayers() do
-	worldReady:FireClient(player)
+	if root.Parent then
+		root.Anchored = false
+		root.CFrame = CFrame.new(position)
+		if humanoid then
+			humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+		end
+	end
 end
+
+local function onPlayerAdded(player: Player)
+	ChunkStreamer.track(player)
+
+	local saved = PersistenceService.loadPlayer(player.UserId)
+	InventoryService.track(player, saved)
+
+	if saved == nil then
+		for _, entry in STARTER_KIT do
+			InventoryService.addItem(player, ItemRegistry.id(entry[1] :: string), entry[2] :: number)
+		end
+	end
+
+	player.CharacterAdded:Connect(function(character)
+		task.spawn(placeCharacter, player, character)
+	end)
+
+	if player.Character then
+		task.spawn(placeCharacter, player, player.Character)
+	end
+end
+
+local function savePlayer(player: Player)
+	local data = InventoryService.serialize(player)
+	if data then
+		PersistenceService.savePlayer(player.UserId, data)
+	end
+end
+
+local function onPlayerRemoving(player: Player)
+	InventoryService.returnLooseItems(player)
+	savePlayer(player)
+	InventoryService.forget(player)
+	ChunkStreamer.forget(player)
+	readyPlayers[player] = nil
+end
+
+local function start()
+	clearTemplateGeometry()
+	Workspace.FallenPartsDestroyHeight = -120
+
+	DropService.start()
+	InventoryService.start()
+	BlockService.start()
+	ChunkStreamer.start()
+	DayNightService.start()
+
+	clientReady.OnServerEvent:Connect(function(player)
+		readyPlayers[player] = true
+	end)
+
+	Players.PlayerAdded:Connect(onPlayerAdded)
+	Players.PlayerRemoving:Connect(onPlayerRemoving)
+
+	for _, player in Players:GetPlayers() do
+		task.spawn(onPlayerAdded, player)
+	end
+
+	-- Autosave: player inventories, then any chunk a player has changed.
+	task.spawn(function()
+		while true do
+			task.wait(WorldConfig.AutosaveInterval)
+
+			for _, player in Players:GetPlayers() do
+				savePlayer(player)
+			end
+			WorldService.saveDirtyChunks()
+		end
+	end)
+
+	game:BindToClose(function()
+		for _, player in Players:GetPlayers() do
+			savePlayer(player)
+		end
+		WorldService.saveDirtyChunks()
+	end)
+
+	print(string.format(
+		"[FakeMinecraft] world ready - seed %d, %s",
+		WorldConfig.Seed,
+		PersistenceService.describe()
+	))
+end
+
+start()

@@ -11,7 +11,9 @@
     "serve": "node server/bridge.js serve",
     "build": "node server/bridge.js build",
     "install-plugin": "bash scripts/install-plugin.sh",
-    "test": "node test/bridge.test.js"
+    "test": "node test/bridge.test.js && node test/game.test.js",
+    "test:bridge": "node test/bridge.test.js",
+    "test:game": "node test/game.test.js"
   },
   "engines": {
     "node": ">=18"
