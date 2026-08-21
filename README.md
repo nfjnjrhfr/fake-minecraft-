@@ -296,3 +296,24 @@ python3 scripts/benchmark.py
 ## 授權
 
 MIT
+
+## 打包成單一檔案
+
+```sh
+./build-single-file.sh pyvpn-server.pyz
+```
+
+產生一個約 107 KB、可直接執行的檔案，把整個套件包在裡面。複製到任何一台
+Linux 機器就能用，不需要 clone 這個 repo：
+
+```sh
+python3 pyvpn-server.pyz selftest              # 自我測試
+python3 pyvpn-server.pyz init --endpoint 你的IP:51820
+sudo python3 pyvpn-server.pyz server -c vpn-config/server.conf
+```
+
+那台機器只需要 Python 3.11 以上與 `cryptography` 套件（`pip install
+cryptography`）—— 它是 C 擴充模組，沒辦法打包進單一檔案裡。
+
+執行伺服器需要 root（要建立 TUN 介面、設定路由與 NAT），而且那台機器必須
+有對外可連入的位址，以及開放的 UDP 埠。
