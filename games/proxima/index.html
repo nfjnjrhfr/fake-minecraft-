@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proxima — Synthesis Camp Games</title>
+<link rel="stylesheet" href="../../shared/theme.css">
+<style>
+  .gauge { height:8px; border-radius:99px; background:#1b2745; overflow:hidden; margin-top:4px; }
+  .gauge i { display:block; height:100%; border-radius:99px; }
+  .sig { display:flex; gap:3px; margin-top:6px; }
+  .sig b { flex:1; height:16px; border-radius:3px; background:#1b2745; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="back" href="../../index.html">← All games</a>
+  <h1>Proxima</h1>
+  <span class="pill">One ship · one tank</span>
+  <span class="spacer"></span>
+  <button id="new">New expedition</button>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+    <div>
+      <div id="banner" class="banner">Find the habitable world, then get home. Nobody is coming to refuel you.</div>
+      <div class="board-wrap"><canvas id="board" aria-label="Star chart"></canvas></div>
+      <div class="panel">
+        <div class="row" style="justify-content:space-between">
+          <div id="hint" style="font-size:13.5px;color:var(--ink-dim)">Click a linked system to burn for it.</div>
+          <div class="row">
+            <button id="scan">Deep scan (8 fuel)</button>
+            <button id="mine">Work the system</button>
+          </div>
+        </div>
+      </div>
+      <details class="rules-box">
+        <summary>How it works</summary>
+        <div class="rules panel">
+          <p>Somewhere on this chart is <b>Proxima b</b>, the one world in the cluster that can hold a colony.
+          Your survey only counts if you <b>bring it home</b>.</p>
+          <ul>
+            <li>Every arrival gives a <b>carrier delay</b> — how many jumps you are from Proxima b through the link
+            network. It is exact, and it is the whole map.</li>
+            <li>Burning a link costs fuel proportional to its length. There is no refuelling except what you find.</li>
+            <li>A <b>deep scan</b> reveals what is sitting in every unvisited system linked to you. Cheaper than
+            arriving somewhere with pirates in it.</li>
+            <li><b>Work the system</b> once per system: depots give fuel, belts give ore, derelicts give whatever
+            is left aboard.</li>
+            <li>Run out of fuel between stars, or lose the hull, and the expedition ends where it stands.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Ship</h2>
+        <div class="stat"><span>Fuel</span><b id="fuel">—</b></div>
+        <div class="gauge"><i id="gfuel" style="background:var(--accent)"></i></div>
+        <div class="stat" style="margin-top:8px"><span>Hull</span><b id="hull">—</b></div>
+        <div class="gauge"><i id="ghull" style="background:var(--good)"></i></div>
+        <div class="stat" style="margin-top:8px"><span>Ore</span><b id="ore">—</b></div>
+        <div class="stat"><span>Jumps made</span><b id="jumps">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>Carrier delay</h2>
+        <div id="delay" style="font-family:var(--mono);font-size:22px;font-weight:700">—</div>
+        <div class="sig" id="sig"></div>
+        <div style="font-size:12px;color:var(--ink-faint);margin-top:6px">Jumps from here to Proxima b.</div>
+      </div>
+      <div class="panel">
+        <h2>Log</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script src="../../shared/util.js"></script>
+<script>
+(function () {
+  const { rng, randInt, pick, shuffle, clamp, logger, fitCanvas, pointerPos, starfield, roundRect } = window.SG;
+
+  const CW = 720, CH = 470, NODES = 16;
+
+  const KINDS = {
+    empty:    { label: 'Dead system',  css: '#4a5570', glyph: '·' },
+    depot:    { label: 'Ice depot',    css: '#7cc4ff', glyph: '⛽' },
+    belt:     { label: 'Ore belt',     css: '#ffd166', glyph: '⛏' },
+    derelict: { label: 'Derelict',     css: '#c08cff', glyph: '⌘' },
+    nebula:   { label: 'Nebula',       css: '#ff9de2', glyph: '≈' },
+    pirates:  { label: 'Raiders',      css: '#f87171', glyph: '☠' },
+    target:   { label: 'PROXIMA B',    css: '#4ade80', glyph: '◉' },
+    home:     { label: 'Home colony',  css: '#e8edf9', glyph: '⌂' },
+  };
+
+  const canvas = document.getElementById('board');
+  const ctx = fitCanvas(canvas, CW, CH);
+  const log = logger(document.getElementById('log'));
+  const banner = document.getElementById('banner');
+  const $ = (id) => document.getElementById(id);
+  let G, hover = -1;
+
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const cost = (a, b) => Math.max(3, Math.round(dist(a, b) / 11));
+
+  function buildMap(r) {
+    const nodes = [];
+    let guard = 0;
+    while (nodes.length < NODES && guard++ < 20000) {
+      const p = { x: 60 + r() * (CW - 120), y: 55 + r() * (CH - 110) };
+      if (nodes.every(n => dist(n, p) > 92)) nodes.push({ ...p, i: nodes.length, links: [] });
+    }
+    // link every node to its 3 nearest, then force connectivity with a spanning pass
+    for (const n of nodes) {
+      const near = nodes.filter(m => m !== n).sort((a, b) => dist(n, a) - dist(n, b)).slice(0, 3);
+      for (const m of near) link(n, m);
+    }
+    const seen = new Set([0]), stack = [nodes[0]];
+    while (stack.length) {
+      const n = stack.pop();
+      for (const j of n.links) if (!seen.has(j)) { seen.add(j); stack.push(nodes[j]); }
+    }
+    for (const n of nodes) {
+      if (seen.has(n.i)) continue;
+      const m = nodes.filter(o => seen.has(o.i)).sort((a, b) => dist(n, a) - dist(n, b))[0];
+      link(n, m); seen.add(n.i); stack.push(n);
+      while (stack.length) {
+        const q = stack.pop();
+        for (const j of q.links) if (!seen.has(j)) { seen.add(j); stack.push(nodes[j]); }
+      }
+    }
+    return nodes;
+
+    function link(a, b) {
+      if (!a.links.includes(b.i)) a.links.push(b.i);
+      if (!b.links.includes(a.i)) b.links.push(a.i);
+    }
+  }
+
+  function hops(nodes, from) {
+    const d = new Array(nodes.length).fill(Infinity);
+    d[from] = 0;
+    const q = [from];
+    while (q.length) {
+      const n = q.shift();
+      for (const j of nodes[n].links) if (d[j] === Infinity) { d[j] = d[n] + 1; q.push(j); }
+    }
+    return d;
+  }
+
+  function newGame() {
+    const seed = (Math.random() * 1e9) >>> 0;
+    const r = rng(seed);
+    const nodes = buildMap(r);
+    const home = 0;
+    const fromHome = hops(nodes, home);
+    // Put Proxima b as far out as the chart allows, so the trip actually costs something.
+    const far = nodes.map((n, i) => ({ i, d: fromHome[i] })).sort((a, b) => b.d - a.d);
+    const target = far[randInt(r, 0, Math.min(2, far.length - 1))].i;
+
+    const pool = shuffle(r, ['depot', 'depot', 'depot', 'belt', 'belt', 'belt',
+                             'derelict', 'derelict', 'nebula', 'nebula', 'pirates', 'pirates',
+                             'empty', 'empty', 'empty', 'empty']);
+    let k = 0;
+    for (const n of nodes) {
+      n.kind = n.i === home ? 'home' : n.i === target ? 'target' : pool[k++ % pool.length];
+      n.seen = n.i === home;
+      n.visited = n.i === home;
+      n.worked = false;
+      n.name = starName(r, n.i);
+    }
+
+    G = { seed, r, nodes, home, target, at: home, fuel: 100, maxFuel: 100,
+          hull: 100, ore: 0, jumps: 0, over: false, found: false,
+          delay: hops(nodes, target) };
+
+    $('log').innerHTML = '';
+    banner.className = 'banner';
+    banner.textContent = 'Find the habitable world, then get home. Nobody is coming to refuel you.';
+    log(`Cleared the ring at <b class="hi">${nodes[home].name}</b>. ` +
+        `Carrier delay reads <b class="hi">${G.delay[home]} jumps</b>.`);
+    hover = -1;
+    sync();
+  }
+
+  const SYLL = ['ka', 'ru', 'tal', 'vex', 'or', 'ni', 'sha', 'dor', 'lys', 'em', 'ath', 'zu', 'per', 'cyg'];
+  function starName(r, i) {
+    return (pick(r, SYLL) + pick(r, SYLL)).replace(/^./, c => c.toUpperCase()) + '-' + (100 + i * 7);
+  }
+
+  function arrive(i) {
+    const n = G.nodes[i];
+    n.visited = true; n.seen = true;
+    const K = KINDS[n.kind];
+    log(`Arrived <b class="hi">${n.name}</b> — ${K.label}. Carrier delay ${G.delay[i]}.`);
+
+    if (n.kind === 'pirates' && !n.worked) {
+      const dmg = randInt(G.r, 12, 26);
+      const stolen = Math.min(G.ore, randInt(G.r, 0, 3));
+      G.hull -= dmg; G.ore -= stolen;
+      log(`Raiders. Hull −${dmg}${stolen ? `, ore −${stolen}` : ''}.`, 'bad');
+    } else if (n.kind === 'nebula') {
+      const dmg = randInt(G.r, 5, 14);
+      G.hull -= dmg;
+      log(`Nebula grit scours the hull, −${dmg}.`, 'bad');
+    } else if (n.kind === 'target') {
+      G.found = true;
+      log('<b class="good">PROXIMA B.</b> Liquid water, breathable partial pressure. Survey locked — now get it home.', 'good');
+      banner.className = 'banner good';
+      banner.innerHTML = '<b>Proxima b surveyed.</b> The expedition only counts if you make it back to the home colony.';
+    }
+    checkDead();
+    sync();
+  }
+
+  function travel(i) {
+    if (G.over) return;
+    const here = G.nodes[G.at];
+    if (!here.links.includes(i)) return;
+    const c = cost(here, G.nodes[i]);
+    if (c > G.fuel) { log(`Not enough fuel for that burn (${c} needed).`, 'bad'); return; }
+    G.fuel -= c; G.jumps++; G.at = i;
+    arrive(i);
+    if (!G.over && G.found && i === G.home) finish(true);
+  }
+
+  function work() {
+    if (G.over) return;
+    const n = G.nodes[G.at];
+    if (n.worked) { log('Nothing more to take here.'); return; }
+    n.worked = true;
+    switch (n.kind) {
+      case 'depot': {
+        const f = randInt(G.r, 22, 38);
+        G.fuel = Math.min(G.maxFuel, G.fuel + f);
+        log(`Cracked ice for <b class="good">+${f} fuel</b>.`, 'good'); break;
+      }
+      case 'belt': {
+        const o = randInt(G.r, 2, 5);
+        G.ore += o; G.fuel -= 4;
+        log(`Mined <b class="good">${o} ore</b> for 4 fuel.`, 'good'); break;
+      }
+      case 'derelict': {
+        if (G.r() < 0.55) {
+          const f = randInt(G.r, 12, 24); G.fuel = Math.min(G.maxFuel, G.fuel + f);
+          log(`Drained the derelict's tanks, <b class="good">+${f} fuel</b>.`, 'good');
+        } else {
+          const h = randInt(G.r, 10, 22); G.hull = Math.min(100, G.hull + h);
+          log(`Stripped plating off the derelict, <b class="good">hull +${h}</b>.`, 'good');
+        }
+        break;
+      }
+      case 'home': {
+        if (G.ore >= 3) { G.ore -= 3; G.fuel = Math.min(G.maxFuel, G.fuel + 30);
+          log('Traded 3 ore for 30 fuel at the colony.', 'good'); n.worked = false; }
+        else log('The colony wants 3 ore for a tank of fuel.');
+        break;
+      }
+      case 'target': log('Surveying complete. There is nothing here to strip.'); break;
+      default: log('Empty. Sensors find nothing worth the burn.');
+    }
+    checkDead();
+    sync();
+  }
+
+  function scan() {
+    if (G.over) return;
+    if (G.fuel < 8) { log('Not enough fuel to power the array.', 'bad'); return; }
+    G.fuel -= 8;
+    const n = G.nodes[G.at];
+    const found = [];
+    for (const j of n.links) {
+      if (!G.nodes[j].seen) { G.nodes[j].seen = true; found.push(G.nodes[j]); }
+    }
+    log(found.length
+      ? 'Scan: ' + found.map(m => `${m.name} = <b class="hi">${KINDS[m.kind].label}</b>`).join(', ')
+      : 'Scan returns nothing new.');
+    checkDead();
+    sync();
+  }
+
+  function checkDead() {
+    if (G.over) return;
+    if (G.hull <= 0) { G.hull = 0; return finish(false, 'The hull failed.'); }
+    const here = G.nodes[G.at];
+    const cheapest = Math.min(...here.links.map(j => cost(here, G.nodes[j])));
+    if (G.fuel < cheapest && !(here.kind === 'depot' && !here.worked)
+        && !(here.kind === 'derelict' && !here.worked)
+        && !(here.kind === 'home' && G.ore >= 3)) {
+      return finish(false, 'Dry tanks. The ship cannot make another burn.');
+    }
+  }
+
+  function finish(win, why) {
+    G.over = true;
+    if (win) {
+      const score = Math.round(G.fuel + G.ore * 12 + G.hull * 0.5 + Math.max(0, 40 - G.jumps) * 6);
+      banner.className = 'banner good';
+      banner.innerHTML = `<b>Home with the survey.</b> ${G.jumps} jumps, ${G.ore} ore, ` +
+        `${G.fuel} fuel and ${G.hull} hull left — expedition score <b>${score}</b>.`;
+      log(`<b class="good">Expedition complete. Score ${score}.</b>`, 'good');
+    } else {
+      banner.className = 'banner bad';
+      banner.innerHTML = `<b>Expedition lost at ${G.nodes[G.at].name}.</b> ${why} ` +
+        (G.found ? 'The survey never made it back.' : 'Proxima b was never found.');
+      log(`<b class="bad">${why}</b>`, 'bad');
+    }
+    sync();
+  }
+
+  function sync() {
+    $('fuel').textContent = `${Math.max(0, Math.round(G.fuel))} / ${G.maxFuel}`;
+    $('hull').textContent = `${Math.max(0, Math.round(G.hull))} / 100`;
+    $('ore').textContent = String(G.ore);
+    $('jumps').textContent = String(G.jumps);
+    $('gfuel').style.width = clamp(G.fuel / G.maxFuel * 100, 0, 100) + '%';
+    $('ghull').style.width = clamp(G.hull, 0, 100) + '%';
+    $('ghull').style.background = G.hull > 50 ? 'var(--good)' : G.hull > 25 ? 'var(--warn)' : 'var(--bad)';
+
+    const d = G.delay[G.at];
+    $('delay').textContent = G.found && G.at === G.target ? 'HERE' : `${d} jump${d === 1 ? '' : 's'}`;
+    const maxD = Math.max(...G.delay.filter(v => isFinite(v)));
+    $('sig').innerHTML = Array.from({ length: maxD + 1 }, (_, k) =>
+      `<b style="background:${k >= d ? '#4ade80' : '#1b2745'}"></b>`).join('');
+
+    const here = G.nodes[G.at];
+    $('scan').disabled = G.over || G.fuel < 8;
+    $('mine').disabled = G.over || here.worked;
+    $('hint').innerHTML = G.over ? 'Expedition over — start a new one.'
+      : `At <b>${here.name}</b> (${KINDS[here.kind].label}). Linked: ` +
+        here.links.map(j => `${G.nodes[j].name} <span style="color:var(--ink-faint)">${cost(here, G.nodes[j])}f</span>`).join(' · ');
+    draw();
+  }
+
+  function draw() {
+    const g = ctx;
+    g.fillStyle = '#080e1c'; g.fillRect(0, 0, CW, CH);
+    starfield(g, CW, CH, rng(G.seed ^ 0xbeef), 220);
+
+    const here = G.nodes[G.at];
+    for (const n of G.nodes) {
+      for (const j of n.links) {
+        if (j < n.i) continue;
+        const m = G.nodes[j];
+        const live = (n.i === G.at || j === G.at);
+        g.strokeStyle = live ? '#6ea8ff88' : '#22304f';
+        g.lineWidth = live ? 2 : 1;
+        g.beginPath(); g.moveTo(n.x, n.y); g.lineTo(m.x, m.y); g.stroke();
+        if (live) {
+          const mx = (n.x + m.x) / 2, my = (n.y + m.y) / 2;
+          const c = cost(n, m);
+          g.fillStyle = c > G.fuel ? '#f87171' : '#93a1c0';
+          g.font = '600 10px ui-monospace, monospace';
+          g.textAlign = 'center'; g.textBaseline = 'middle';
+          roundRect(g, mx - 13, my - 8, 26, 16, 5);
+          g.save(); g.fillStyle = '#0a1122dd'; g.fill(); g.restore();
+          g.fillStyle = c > G.fuel ? '#f87171' : '#93a1c0';
+          g.fillText(c + 'f', mx, my);
+        }
+      }
+    }
+
+    for (const n of G.nodes) {
+      const known = n.seen || n.visited;
+      const K = KINDS[n.kind];
+      const col = known ? K.css : '#33415f';
+      const rad = n.i === G.at ? 20 : 15;
+
+      if (hover === n.i && here.links.includes(n.i) && !G.over) {
+        g.fillStyle = '#6ea8ff22';
+        g.beginPath(); g.arc(n.x, n.y, rad + 12, 0, Math.PI * 2); g.fill();
+      }
+      const grd = g.createRadialGradient(n.x, n.y, 0, n.x, n.y, rad * 2.2);
+      grd.addColorStop(0, col + '77'); grd.addColorStop(1, col + '00');
+      g.fillStyle = grd;
+      g.beginPath(); g.arc(n.x, n.y, rad * 2.2, 0, Math.PI * 2); g.fill();
+
+      g.fillStyle = '#0d1426';
+      g.beginPath(); g.arc(n.x, n.y, rad, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = col; g.lineWidth = n.visited ? 3 : 1.5;
+      g.stroke();
+
+      g.fillStyle = col;
+      g.font = '13px ui-sans-serif, system-ui';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(known ? K.glyph : '?', n.x, n.y + 1);
+
+      g.fillStyle = n.visited ? '#93a1c0' : '#5c6c92';
+      g.font = '600 10px ui-monospace, monospace';
+      g.textBaseline = 'top';
+      g.fillText(n.name, n.x, n.y + rad + 5);
+      if (n.visited) {
+        g.fillStyle = '#4ade8099';
+        g.fillText('delay ' + G.delay[n.i], n.x, n.y + rad + 17);
+      }
+    }
+
+    // the ship
+    g.save();
+    g.translate(here.x, here.y - 26);
+    g.fillStyle = '#ffd166';
+    g.beginPath(); g.moveTo(0, -8); g.lineTo(6, 6); g.lineTo(0, 3); g.lineTo(-6, 6); g.closePath(); g.fill();
+    g.restore();
+  }
+
+  function nodeAt(px, py) {
+    for (const n of G.nodes) if (Math.hypot(n.x - px, n.y - py) < 22) return n.i;
+    return -1;
+  }
+  canvas.addEventListener('mousemove', (e) => {
+    const p = pointerPos(canvas, e);
+    const i = nodeAt(p.x, p.y);
+    if (i !== hover) { hover = i; draw(); }
+  });
+  canvas.addEventListener('mouseleave', () => { hover = -1; draw(); });
+  canvas.addEventListener('click', (e) => {
+    const p = pointerPos(canvas, e);
+    const i = nodeAt(p.x, p.y);
+    if (i >= 0) travel(i);
+  });
+  $('scan').addEventListener('click', scan);
+  $('mine').addEventListener('click', work);
+  $('new').addEventListener('click', newGame);
+
+  newGame();
+})();
+</script>
+</body>
+</html>

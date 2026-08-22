@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Constellation — Synthesis Camp Games</title>
+<link rel="stylesheet" href="../../shared/theme.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="back" href="../../index.html">← All games</a>
+  <h1>Constellation</h1>
+  <span class="pill">Shifting scoring</span>
+  <span class="spacer"></span>
+  <button id="new">New game</button>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+    <div>
+      <div id="banner" class="banner">Claim a star. You, Vega and Rigel take turns — 8 stars each.</div>
+      <div class="board-wrap"><canvas id="board" aria-label="Star map"></canvas></div>
+      <details class="rules-box">
+        <summary>How it works</summary>
+        <div class="rules panel">
+          <p>You are never told which pattern will pay. <b>Three scoring variables</b> are live at once, and one of
+          them is swapped out after rounds 3 and 6 — a constellation built for the old rules may be worth nothing
+          under the new ones.</p>
+          <ul>
+            <li>Three claimants take turns taking one unclaimed star, 8 rounds.</li>
+            <li>Every live variable scores your whole constellation, every round. The board score you see is current, not final.</li>
+            <li>Stars have a <b>colour</b> (spectral class) and a <b>magnitude</b> of 1–4.</li>
+            <li>Adjacency means orthogonally touching on the grid; alignment means a straight run in any of the 8 directions.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Live scoring variables</h2>
+        <div id="rules-live" class="rules"></div>
+      </div>
+      <div class="panel">
+        <h2>Standings</h2>
+        <table class="grid" id="scores"></table>
+      </div>
+      <div class="panel">
+        <h2>Log</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script src="../../shared/util.js"></script>
+<script>
+(function () {
+  const { rng, randInt, pick, shuffle, logger, fitCanvas, pointerPos, starfield } = window.SG;
+
+  const N = 6;                       // 6 x 6 star map
+  const PICKS = 8;                   // stars per claimant
+  const CELL = 88, PAD = 26;
+  const SIZE = N * CELL + PAD * 2;
+
+  const COLOURS = [
+    { key: 'O', name: 'blue',   css: '#7cc4ff' },
+    { key: 'G', name: 'gold',   css: '#ffd166' },
+    { key: 'R', name: 'red',    css: '#ff7b7b' },
+    { key: 'W', name: 'white',  css: '#e8edf9' },
+  ];
+
+  const PLAYERS = [
+    { name: 'You',   css: '#6ea8ff', human: true },
+    { name: 'Vega',  css: '#f87171', human: false },
+    { name: 'Rigel', css: '#4ade80', human: false },
+  ];
+
+  // Every variable scores one claimant's whole set of stars.
+  const VARIABLES = [
+    { id: 'align',  label: 'Alignment',  desc: 'Longest straight run of your stars × 5',
+      score: (s, g) => longestRun(s) * 5 },
+    { id: 'mag',    label: 'Magnitude',  desc: 'Sum of the magnitudes you hold',
+      score: (s, g) => s.reduce((a, c) => a + c.mag, 0) },
+    { id: 'clust',  label: 'Cluster',    desc: 'Largest touching group × 6',
+      score: (s, g) => largestCluster(s) * 6 },
+    { id: 'spec',   label: 'Spectrum',   desc: 'Stars of your most-held colour × 4',
+      score: (s, g) => {
+        const t = tally(s); return (Math.max(0, ...Object.values(t))) * 4; } },
+    { id: 'rare',   label: 'Rarity',     desc: 'Stars of the map’s rarest colour × 8',
+      score: (s, g) => s.filter(c => c.col === g.rarest).length * 8 },
+    { id: 'edge',   label: 'Rim',        desc: 'Each star on the rim of the map × 3',
+      score: (s, g) => s.filter(c => c.x === 0 || c.y === 0 || c.x === N - 1 || c.y === N - 1).length * 3 },
+    { id: 'void',   label: 'Void',       desc: 'Each star with no claimed star beside it × 5',
+      score: (s, g) => s.filter(c => !neighbours(c).some(n => g.cells[n].owner !== null)).length * 5 },
+    { id: 'twin',   label: 'Twins',      desc: 'Each touching same-colour pair you own × 5',
+      score: (s, g) => {
+        let p = 0;
+        for (const c of s) for (const n of neighbours(c)) {
+          const o = g.cells[n];
+          if (o.owner === c.owner && o.col === c.col && o.i > c.i) p++;
+        }
+        return p * 5; } },
+    { id: 'core',   label: 'Core',       desc: 'Each star in the central 2×2 block × 9',
+      score: (s, g) => s.filter(c => c.x >= 2 && c.x <= 3 && c.y >= 2 && c.y <= 3).length * 9 },
+    { id: 'spread', label: 'Spread',     desc: 'Distinct colours you hold, squared × 3',
+      score: (s, g) => { const t = tally(s); return Object.keys(t).length ** 2 * 3; } },
+  ];
+
+  const idx = (x, y) => y * N + x;
+  const tally = (s) => s.reduce((a, c) => (a[c.col] = (a[c.col] || 0) + 1, a), {});
+
+  function neighbours(c) {
+    const out = [];
+    if (c.x > 0) out.push(idx(c.x - 1, c.y));
+    if (c.x < N - 1) out.push(idx(c.x + 1, c.y));
+    if (c.y > 0) out.push(idx(c.x, c.y - 1));
+    if (c.y < N - 1) out.push(idx(c.x, c.y + 1));
+    return out;
+  }
+
+  function longestRun(s) {
+    if (!s.length) return 0;
+    const own = new Set(s.map(c => c.i));
+    const dirs = [[1, 0], [0, 1], [1, 1], [1, -1]];
+    let best = 0;
+    for (const c of s) for (const [dx, dy] of dirs) {
+      let n = 1, x = c.x + dx, y = c.y + dy;
+      while (x >= 0 && y >= 0 && x < N && y < N && own.has(idx(x, y))) { n++; x += dx; y += dy; }
+      best = Math.max(best, n);
+    }
+    return best;
+  }
+
+  function largestCluster(s) {
+    const own = new Set(s.map(c => c.i));
+    const seen = new Set();
+    let best = 0;
+    for (const c of s) {
+      if (seen.has(c.i)) continue;
+      let n = 0;
+      const stack = [c.i];
+      seen.add(c.i);
+      while (stack.length) {
+        const i = stack.pop(); n++;
+        const cc = { x: i % N, y: (i / N) | 0 };
+        for (const j of neighbours(cc)) {
+          if (own.has(j) && !seen.has(j)) { seen.add(j); stack.push(j); }
+        }
+      }
+      best = Math.max(best, n);
+    }
+    return best;
+  }
+
+  const canvas = document.getElementById('board');
+  const ctx = fitCanvas(canvas, SIZE, SIZE);
+  const log = logger(document.getElementById('log'));
+  const banner = document.getElementById('banner');
+  let G = null, hover = -1, busy = false;
+
+  function newGame() {
+    const seed = (Math.random() * 1e9) >>> 0;
+    const r = rng(seed);
+    const cells = [];
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      cells.push({
+        i: idx(x, y), x, y, owner: null,
+        col: pick(r, COLOURS).key,
+        mag: randInt(r, 1, 4),
+        tw: r() * Math.PI * 2,
+      });
+    }
+    const counts = tally(cells);
+    const rarest = Object.keys(counts).sort((a, b) => counts[a] - counts[b])[0];
+    const deck = shuffle(r, VARIABLES);
+    G = {
+      r, cells, rarest, seed,
+      deck, live: deck.slice(0, 3), next: 3,
+      turn: 0, round: 1, over: false,
+      stars: rng(seed ^ 0x9e37),
+    };
+    hover = -1; busy = false;
+    document.getElementById('log').innerHTML = '';
+    log(`Star map seeded. Rarest class: <b class="hi">${COLOURS.find(c => c.key === rarest).name}</b>.`);
+    banner.className = 'banner';
+    banner.textContent = 'Round 1 — your move. Click a star to claim it.';
+    draw(); renderSide();
+  }
+
+  const owned = (p) => G.cells.filter(c => c.owner === p);
+
+  function scoreOf(p) {
+    const s = owned(p);
+    return G.live.reduce((a, v) => a + v.score(s, G), 0);
+  }
+
+  function scoreBreakdown(p) {
+    const s = owned(p);
+    return G.live.map(v => ({ label: v.label, val: v.score(s, G) }));
+  }
+
+  function claim(i, p) {
+    G.cells[i].owner = p;
+    const c = G.cells[i];
+    log(`<b class="hi">${PLAYERS[p].name}</b> takes ${'ABCDEF'[c.x]}${c.y + 1} ` +
+        `(${COLOURS.find(k => k.key === c.col).name}, mag ${c.mag})`);
+  }
+
+  function advance() {
+    let swapped = false;
+    G.turn++;
+    if (G.turn >= PLAYERS.length) {
+      G.turn = 0;
+      G.round++;
+      if (G.round === 4 || G.round === 7) swapped = swapVariable();
+      if (G.round > PICKS) return finish();
+    }
+    if (!PLAYERS[G.turn].human) {
+      busy = true;
+      setTimeout(() => { aiMove(G.turn); busy = false; }, 380);
+    } else if (!swapped) {
+      banner.className = 'banner';
+      banner.textContent = `Round ${G.round} — your move.`;
+    }
+    draw(); renderSide();
+  }
+
+  function swapVariable() {
+    const out = G.live[randInt(G.r, 0, G.live.length - 1)];
+    const pool = G.deck.filter(v => !G.live.includes(v));
+    if (!pool.length) return false;
+    const inn = pool[G.next++ % pool.length];
+    G.live = G.live.map(v => (v === out ? inn : v));
+    log(`<b class="bad">${out.label}</b> stops counting. <b class="good">${inn.label}</b> is now live.`, 'hi');
+    banner.className = 'banner bad';
+    banner.innerHTML = `<b>The variables shifted.</b> ${out.label} is out, ${inn.label} is in — ` +
+      `${inn.desc}. Round ${G.round}, your move.`;
+    return true;
+  }
+
+  function aiMove(p) {
+    const free = G.cells.filter(c => c.owner === null);
+    if (!free.length) return finish();
+    const before = scoreOf(p);
+    let best = null, bestVal = -Infinity;
+    for (const c of free) {
+      c.owner = p;
+      // Value the move by our gain minus the best gain we deny the leader.
+      const gain = scoreOf(p) - before;
+      c.owner = null;
+      // How much the current leader would gain from the same star, to price blocking it.
+      const leader = PLAYERS.map((_, k) => k).filter(k => k !== p)
+        .sort((a, b) => scoreOf(b) - scoreOf(a))[0];
+      const lb = scoreOf(leader);
+      c.owner = leader; const la = scoreOf(leader); c.owner = null;
+      const val = gain + (la - lb) * 0.45 + G.r() * 2.5;
+      if (val > bestVal) { bestVal = val; best = c; }
+    }
+    claim(best.i, p);
+    advance();
+  }
+
+  function finish() {
+    G.over = true;
+    const totals = PLAYERS.map((pl, p) => ({ p, name: pl.name, val: scoreOf(p) }))
+      .sort((a, b) => b.val - a.val);
+    const win = totals[0];
+    banner.className = 'banner ' + (win.p === 0 ? 'good' : 'bad');
+    banner.innerHTML = win.p === 0
+      ? `<b>You win with ${win.val} points.</b> ${totals[1].name} finished on ${totals[1].val}.`
+      : `<b>${win.name} wins with ${win.val} points.</b> You finished on ${totals.find(t => t.p === 0).val}.`;
+    log(`Final: ${totals.map(t => `${t.name} ${t.val}`).join(' · ')}`, 'hi');
+    draw(); renderSide();
+  }
+
+  function renderSide() {
+    document.getElementById('rules-live').innerHTML =
+      '<ul style="margin:0;padding-left:18px">' + G.live.map(v =>
+        `<li><b>${v.label}</b> — ${v.desc}</li>`).join('') + '</ul>' +
+      (G.round <= 6 ? `<div style="margin-top:8px;font-size:12px;color:var(--ink-faint)">One variable is
+        replaced after round ${G.round <= 3 ? 3 : 6}.</div>` : '');
+
+    const rows = PLAYERS.map((pl, p) => {
+      const bd = scoreBreakdown(p);
+      const tot = bd.reduce((a, b) => a + b.val, 0);
+      return `<tr class="${p === 0 ? 'me' : ''}">
+        <td><span style="color:${pl.css}">●</span> ${pl.name}</td>
+        <td class="num" style="color:var(--ink-faint)">${bd.map(b => b.val).join(' + ')}</td>
+        <td class="num"><b>${tot}</b></td></tr>`;
+    }).join('');
+    document.getElementById('scores').innerHTML =
+      `<tr><th>Claimant</th><th class="num">Parts</th><th class="num">Now</th></tr>${rows}`;
+  }
+
+  function draw() {
+    const g = ctx;
+    g.fillStyle = '#0a1122';
+    g.fillRect(0, 0, SIZE, SIZE);
+    starfield(g, SIZE, SIZE, rng(G.seed ^ 0x1234), 140);
+
+    // grid
+    g.strokeStyle = '#1b2745';
+    g.lineWidth = 1;
+    for (let k = 0; k <= N; k++) {
+      const t = PAD + k * CELL;
+      g.beginPath(); g.moveTo(PAD, t); g.lineTo(SIZE - PAD, t); g.stroke();
+      g.beginPath(); g.moveTo(t, PAD); g.lineTo(t, SIZE - PAD); g.stroke();
+    }
+
+    // links between same-owner adjacent stars, so constellations read as shapes
+    for (const c of G.cells) {
+      if (c.owner === null) continue;
+      for (const j of neighbours(c)) {
+        const o = G.cells[j];
+        if (o.owner === c.owner && o.i > c.i) {
+          g.strokeStyle = PLAYERS[c.owner].css + '66';
+          g.lineWidth = 3;
+          g.beginPath();
+          g.moveTo(cx(c), cy(c)); g.lineTo(cx(o), cy(o)); g.stroke();
+        }
+      }
+    }
+
+    for (const c of G.cells) {
+      const x = cx(c), y = cy(c);
+      const col = COLOURS.find(k => k.key === c.col).css;
+      const rad = 8 + c.mag * 3.5;
+
+      if (hover === c.i && c.owner === null && !G.over && !busy) {
+        g.fillStyle = '#6ea8ff22';
+        g.fillRect(PAD + c.x * CELL, PAD + c.y * CELL, CELL, CELL);
+      }
+
+      // glow
+      const grd = g.createRadialGradient(x, y, 0, x, y, rad * 2.4);
+      grd.addColorStop(0, col + 'aa');
+      grd.addColorStop(1, col + '00');
+      g.fillStyle = grd;
+      g.beginPath(); g.arc(x, y, rad * 2.4, 0, Math.PI * 2); g.fill();
+
+      g.fillStyle = col;
+      g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.fill();
+
+      if (c.owner !== null) {
+        g.strokeStyle = PLAYERS[c.owner].css;
+        g.lineWidth = 3.5;
+        g.beginPath(); g.arc(x, y, rad + 7, 0, Math.PI * 2); g.stroke();
+      }
+
+      g.fillStyle = '#06101f';
+      g.font = '700 11px ui-monospace, monospace';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(String(c.mag), x, y + 0.5);
+    }
+
+    // coordinates
+    g.fillStyle = '#5c6c92';
+    g.font = '600 11px ui-monospace, monospace';
+    for (let k = 0; k < N; k++) {
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('ABCDEF'[k], PAD + k * CELL + CELL / 2, 13);
+      g.fillText(String(k + 1), 13, PAD + k * CELL + CELL / 2);
+    }
+  }
+
+  const cx = (c) => PAD + c.x * CELL + CELL / 2;
+  const cy = (c) => PAD + c.y * CELL + CELL / 2;
+
+  function cellAt(px, py) {
+    const x = Math.floor((px - PAD) / CELL), y = Math.floor((py - PAD) / CELL);
+    if (x < 0 || y < 0 || x >= N || y >= N) return -1;
+    return idx(x, y);
+  }
+
+  canvas.addEventListener('mousemove', (e) => {
+    const p = pointerPos(canvas, e);
+    const i = cellAt(p.x, p.y);
+    if (i !== hover) { hover = i; draw(); }
+  });
+  canvas.addEventListener('mouseleave', () => { hover = -1; draw(); });
+  canvas.addEventListener('click', (e) => {
+    if (G.over || busy || !PLAYERS[G.turn].human) return;
+    const p = pointerPos(canvas, e);
+    const i = cellAt(p.x, p.y);
+    if (i < 0 || G.cells[i].owner !== null) return;
+    claim(i, 0);
+    advance();
+  });
+  document.getElementById('new').addEventListener('click', newGame);
+
+  newGame();
+})();
+</script>
+</body>
+</html>

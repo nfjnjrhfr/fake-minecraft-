@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synthesis Camp Games</title>
+<link rel="stylesheet" href="shared/theme.css">
+<style>
+  .hero { padding: 46px 0 26px; max-width: 720px; }
+  .hero h1 { font-size: 40px; margin: 0 0 12px; letter-spacing: -1px; line-height: 1.1; }
+  .hero p { color: var(--ink-dim); font-size: 16px; line-height: 1.65; margin: 0 0 10px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .card {
+    display: block; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; overflow: hidden; color: inherit; transition: border-color .15s, transform .15s;
+  }
+  .card:hover { border-color: var(--accent); transform: translateY(-2px); text-decoration: none; }
+  .card canvas { display: block; width: 100%; height: 128px; background: #0a1122; }
+  .card .body { padding: 14px 16px 16px; }
+  .card h2 { margin: 0 0 4px; font-size: 18px; font-weight: 650; letter-spacing: -.2px;
+             color: var(--ink); text-transform: none; }
+  .card p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.55; color: var(--ink-dim); }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; font-weight: 700;
+         color: var(--ink-faint); border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px; }
+  footer { margin-top: 50px; padding-top: 20px; border-top: 1px solid var(--line);
+           color: var(--ink-faint); font-size: 13px; line-height: 1.7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>Synthesis Camp Games</h1>
+    <p>Playable versions of the collaborative strategy games run at <b style="color:var(--ink)">Synthesis</b> —
+    the programme that started as a class at Ad&nbsp;Astra, the school Elon Musk set up on the SpaceX campus.</p>
+    <p>The originals are multiplayer, moderated, and deliberately taught without rules: children are dropped into
+    the simulation mid-stream and have to work out what is going on. These are single-player reconstructions of the
+    same mechanics — shifting scoring, common-pool resources, sealed bids, an opponent that is a system rather than
+    a person. Every one runs in the browser with no build step and no network.</p>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <footer>
+    Original game concepts belong to Synthesis. These are independent implementations written from published
+    descriptions of how each game plays — no Synthesis code, art or content is used.
+    Open <code>index.html</code> in any browser, or serve the folder statically.
+  </footer>
+</div>
+
+<script src="shared/util.js"></script>
+<script>
+(function () {
+  const { rng, randInt, starfield } = window.SG;
+
+  const GAMES = [
+    { dir: 'constellation', title: 'Constellation', art: 'stars',
+      blurb: 'Claim stars from a shared map while the rules for what a good constellation is keep changing under you.',
+      tags: ['3 players', 'shifting scoring', 'blocking'] },
+    { dir: 'constellation-3d', title: 'Constellation 3D', art: 'cube',
+      blurb: 'The same map, four layers deep. 76 lines run through the cube and most of them are invisible until you look.',
+      tags: ['2 players', 'spatial', 'abstract'] },
+    { dir: 'proxima', title: 'Proxima', art: 'graph',
+      blurb: 'One ship, one tank of fuel, a chart full of unknowns. Find the habitable world and bring the survey home.',
+      tags: ['exploration', 'routing', 'risk'] },
+    { dir: 'fish', title: 'Fish', art: 'fish',
+      blurb: 'Four fleets, one stock of fish. Everyone can see the arithmetic; nobody can make anyone else respect it.',
+      tags: ['commons', 'negotiation', '12 seasons'] },
+    { dir: 'fire', title: 'Fire', art: 'fire',
+      blurb: 'The opponent is not another player, it is the fire. Cut line, drop water, and watch the wind swing.',
+      tags: ['co-operative', 'simulation', 'wind'] },
+    { dir: 'art-for-all', title: 'Art For All', art: 'art',
+      blurb: 'Build a museum at auction. Depth pays, breadth pays, and the bidding war you win is the one that ruins you.',
+      tags: ['auction', 'set collection', '14 lots'] },
+    { dir: 'hollywood', title: 'Hollywood', art: 'holly',
+      blurb: 'Buy scripts, stars and directors in sealed bids, then release one film into an audience that already moved on.',
+      tags: ['sealed bid', 'forecasting', '5 seasons'] },
+    { dir: 'geobridge', title: 'GeoBridge', art: 'bridge',
+      blurb: 'Connect every town to the capital on a budget, knowing the spring flood will take one bridge at random.',
+      tags: ['networks', 'estimation', 'redundancy'] },
+  ];
+
+  const W = 340, H = 128;
+
+  const ART = {
+    stars(g, r) {
+      starfield(g, W, H, r, 90);
+      const pts = Array.from({ length: 7 }, () => ({ x: 30 + r() * (W - 60), y: 20 + r() * (H - 40) }));
+      g.strokeStyle = '#6ea8ff88'; g.lineWidth = 2;
+      g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke();
+      for (const p of pts) {
+        const c = ['#7cc4ff', '#ffd166', '#ff7b7b', '#e8edf9'][randInt(r, 0, 3)];
+        const grd = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, 16);
+        grd.addColorStop(0, c); grd.addColorStop(1, c + '00');
+        g.fillStyle = grd; g.beginPath(); g.arc(p.x, p.y, 16, 0, 6.28); g.fill();
+      }
+    },
+    cube(g, r) {
+      starfield(g, W, H, r, 60);
+      for (let z = 0; z < 4; z++) {
+        const ox = 40 + z * 68, oy = 22 + z * 6;
+        g.strokeStyle = '#22304f'; g.lineWidth = 1;
+        g.strokeRect(ox, oy, 56, 56);
+        for (let k = 0; k < 16; k++) {
+          const x = ox + 7 + (k % 4) * 14, y = oy + 7 + ((k / 4) | 0) * 14;
+          const on = r() < 0.3;
+          g.fillStyle = on ? (r() < 0.5 ? '#6ea8ff' : '#f87171') : '#2a3855';
+          g.beginPath(); g.arc(x, y, on ? 4 : 2.2, 0, 6.28); g.fill();
+        }
+      }
+    },
+    graph(g, r) {
+      starfield(g, W, H, r, 120);
+      const n = Array.from({ length: 9 }, () => ({ x: 26 + r() * (W - 52), y: 20 + r() * (H - 40) }));
+      g.strokeStyle = '#22304f'; g.lineWidth = 1;
+      for (const a of n) {
+        const near = n.filter(b => b !== a).sort((p, q) =>
+          Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(a.x - q.x, a.y - q.y)).slice(0, 2);
+        for (const b of near) { g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); }
+      }
+      n.forEach((p, i) => {
+        const c = i === 0 ? '#4ade80' : i === 1 ? '#e8edf9' : '#4a5570';
+        g.fillStyle = '#0d1426'; g.beginPath(); g.arc(p.x, p.y, 8, 0, 6.28); g.fill();
+        g.strokeStyle = c; g.lineWidth = 2; g.stroke();
+      });
+    },
+    fish(g, r) {
+      g.fillStyle = '#0d1a2e'; g.fillRect(0, 0, W, H);
+      for (let k = 0; k < 5; k++) {
+        g.strokeStyle = `rgba(110,168,255,${0.06 + k * 0.03})`; g.lineWidth = 2;
+        g.beginPath();
+        for (let x = 0; x <= W; x += 8) g.lineTo(x, 30 + k * 18 + Math.sin(x * 0.05 + k) * 5);
+        g.stroke();
+      }
+      // stock curve that rises then crashes
+      g.strokeStyle = '#7cc4ff'; g.lineWidth = 2.5; g.beginPath();
+      for (let x = 0; x <= W; x += 6) {
+        const t = x / W;
+        const y = H - 18 - (Math.sin(t * 3.1) * 60 + 25) * (1 - t * 0.85);
+        g.lineTo(x, y);
+      }
+      g.stroke();
+      for (let k = 0; k < 9; k++) {
+        const x = 20 + r() * (W - 40), y = 22 + r() * (H - 44);
+        g.fillStyle = '#ffd16688';
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x - 9, y - 4); g.lineTo(x - 9, y + 4); g.closePath(); g.fill();
+      }
+    },
+    fire(g, r) {
+      for (let y = 0; y < H; y += 8) for (let x = 0; x < W; x += 8) {
+        const n = Math.sin(x * 0.05) * Math.cos(y * 0.07) + r() * 0.3;
+        g.fillStyle = n > 0.5 ? '#2f6b3a' : n > 0 ? '#8a9a4a' : '#5c7a3a';
+        g.fillRect(x, y, 8, 8);
+      }
+      for (let k = 0; k < 26; k++) {
+        const x = 40 + r() * 150, y = 20 + r() * (H - 40);
+        const grd = g.createRadialGradient(x, y, 1, x, y, 22);
+        grd.addColorStop(0, 'rgba(255,240,150,.95)');
+        grd.addColorStop(.45, 'rgba(255,140,40,.75)');
+        grd.addColorStop(1, 'rgba(180,40,10,0)');
+        g.fillStyle = grd; g.fillRect(x - 22, y - 22, 44, 44);
+      }
+      g.fillStyle = '#3b3b42';
+      for (let k = 0; k < 40; k++) g.fillRect(r() * 90, r() * H, 8, 8);
+    },
+    art(g, r) {
+      g.fillStyle = '#12151d'; g.fillRect(0, 0, W, H);
+      const hues = [35, 205, 5, 120, 275];
+      for (let k = 0; k < 5; k++) {
+        const x = 20 + k * 62, y = 24, w = 50, h = 78;
+        g.fillStyle = '#6b5836'; g.fillRect(x - 4, y - 4, w + 8, h + 8);
+        const hue = hues[k];
+        g.fillStyle = `hsl(${hue},22%,16%)`; g.fillRect(x, y, w, h);
+        for (let j = 0; j < 14; j++) {
+          g.fillStyle = `hsla(${hue + (r() - .5) * 60},${30 + r() * 50}%,${25 + r() * 50}%,.85)`;
+          g.fillRect(x + r() * w * .8, y + r() * h * .8, 6 + r() * 16, 5 + r() * 18);
+        }
+      }
+    },
+    holly(g, r) {
+      g.fillStyle = '#0d1426'; g.fillRect(0, 0, W, H);
+      const cols = ['#7cc4ff', '#ffd166', '#c08cff', '#93a1c0', '#f87171'];
+      for (let k = 0; k < 5; k++) {
+        for (let s = 0; s < 4; s++) {
+          const h = 10 + r() * 80;
+          g.fillStyle = cols[k] + (s === 0 ? 'ff' : '77');
+          g.fillRect(24 + k * 62 + s * 12, H - 20 - h, 10, h);
+        }
+      }
+      g.strokeStyle = '#22304f'; g.lineWidth = 1;
+      for (let y = 20; y < H - 18; y += 22) { g.beginPath(); g.moveTo(14, y); g.lineTo(W - 14, y); g.stroke(); }
+    },
+    bridge(g, r) {
+      for (let y = 0; y < H; y += 10) for (let x = 0; x < W; x += 10) {
+        const h = 0.5 + 0.42 * Math.sin(x * 0.02) * Math.cos(y * 0.03) + 0.2 * Math.sin(y * 0.05);
+        const c = h < 0.42 ? [47, 107, 58] : h < 0.62 ? [125, 122, 94] : [154, 163, 173];
+        const k = 0.72 + h * 0.4;
+        g.fillStyle = `rgb(${c[0] * k | 0},${c[1] * k | 0},${c[2] * k | 0})`;
+        g.fillRect(x, y, 10, 10);
+      }
+      g.strokeStyle = '#3f8fd6'; g.lineWidth = 9; g.lineCap = 'round';
+      g.beginPath();
+      for (let y = 0; y <= H; y += 10) g.lineTo(W / 2 + Math.sin(y * 0.05) * 26, y);
+      g.stroke();
+      const pts = Array.from({ length: 6 }, () => ({ x: 26 + r() * (W - 52), y: 20 + r() * (H - 40) }));
+      g.strokeStyle = '#f3f6ff'; g.lineWidth = 3;
+      for (let i = 1; i < pts.length; i++) {
+        g.beginPath(); g.moveTo(pts[i - 1].x, pts[i - 1].y); g.lineTo(pts[i].x, pts[i].y); g.stroke();
+      }
+      for (const p of pts) {
+        g.fillStyle = '#e8edf9'; g.strokeStyle = '#0a1122'; g.lineWidth = 3;
+        g.beginPath(); g.arc(p.x, p.y, 6, 0, 6.28); g.fill(); g.stroke();
+      }
+    },
+  };
+
+  const host = document.getElementById('cards');
+  GAMES.forEach((game, i) => {
+    const a = document.createElement('a');
+    a.className = 'card';
+    a.href = `games/${game.dir}/index.html`;
+    a.innerHTML = `<canvas></canvas><div class="body">
+        <h2>${game.title}</h2><p>${game.blurb}</p>
+        <div class="tags">${game.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+      </div>`;
+    host.appendChild(a);
+    const canvas = a.querySelector('canvas');
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    const g = canvas.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.fillStyle = '#0a1122'; g.fillRect(0, 0, W, H);
+    ART[game.art](g, rng(0xC0FFEE + i * 7919));
+  });
+})();
+</script>
+</body>
+</html>

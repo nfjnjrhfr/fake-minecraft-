@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Constellation 3D — Synthesis Camp Games</title>
+<link rel="stylesheet" href="../../shared/theme.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="back" href="../../index.html">← All games</a>
+  <h1>Constellation 3D</h1>
+  <span class="pill">4 × 4 × 4</span>
+  <span class="spacer"></span>
+  <button id="new">New game</button>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+    <div>
+      <div id="banner" class="banner">Four stacked layers form one cube. Hover a star to see every line running through it.</div>
+      <div class="board-wrap"><canvas id="board" aria-label="Cube of stars"></canvas></div>
+      <details class="rules-box">
+        <summary>How it works</summary>
+        <div class="rules panel">
+          <p>The map from <a href="../constellation/index.html">Constellation</a> lifted into a cube. Depth is the
+          whole difficulty: a star that looks isolated on its layer may be the middle of a diagonal running corner
+          to corner through the stack.</p>
+          <ul>
+            <li>You and <b>Altair</b> alternate, 16 stars each, out of 64.</li>
+            <li>There are <b>76 straight lines of four</b> through the cube — 48 flat, 24 through the layers, 4 corner-to-corner diagonals.</li>
+            <li>A line pays only the claimant who holds it <b>uncontested</b>: 1 star = 1, two = 3, three = 7, all four = <b>15</b>.</li>
+            <li>Contest a line and neither of you scores it, so blocking is worth real points.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Standings</h2>
+        <table class="grid" id="scores"></table>
+        <div class="divider"></div>
+        <div class="stat"><span>Stars left</span><b id="left">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>Lines through the hovered star</h2>
+        <div id="lines" class="rules" style="font-size:12.5px">Hover the board.</div>
+      </div>
+      <div class="panel">
+        <h2>Log</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script src="../../shared/util.js"></script>
+<script>
+(function () {
+  const { rng, logger, fitCanvas, pointerPos, starfield } = window.SG;
+
+  const N = 4, CELL = 62, LPAD = 14, GAP = 26, MARGIN = 20;
+  const LAYER = N * CELL + LPAD * 2;
+  const SIZE = MARGIN * 2 + LAYER * 2 + GAP;
+
+  const PLAYERS = [
+    { name: 'You',    css: '#6ea8ff' },
+    { name: 'Altair', css: '#f87171' },
+  ];
+  const VALUE = [0, 1, 3, 7, 15];   // payout by uncontested stars held in a line
+
+  const id = (x, y, z) => z * 16 + y * 4 + x;
+
+  const LINES = (() => {
+    const dirs = [];
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+      if (dx === 0 && dy === 0 && dz === 0) continue;
+      // keep one of each opposite pair
+      if (dz > 0 || (dz === 0 && (dy > 0 || (dy === 0 && dx > 0)))) dirs.push([dx, dy, dz]);
+    }
+    const out = [];
+    for (let z = 0; z < N; z++) for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      for (const [dx, dy, dz] of dirs) {
+        const ex = x + dx * 3, ey = y + dy * 3, ez = z + dz * 3;
+        if (ex < 0 || ey < 0 || ez < 0 || ex >= N || ey >= N || ez >= N) continue;
+        const line = [];
+        for (let k = 0; k < N; k++) line.push(id(x + dx * k, y + dy * k, z + dz * k));
+        out.push(line);
+      }
+    }
+    return out;
+  })();
+
+  const canvas = document.getElementById('board');
+  const ctx = fitCanvas(canvas, SIZE, SIZE);
+  const log = logger(document.getElementById('log'));
+  const banner = document.getElementById('banner');
+  let G = null, hover = -1, busy = false;
+
+  function newGame() {
+    const seed = (Math.random() * 1e9) >>> 0;
+    const r = rng(seed);
+    G = {
+      seed, r,
+      owner: new Array(64).fill(null),
+      turn: 0, placed: 0, over: false,
+    };
+    hover = -1; busy = false;
+    document.getElementById('log').innerHTML = '';
+    log(`Cube open. ${LINES.length} scoring lines.`);
+    banner.className = 'banner';
+    banner.textContent = 'Your move — claim any unowned star.';
+    draw(); renderSide();
+  }
+
+  function scoreOf(p) {
+    let s = 0;
+    for (const line of LINES) {
+      let mine = 0, theirs = 0;
+      for (const i of line) {
+        if (G.owner[i] === p) mine++;
+        else if (G.owner[i] !== null) theirs++;
+      }
+      if (theirs === 0) s += VALUE[mine];
+    }
+    return s;
+  }
+
+  function claim(i, p) {
+    G.owner[i] = p;
+    G.placed++;
+    const z = (i / 16) | 0, y = ((i % 16) / 4) | 0, x = i % 4;
+    log(`<b class="hi">${PLAYERS[p].name}</b> takes L${z + 1}·${'ABCD'[x]}${y + 1}`);
+  }
+
+  function advance() {
+    if (G.placed >= 32) return finish();
+    G.turn = 1 - G.turn;
+    if (G.turn === 1) {
+      busy = true;
+      setTimeout(() => { aiMove(); busy = false; }, 320);
+    } else {
+      banner.className = 'banner';
+      banner.textContent = 'Your move.';
+    }
+    draw(); renderSide();
+  }
+
+  function aiMove() {
+    const before = [scoreOf(0), scoreOf(1)];
+    let best = -1, bestVal = -Infinity;
+    for (let i = 0; i < 64; i++) {
+      if (G.owner[i] !== null) continue;
+      G.owner[i] = 1;
+      const gain = scoreOf(1) - before[1];
+      G.owner[i] = 0;
+      const deny = scoreOf(0) - before[0];   // what the human would have gained here
+      G.owner[i] = null;
+      const val = gain + deny * 0.8 + G.r() * 1.2;
+      if (val > bestVal) { bestVal = val; best = i; }
+    }
+    claim(best, 1);
+    advance();
+  }
+
+  function finish() {
+    G.over = true;
+    const a = scoreOf(0), b = scoreOf(1);
+    banner.className = 'banner ' + (a >= b ? 'good' : 'bad');
+    banner.innerHTML = a > b ? `<b>You win ${a} – ${b}.</b>`
+      : a === b ? `<b>Dead heat, ${a} – ${b}.</b>`
+      : `<b>Altair wins ${b} – ${a}.</b>`;
+    log(`Final: You ${a} · Altair ${b}`, 'hi');
+    draw(); renderSide();
+  }
+
+  function renderSide() {
+    const rows = PLAYERS.map((pl, p) => `<tr class="${p === 0 ? 'me' : ''}">
+      <td><span style="color:${pl.css}">●</span> ${pl.name}</td>
+      <td class="num"><b>${scoreOf(p)}</b></td></tr>`).join('');
+    document.getElementById('scores').innerHTML =
+      `<tr><th>Claimant</th><th class="num">Score</th></tr>${rows}`;
+    document.getElementById('left').textContent = String(32 - G.placed);
+
+    const box = document.getElementById('lines');
+    if (hover < 0) { box.textContent = 'Hover the board.'; return; }
+    const through = LINES.filter(l => l.includes(hover));
+    box.innerHTML = through.map(l => {
+      const cells = l.map(i => {
+        const o = G.owner[i];
+        const c = o === null ? '#3d4a69' : PLAYERS[o].css;
+        return `<span style="color:${c}">${i === hover ? '◉' : o === null ? '○' : '●'}</span>`;
+      }).join(' ');
+      let mine = 0, theirs = 0;
+      for (const i of l) { if (G.owner[i] === 0) mine++; else if (G.owner[i] !== null) theirs++; }
+      const worth = theirs === 0 ? `+${VALUE[mine]}` : 'dead';
+      return `<div style="padding:2px 0">${cells} <span style="color:var(--ink-faint)">${worth}</span></div>`;
+    }).join('') || '<i>no lines</i>';
+  }
+
+  // layer k is drawn in a 2x2 arrangement: (0,0) (1,0) / (0,1) (1,1)
+  function layerOrigin(z) {
+    return {
+      ox: MARGIN + (z % 2) * (LAYER + GAP),
+      oy: MARGIN + ((z / 2) | 0) * (LAYER + GAP),
+    };
+  }
+  function cellCentre(i) {
+    const z = (i / 16) | 0, y = ((i % 16) / 4) | 0, x = i % 4;
+    const { ox, oy } = layerOrigin(z);
+    return { x: ox + LPAD + x * CELL + CELL / 2, y: oy + LPAD + y * CELL + CELL / 2 };
+  }
+
+  function draw() {
+    const g = ctx;
+    g.fillStyle = '#0a1122';
+    g.fillRect(0, 0, SIZE, SIZE);
+    starfield(g, SIZE, SIZE, rng(G.seed ^ 0x77), 150);
+
+    const through = hover >= 0 ? LINES.filter(l => l.includes(hover)) : [];
+    const lit = new Set(through.flat());
+
+    for (let z = 0; z < N; z++) {
+      const { ox, oy } = layerOrigin(z);
+      g.fillStyle = '#0d1426cc';
+      g.strokeStyle = '#22304f';
+      g.lineWidth = 1;
+      g.fillRect(ox, oy, LAYER, LAYER);
+      g.strokeRect(ox + .5, oy + .5, LAYER - 1, LAYER - 1);
+
+      g.fillStyle = '#5c6c92';
+      g.font = '700 10px ui-monospace, monospace';
+      g.textAlign = 'left'; g.textBaseline = 'top';
+      g.fillText('LAYER ' + (z + 1), ox + 6, oy + 4);
+
+      for (let k = 0; k <= N; k++) {
+        const t = LPAD + k * CELL;
+        g.strokeStyle = '#1a2440';
+        g.beginPath(); g.moveTo(ox + LPAD, oy + t); g.lineTo(ox + LAYER - LPAD, oy + t); g.stroke();
+        g.beginPath(); g.moveTo(ox + t, oy + LPAD); g.lineTo(ox + t, oy + LAYER - LPAD); g.stroke();
+      }
+    }
+
+    // highlight the lines through the hovered star, layer by layer
+    if (through.length) {
+      for (const line of through) {
+        for (let k = 0; k + 1 < line.length; k++) {
+          const a = line[k], b = line[k + 1];
+          if (((a / 16) | 0) !== ((b / 16) | 0)) continue;   // only draw the in-layer segments
+          const p = cellCentre(a), q = cellCentre(b);
+          g.strokeStyle = '#6ea8ff33'; g.lineWidth = 6;
+          g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(q.x, q.y); g.stroke();
+        }
+      }
+    }
+
+    for (let i = 0; i < 64; i++) {
+      const { x, y } = cellCentre(i);
+      const o = G.owner[i];
+      const col = o === null ? '#33415f' : PLAYERS[o].css;
+      const rad = o === null ? 8 : 13;
+
+      if (lit.has(i)) {
+        g.fillStyle = '#6ea8ff18';
+        g.beginPath(); g.arc(x, y, 22, 0, Math.PI * 2); g.fill();
+      }
+      if (o !== null) {
+        const grd = g.createRadialGradient(x, y, 0, x, y, 26);
+        grd.addColorStop(0, col + '99'); grd.addColorStop(1, col + '00');
+        g.fillStyle = grd;
+        g.beginPath(); g.arc(x, y, 26, 0, Math.PI * 2); g.fill();
+      }
+      g.fillStyle = col;
+      g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.fill();
+      if (i === hover) {
+        g.strokeStyle = '#fff'; g.lineWidth = 2;
+        g.beginPath(); g.arc(x, y, rad + 5, 0, Math.PI * 2); g.stroke();
+      }
+    }
+  }
+
+  function cellAt(px, py) {
+    for (let z = 0; z < N; z++) {
+      const { ox, oy } = layerOrigin(z);
+      const lx = px - ox - LPAD, ly = py - oy - LPAD;
+      if (lx < 0 || ly < 0 || lx >= N * CELL || ly >= N * CELL) continue;
+      return id(Math.floor(lx / CELL), Math.floor(ly / CELL), z);
+    }
+    return -1;
+  }
+
+  canvas.addEventListener('mousemove', (e) => {
+    const p = pointerPos(canvas, e);
+    const i = cellAt(p.x, p.y);
+    if (i !== hover) { hover = i; draw(); renderSide(); }
+  });
+  canvas.addEventListener('mouseleave', () => { hover = -1; draw(); renderSide(); });
+  canvas.addEventListener('click', (e) => {
+    if (G.over || busy || G.turn !== 0) return;
+    const p = pointerPos(canvas, e);
+    const i = cellAt(p.x, p.y);
+    if (i < 0 || G.owner[i] !== null) return;
+    claim(i, 0);
+    advance();
+  });
+  document.getElementById('new').addEventListener('click', newGame);
+
+  newGame();
+})();
+</script>
+</body>
+</html>

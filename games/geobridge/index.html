@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GeoBridge — Synthesis Camp Games</title>
+<link rel="stylesheet" href="../../shared/theme.css">
+<style>
+  .legend { display:grid; grid-template-columns:auto 1fr; gap:6px 10px; font-size:12.5px; color:var(--ink-dim); align-items:center; }
+  .sw { width:14px; height:14px; border-radius:3px; }
+  .gauge { height:10px; border-radius:99px; background:#1b2745; overflow:hidden; margin-top:6px; }
+  .gauge i { display:block; height:100%; background:var(--accent); }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="back" href="../../index.html">← All games</a>
+  <h1>GeoBridge</h1>
+  <span class="pill">Connect the valley</span>
+  <span class="spacer"></span>
+  <button id="new">New valley</button>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+    <div>
+      <div id="banner" class="banner">Link every town to the capital before the money runs out. The river will take one of your bridges.</div>
+      <div class="board-wrap"><canvas id="board" aria-label="Valley map"></canvas></div>
+      <div class="panel">
+        <div class="row" style="justify-content:space-between">
+          <div id="hint" style="font-size:13.5px;color:var(--ink-dim)">Hover a route for its estimate. Click to build it.</div>
+          <div class="row">
+            <button id="mode">Mode: build</button>
+            <button class="primary" id="done">Open the network →</button>
+          </div>
+        </div>
+      </div>
+      <details class="rules-box">
+        <summary>How it works</summary>
+        <div class="rules panel">
+          <p>Every town is worth its <b>population</b>, but only if it can reach the <b>capital</b> over routes you
+          have built. What you are really buying is a connected graph, and the cheapest connected graph is a
+          <b>tree</b> — which is also the one a flood can cut in half.</p>
+          <ul>
+            <li>Routes are priced by <b>length</b>, by the <b>climb</b> they cross, and worst of all by the <b>river</b> — a bridge costs roughly two and a half times a road.</li>
+            <li>The price on the map is an <b>estimate</b>. The real bill lands when you build, anywhere from 35% under to 35% over.</li>
+            <li>A <b>survey</b> costs 8% of the estimate and pins the real number before you commit.</li>
+            <li>When you open the network the spring flood takes out <b>one bridge</b>, chosen at random. Towns cut off from the capital score nothing.</li>
+            <li>Score = population still connected + a tenth of the money you never spent.</li>
+          </ul>
+          <p>A second bridge you never needed is insurance. Insurance you didn't need is wasted budget. That is the whole game.</p>
+        </div>
+      </details>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Budget</h2>
+        <div class="stat"><span>Left</span><b id="budget">—</b></div>
+        <div class="gauge"><i id="gbud"></i></div>
+        <div class="stat" style="margin-top:8px"><span>Spent on routes</span><b id="spent">—</b></div>
+        <div class="stat"><span>Spent on surveys</span><b id="surveys">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>Network</h2>
+        <div class="stat"><span>Towns connected</span><b id="conn">—</b></div>
+        <div class="stat"><span>Population served</span><b id="pop">—</b></div>
+        <div class="stat"><span>Bridges built</span><b id="bridges">—</b></div>
+        <div class="stat"><span>Towns on one bridge</span><b id="fragile">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>Map</h2>
+        <div class="legend">
+          <span class="sw" style="background:#2f6b3a"></span><span>Lowland — cheap going</span>
+          <span class="sw" style="background:#7d7a5e"></span><span>Upland — costs more</span>
+          <span class="sw" style="background:#9aa3ad"></span><span>Ridge — expensive</span>
+          <span class="sw" style="background:#2b6fb0"></span><span>River — needs a bridge</span>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Works log</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script src="../../shared/util.js"></script>
+<script>
+(function () {
+  const { rng, randInt, pick, clamp, logger, fitCanvas, pointerPos, roundRect, fmt } = window.SG;
+
+  const CW = 720, CH = 470, TOWNS = 11, BUDGET = 2200, GS = 10;
+
+  const canvas = document.getElementById('board');
+  const ctx = fitCanvas(canvas, CW, CH);
+  const log = logger(document.getElementById('log'));
+  const banner = document.getElementById('banner');
+  const $ = (id) => document.getElementById(id);
+  let G, hover = -1, mode = 'build';
+
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+  function newGame() {
+    const seed = (Math.random() * 1e9) >>> 0;
+    const r = rng(seed);
+
+    // --- terrain -----------------------------------------------------------
+    const ax = r() * 6.28, ay = r() * 6.28, bx = r() * 6.28;
+    const height = (x, y) =>
+      clamp(0.5 + 0.42 * Math.sin(x * 0.0092 + ax) * Math.cos(y * 0.0125 + ay)
+              + 0.24 * Math.sin(y * 0.021 + bx), 0, 1);
+
+    // river: a wandering polyline from one edge to the other
+    const river = [];
+    const vertical = r() < 0.5;
+    let t = vertical ? 120 + r() * (CW - 240) : 100 + r() * (CH - 200);
+    for (let k = 0; k <= 22; k++) {
+      const p = k / 22;
+      t += (r() - 0.5) * 46;
+      river.push(vertical
+        ? { x: clamp(t, 40, CW - 40), y: p * CH }
+        : { x: p * CW, y: clamp(t, 40, CH - 40) });
+    }
+
+    // --- towns -------------------------------------------------------------
+    const towns = [];
+    let guard = 0;
+    while (towns.length < TOWNS && guard++ < 20000) {
+      const p = { x: 46 + r() * (CW - 92), y: 46 + r() * (CH - 92) };
+      if (nearRiver(p, river) < 26) continue;
+      if (towns.some(o => dist(o, p) < 96)) continue;
+      towns.push({ ...p, i: towns.length, pop: randInt(r, 4, 30) * 1000, name: townName(r) });
+    }
+    towns[0].pop = 45000;
+    towns[0].capital = true;
+    towns[0].name = 'Marrow';
+
+    // --- candidate routes --------------------------------------------------
+    const routes = [];
+    const key = (a, b) => Math.min(a, b) + '-' + Math.max(a, b);
+    const made = new Set();
+    for (const a of towns) {
+      const near = towns.filter(b => b !== a).sort((p, q) => dist(a, p) - dist(a, q)).slice(0, 4);
+      for (const b of near) {
+        if (made.has(key(a.i, b.i))) continue;
+        made.add(key(a.i, b.i));
+        const len = dist(a, b);
+        const bridge = crossesRiver(a, b, river);
+        let climb = 0;
+        for (let k = 0; k <= 10; k++) {
+          const x = a.x + (b.x - a.x) * k / 10, y = a.y + (b.y - a.y) * k / 10;
+          climb += height(x, y);
+        }
+        climb /= 11;
+        const base = len * (0.55 + climb * 1.15) * (bridge ? 2.6 : 1);
+        const est = Math.round(base / 5) * 5;
+        routes.push({
+          a: a.i, b: b.i, est, bridge, climb,
+          real: Math.round(est * (0.65 + r() * 0.7) / 5) * 5,
+          built: false, surveyed: false, washed: false,
+        });
+      }
+    }
+
+    G = { seed, r, height, river, towns, routes, budget: BUDGET,
+          spent: 0, surveyed: 0, over: false, flooded: null };
+
+    $('log').innerHTML = '';
+    banner.className = 'banner';
+    banner.textContent = 'Link every town to the capital before the money runs out. The river will take one of your bridges.';
+    log(`Valley surveyed. ${towns.length} towns, ${routes.length} possible routes, ` +
+        `<b class="hi">${fmt(BUDGET)}</b> to spend.`);
+    hover = -1;
+    sync();
+  }
+
+  const NAMES_A = ['Ash', 'Bram', 'Cold', 'Dun', 'Fern', 'Gled', 'Hal', 'Kirk', 'Mor', 'Ness', 'Ort', 'Pike', 'Quarry', 'Thorn', 'Wyn'];
+  const NAMES_B = ['ford', 'holt', 'bury', 'stead', 'mere', 'gate', 'combe', 'wick', 'ridge', 'fell'];
+  function townName(r) { return pick(r, NAMES_A) + pick(r, NAMES_B); }
+
+  function nearRiver(p, river) {
+    let best = Infinity;
+    for (let k = 0; k + 1 < river.length; k++) best = Math.min(best, segPointDist(river[k], river[k + 1], p));
+    return best;
+  }
+  function segPointDist(a, b, p) {
+    const vx = b.x - a.x, vy = b.y - a.y;
+    const t = clamp(((p.x - a.x) * vx + (p.y - a.y) * vy) / (vx * vx + vy * vy || 1), 0, 1);
+    return Math.hypot(a.x + vx * t - p.x, a.y + vy * t - p.y);
+  }
+  function crossesRiver(a, b, river) {
+    for (let k = 0; k + 1 < river.length; k++) if (segInt(a, b, river[k], river[k + 1])) return true;
+    return false;
+  }
+  function segInt(p1, p2, p3, p4) {
+    const d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
+    if (Math.abs(d) < 1e-9) return false;
+    const u = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d;
+    const v = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / d;
+    return u >= 0 && u <= 1 && v >= 0 && v <= 1;
+  }
+
+  /** Towns reachable from the capital over built (and un-washed) routes. */
+  function reachable(ignore) {
+    const adj = G.towns.map(() => []);
+    for (const rt of G.routes) {
+      if (!rt.built || rt.washed || rt === ignore) continue;
+      adj[rt.a].push(rt.b); adj[rt.b].push(rt.a);
+    }
+    const seen = new Set([0]), st = [0];
+    while (st.length) {
+      const n = st.pop();
+      for (const m of adj[n]) if (!seen.has(m)) { seen.add(m); st.push(m); }
+    }
+    return seen;
+  }
+
+  function build(rt) {
+    if (G.over || rt.built) return;
+    const bill = rt.real;
+    if (bill > G.budget) {
+      log(`${label(rt)} came in at <b class="bad">${fmt(bill)}</b> — more than you have left.`, 'bad');
+      return;
+    }
+    rt.built = true;
+    G.budget -= bill; G.spent += bill;
+    const over = bill - rt.est;
+    log(`Built ${label(rt)} for <b class="hi">${fmt(bill)}</b>` +
+        (rt.surveyed ? '' : over > 0 ? ` <span class="bad">(${fmt(over)} over estimate)</span>`
+                                     : ` <span class="good">(${fmt(-over)} under)</span>`),
+        over > 0 && !rt.surveyed ? 'bad' : '');
+    sync();
+  }
+
+  function survey(rt) {
+    if (G.over || rt.surveyed || rt.built) return;
+    const fee = Math.max(2, Math.round(rt.est * 0.08));
+    if (fee > G.budget) { log('No money left for surveys.', 'bad'); return; }
+    rt.surveyed = true;
+    G.budget -= fee; G.surveyed += fee;
+    log(`Surveyed ${label(rt)} for ${fmt(fee)} — the real price is <b class="hi">${fmt(rt.real)}</b> ` +
+        `against an estimate of ${fmt(rt.est)}.`);
+    sync();
+  }
+
+  const label = (rt) => `${G.towns[rt.a].name}–${G.towns[rt.b].name}${rt.bridge ? ' bridge' : ''}`;
+
+  function finish() {
+    G.over = true;
+    const bridges = G.routes.filter(rt => rt.built && rt.bridge);
+    if (bridges.length) {
+      const gone = bridges[randInt(G.r, 0, bridges.length - 1)];
+      gone.washed = true;
+      G.flooded = gone;
+      log(`<b class="bad">Spring flood.</b> The ${label(gone)} is gone.`, 'bad');
+    } else {
+      log('No bridges to lose — the flood does nothing.');
+    }
+    const seen = reachable();
+    const pop = G.towns.filter(t => seen.has(t.i)).reduce((a, t) => a + t.pop, 0);
+    const total = G.towns.reduce((a, t) => a + t.pop, 0);
+    const thrift = Math.round(G.budget / 10);
+    const score = Math.round(pop / 1000) + thrift;
+    const pct = Math.round(pop / total * 100);
+    banner.className = 'banner ' + (pct === 100 ? 'good' : pct >= 70 ? '' : 'bad');
+    banner.innerHTML = `<b>${fmt(pop)} of ${fmt(total)} people (${pct}%) can still reach the capital.</b> ` +
+      `Score ${score} — ${Math.round(pop / 1000)} for population served, ${thrift} for the ${fmt(G.budget)} left over.`;
+    log(`Final score <b class="hi">${score}</b>.`, pct === 100 ? 'good' : 'bad');
+    $('done').disabled = true;
+    sync();
+  }
+
+  function sync() {
+    const seen = reachable();
+    const pop = G.towns.filter(t => seen.has(t.i)).reduce((a, t) => a + t.pop, 0);
+    const bridges = G.routes.filter(rt => rt.built && rt.bridge && !rt.washed).length;
+
+    // towns that a single bridge failure would cut off
+    let fragile = 0;
+    for (const rt of G.routes) {
+      if (!rt.built || !rt.bridge || rt.washed) continue;
+      const without = reachable(rt);
+      fragile = Math.max(fragile, seen.size - without.size);
+    }
+
+    $('budget').textContent = fmt(G.budget);
+    $('gbud').style.width = clamp(G.budget / BUDGET * 100, 0, 100) + '%';
+    $('gbud').style.background = G.budget > BUDGET * 0.3 ? 'var(--accent)' : 'var(--warn)';
+    $('spent').textContent = fmt(G.spent);
+    $('surveys').textContent = fmt(G.surveyed);
+    $('conn').textContent = `${seen.size - 1} / ${G.towns.length - 1}`;
+    $('pop').textContent = fmt(pop);
+    $('bridges').textContent = String(bridges);
+    $('fragile').textContent = fragile ? `${fragile} at risk` : 'none';
+    $('mode').textContent = 'Mode: ' + mode;
+    draw();
+  }
+
+  function draw() {
+    const g = ctx;
+    // terrain
+    for (let y = 0; y < CH; y += GS) for (let x = 0; x < CW; x += GS) {
+      const h = G.height(x + GS / 2, y + GS / 2);
+      const c = h < 0.42 ? [47, 107, 58] : h < 0.62 ? [125, 122, 94] : [154, 163, 173];
+      const k = 0.72 + h * 0.4;
+      g.fillStyle = `rgb(${Math.round(c[0] * k)},${Math.round(c[1] * k)},${Math.round(c[2] * k)})`;
+      g.fillRect(x, y, GS, GS);
+    }
+    // river
+    g.strokeStyle = '#2b6fb0'; g.lineJoin = 'round'; g.lineCap = 'round';
+    g.lineWidth = 13; g.globalAlpha = 0.55;
+    g.beginPath(); G.river.forEach((p, k) => (k ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke();
+    g.globalAlpha = 1; g.lineWidth = 8; g.strokeStyle = '#3f8fd6';
+    g.beginPath(); G.river.forEach((p, k) => (k ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke();
+
+    const seen = reachable();
+
+    // routes
+    G.routes.forEach((rt, k) => {
+      const a = G.towns[rt.a], b = G.towns[rt.b];
+      const isHover = k === hover;
+      if (rt.built && !rt.washed) {
+        g.strokeStyle = rt.bridge ? '#ffd166' : '#f3f6ff';
+        g.lineWidth = rt.bridge ? 6 : 4;
+      } else if (rt.washed) {
+        g.strokeStyle = '#f87171'; g.lineWidth = 4; g.setLineDash([7, 7]);
+      } else if (isHover && !G.over) {
+        g.strokeStyle = '#ffffffcc'; g.lineWidth = 3;
+      } else {
+        g.strokeStyle = rt.surveyed ? '#7cc4ff66' : '#0a112255';
+        g.lineWidth = rt.surveyed ? 2.5 : 1.5;
+        g.setLineDash([4, 6]);
+      }
+      g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
+      g.setLineDash([]);
+
+      if (isHover && !rt.built && !G.over) {
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        const txt = rt.surveyed ? fmt(rt.real) : '~' + fmt(rt.est);
+        g.font = '700 12px ui-monospace, monospace';
+        const w = g.measureText(txt).width + 18;
+        roundRect(g, mx - w / 2, my - 12, w, 24, 7);
+        g.fillStyle = '#0a1122ee'; g.fill();
+        g.strokeStyle = rt.bridge ? '#ffd166' : '#3d4a69'; g.lineWidth = 1.5; g.stroke();
+        g.fillStyle = rt.surveyed ? '#7cc4ff' : '#e8edf9';
+        g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(txt, mx, my);
+      }
+    });
+
+    // towns
+    for (const t of G.towns) {
+      const rad = 7 + Math.sqrt(t.pop) / 34;
+      const on = seen.has(t.i);
+      g.fillStyle = t.capital ? '#ffd166' : on ? '#e8edf9' : '#66718f';
+      g.strokeStyle = '#0a1122'; g.lineWidth = 3;
+      g.beginPath(); g.arc(t.x, t.y, rad, 0, Math.PI * 2); g.fill(); g.stroke();
+      if (t.capital) {
+        g.strokeStyle = '#ffd166'; g.lineWidth = 2;
+        g.beginPath(); g.arc(t.x, t.y, rad + 6, 0, Math.PI * 2); g.stroke();
+      }
+      g.font = '700 11px ui-monospace, monospace';
+      g.textAlign = 'center'; g.textBaseline = 'top';
+      g.lineWidth = 3; g.strokeStyle = '#0a1122cc';
+      const cap = `${t.name} ${fmt(t.pop / 1000)}k`;
+      g.strokeText(cap, t.x, t.y + rad + 4);
+      g.fillStyle = on ? '#ffffff' : '#c2c9da';
+      g.fillText(cap, t.x, t.y + rad + 4);
+    }
+  }
+
+  function routeAt(px, py) {
+    let best = -1, bestD = 11;
+    G.routes.forEach((rt, k) => {
+      const d = segPointDist(G.towns[rt.a], G.towns[rt.b], { x: px, y: py });
+      if (d < bestD) { bestD = d; best = k; }
+    });
+    return best;
+  }
+
+  canvas.addEventListener('mousemove', (e) => {
+    const p = pointerPos(canvas, e);
+    const k = routeAt(p.x, p.y);
+    if (k !== hover) {
+      hover = k;
+      const rt = G.routes[k];
+      $('hint').innerHTML = rt
+        ? `${label(rt)} — ${rt.surveyed ? `surveyed at <b style="color:var(--ink)">${fmt(rt.real)}</b>`
+            : `estimate <b style="color:var(--ink)">${fmt(rt.est)}</b>`}` +
+          `${rt.bridge ? ' · <span style="color:var(--accent-2)">river crossing</span>' : ''}` +
+          `${rt.built ? ' · built' : ''}`
+        : 'Hover a route for its estimate. Click to build it.';
+      draw();
+    }
+  });
+  canvas.addEventListener('mouseleave', () => { hover = -1; draw(); });
+  canvas.addEventListener('click', (e) => {
+    if (G.over) return;
+    const p = pointerPos(canvas, e);
+    const k = routeAt(p.x, p.y);
+    if (k < 0) return;
+    (mode === 'build' ? build : survey)(G.routes[k]);
+  });
+  $('mode').addEventListener('click', () => {
+    mode = mode === 'build' ? 'survey' : 'build';
+    sync();
+  });
+  $('done').addEventListener('click', () => { if (!G.over) finish(); });
+  $('new').addEventListener('click', () => { $('done').disabled = false; newGame(); });
+
+  newGame();
+})();
+</script>
+</body>
+</html>
