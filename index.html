@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@200;900&family=VT323&display=swap">
 <title>它一直都在那裡</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
@@ -11,34 +14,37 @@
   #c{display:block;width:100vw;height:100vh;image-rendering:pixelated;image-rendering:crisp-edges}
 
   #hud{
-    position:fixed;top:10px;left:12px;pointer-events:none;
-    font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    color:#d6dbd4;text-shadow:1px 1px 0 #000;white-space:pre;opacity:.55;
+    position:fixed;top:10px;left:14px;pointer-events:none;
+    font:19px/1.28 'VT323',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    color:#cfd8cd;text-shadow:0 0 6px rgba(150,200,160,.30),1px 1px 0 #000;
+    white-space:pre;opacity:.62;
   }
   #whisper{
     position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;
-    font:700 clamp(20px,4.2vw,46px)/1.3 ui-monospace,Menlo,Consolas,monospace;
-    color:#cdd2cb;letter-spacing:.28em;text-indent:.28em;
-    text-shadow:0 0 22px rgba(200,220,255,.35);
+    font:900 clamp(22px,4.6vw,52px)/1.35 'Noto Serif TC',"Songti TC","Noto Serif CJK TC",serif;
+    color:#d3d8d1;letter-spacing:.34em;text-indent:.34em;
+    text-shadow:0 0 26px rgba(196,220,255,.32),0 0 3px rgba(0,0,0,.9);
     opacity:0;transition:opacity 1.4s ease;
   }
   #ctl{
-    position:fixed;right:12px;bottom:12px;display:flex;gap:8px;
-    font:11px/1 ui-monospace,Menlo,Consolas,monospace;
+    position:fixed;right:14px;bottom:14px;display:flex;gap:8px;
+    font:200 12px/1 'Noto Serif TC',"Songti TC",serif;
   }
   #ctl button{
-    background:rgba(8,10,12,.55);color:#9aa39a;border:1px solid rgba(150,170,150,.28);
-    padding:7px 11px;letter-spacing:.12em;cursor:pointer;backdrop-filter:blur(2px);
+    font:inherit;background:rgba(6,9,11,.55);color:#96a096;
+    border:1px solid rgba(150,175,155,.26);padding:8px 13px;letter-spacing:.16em;
+    cursor:pointer;backdrop-filter:blur(2px);transition:color .25s,border-color .25s;
   }
-  #ctl button:hover{color:#e6ece6;border-color:rgba(200,220,200,.5)}
+  #ctl button:hover,#ctl button:focus-visible{color:#e8eee8;border-color:rgba(205,225,205,.55);outline:none}
 
   #gate{
     position:fixed;inset:0;display:grid;place-items:center;background:#000;z-index:9;
-    font:14px/2 ui-monospace,Menlo,Consolas,monospace;color:#8f978f;letter-spacing:.3em;
+    font:200 14px/2.2 'Noto Serif TC',"Songti TC",serif;color:#8d968d;letter-spacing:.34em;
     text-align:center;cursor:pointer;transition:opacity 1.1s ease;
   }
-  #gate b{display:block;font-size:clamp(22px,5vw,40px);color:#dfe5df;letter-spacing:.22em;margin-bottom:18px;font-weight:700}
-  #gate span{opacity:.55;font-size:11px}
+  #gate b{display:block;font-weight:900;font-size:clamp(24px,5.4vw,46px);color:#e2e8e2;
+          letter-spacing:.26em;text-indent:.26em;margin-bottom:20px;text-shadow:0 0 30px rgba(190,215,255,.22)}
+  #gate span{display:block;margin-top:14px;opacity:.5;font-size:11px;letter-spacing:.28em}
   #gate.off{opacity:0;pointer-events:none}
   .blink{animation:bl 2.6s steps(1,end) infinite}
   @keyframes bl{0%,88%{opacity:.55}90%,100%{opacity:.08}}
