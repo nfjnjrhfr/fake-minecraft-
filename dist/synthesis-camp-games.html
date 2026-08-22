@@ -1,0 +1,3706 @@
+<title>Synthesis Camp Games</title>
+<style>
+/* Shared visual language for the Synthesis-style game collection. */
+:root {
+  --bg: #070b16;
+  --bg-2: #0d1426;
+  --panel: #121b31;
+  --panel-2: #18233d;
+  --line: #24314f;
+  --ink: #e8edf9;
+  --ink-dim: #93a1c0;
+  --ink-faint: #64719191;
+  --accent: #6ea8ff;
+  --accent-2: #ffd166;
+  --good: #4ade80;
+  --bad: #f87171;
+  --warn: #fb923c;
+  --p1: #6ea8ff;
+  --p2: #f87171;
+  --p3: #4ade80;
+  --p4: #ffd166;
+  --radius: 12px;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: radial-gradient(1200px 800px at 70% -10%, #16224016, transparent 60%), var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+  background: #0a1122cc;
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.topbar h1 { font-size: 17px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+.topbar .spacer { flex: 1; }
+.back {
+  font-size: 13px;
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
+  padding: 5px 10px;
+  border-radius: 8px;
+}
+.back:hover { color: var(--ink); border-color: var(--accent); text-decoration: none; }
+
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 22px 20px 60px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.panel + .panel { margin-top: 14px; }
+.panel h2 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  font-weight: 700;
+}
+
+.board-wrap {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  justify-content: center;
+}
+canvas { display: block; max-width: 100%; height: auto; touch-action: manipulation; }
+
+button, .btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 8px 13px;
+  cursor: pointer;
+  transition: background .12s, border-color .12s, transform .06s;
+}
+button:hover:not(:disabled) { background: #22304f; border-color: var(--accent); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:disabled { opacity: .4; cursor: not-allowed; }
+button.primary { background: #1d3a6e; border-color: #2f5fae; }
+button.primary:hover:not(:disabled) { background: #24498a; }
+
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.stat { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: 14px; }
+.stat span:first-child { color: var(--ink-dim); }
+.stat b { font-variant-numeric: tabular-nums; font-family: var(--mono); font-weight: 600; }
+.divider { height: 1px; background: var(--line); margin: 10px 0; }
+
+.log {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  max-height: 190px;
+  overflow-y: auto;
+  color: var(--ink-dim);
+}
+.log div { padding: 2px 0; border-bottom: 1px solid #1a2440; }
+.log div:last-child { border-bottom: 0; }
+.log .hi { color: var(--ink); }
+.log .good { color: var(--good); }
+.log .bad { color: var(--bad); }
+
+.pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+}
+
+.rules {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--ink-dim);
+}
+.rules b, .rules strong { color: var(--ink); }
+.rules ul { margin: 8px 0; padding-left: 18px; }
+.rules li { margin: 4px 0; }
+
+details.rules-box { margin-top: 14px; }
+details.rules-box summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink-dim);
+  padding: 6px 0;
+  list-style: none;
+}
+details.rules-box summary::before { content: "▸ "; }
+details.rules-box[open] summary::before { content: "▾ "; }
+details.rules-box summary:hover { color: var(--ink); }
+
+.banner {
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+}
+.banner.good { border-color: #2f6f4a; background: #12301f; }
+.banner.bad { border-color: #7a3232; background: #2d1414; }
+
+table.grid { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.grid th, table.grid td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+table.grid th { color: var(--ink-dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+table.grid td.num, table.grid th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+tr.me td { color: var(--accent); font-weight: 600; }
+
+#hub .hero { padding: 46px 0 26px; max-width: 720px;
+}
+#hub .hero h1 { font-size: 40px; margin: 0 0 12px; letter-spacing: -1px; line-height: 1.1;
+}
+#hub .hero p { color: var(--ink-dim); font-size: 16px; line-height: 1.65; margin: 0 0 10px;
+}
+#hub .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;
+}
+#hub .card {
+    display: block; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; overflow: hidden; color: inherit; transition: border-color .15s, transform .15s;
+}
+#hub .card:hover { border-color: var(--accent); transform: translateY(-2px); text-decoration: none;
+}
+#hub .card canvas { display: block; width: 100%; height: 128px; background: #0a1122;
+}
+#hub .card .body { padding: 14px 16px 16px;
+}
+#hub .card h2 { margin: 0 0 4px; font-size: 18px; font-weight: 650; letter-spacing: -.2px;
+             color: var(--ink); text-transform: none;
+}
+#hub .card p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.55; color: var(--ink-dim);
+}
+#hub .tags { display: flex; gap: 6px; flex-wrap: wrap;
+}
+#hub .tag { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; font-weight: 700;
+         color: var(--ink-faint); border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px;
+}
+#hub footer { margin-top: 50px; padding-top: 20px; border-top: 1px solid var(--line);
+           color: var(--ink-faint); font-size: 13px; line-height: 1.7;
+}
+#view[data-game="proxima"] .gauge { height:8px; border-radius:99px; background:#1b2745; overflow:hidden; margin-top:4px;
+}
+#view[data-game="proxima"] .gauge i { display:block; height:100%; border-radius:99px;
+}
+#view[data-game="proxima"] .sig { display:flex; gap:3px; margin-top:6px;
+}
+#view[data-game="proxima"] .sig b { flex:1; height:16px; border-radius:3px; background:#1b2745;
+}
+#view[data-game="fish"] input[type=range] { width: 100%; accent-color: var(--accent);
+}
+#view[data-game="fish"] .quota { font-family: var(--mono); font-size: 26px; font-weight: 700;
+}
+#view[data-game="fish"] .who { display:flex; align-items:center; gap:8px;
+}
+#view[data-game="fish"] .dot { width:10px; height:10px; border-radius:50%; display:inline-block;
+}
+#view[data-game="fire"] .tool { display:flex; gap:8px; align-items:flex-start; width:100%; text-align:left;
+}
+#view[data-game="fire"] .tool.sel { border-color: var(--accent); background:#1d3a6e;
+}
+#view[data-game="fire"] .tool small { display:block; color: var(--ink-faint); font-weight:500; margin-top:2px;
+}
+#view[data-game="fire"] .tools { display:grid; gap:8px;
+}
+#view[data-game="fire"] .legend { display:grid; grid-template-columns:auto 1fr; gap:6px 10px; font-size:12.5px; color:var(--ink-dim); align-items:center;
+}
+#view[data-game="fire"] .sw { width:14px; height:14px; border-radius:3px;
+}
+#view[data-game="art-for-all"] .lot-art { display:flex; gap:16px; align-items:flex-start;
+}
+#view[data-game="art-for-all"] .frame { width:190px; height:190px; border:6px solid #6b5836; border-radius:3px; flex:none;
+           box-shadow:0 8px 24px #0008; background:#111;
+}
+#view[data-game="art-for-all"] .price { font-family:var(--mono); font-size:34px; font-weight:700; letter-spacing:-1px;
+}
+#view[data-game="art-for-all"] .bidders { display:grid; gap:6px; margin-top:10px;
+}
+#view[data-game="art-for-all"] .bidder { display:flex; justify-content:space-between; font-size:13px; padding:4px 8px;
+            border-radius:7px; border:1px solid var(--line);
+}
+#view[data-game="art-for-all"] .bidder.out { opacity:.4; text-decoration:line-through;
+}
+#view[data-game="art-for-all"] .bidder.high { border-color:var(--accent); background:#1d3a6e55;
+}
+#view[data-game="art-for-all"] .coll { display:grid; grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:8px;
+}
+#view[data-game="art-for-all"] .coll .empty { grid-column:1/-1; color:var(--ink-faint); font-size:12px;
+}
+#view[data-game="art-for-all"] .coll canvas { width:100%; height:auto; border:3px solid #6b5836; border-radius:2px; display:block;
+}
+#view[data-game="hollywood"] .lots { display:grid; gap:12px;
+}
+#view[data-game="hollywood"] .lot { border:1px solid var(--line); border-radius:10px; padding:12px; background:var(--panel-2);
+}
+#view[data-game="hollywood"] .lot h3 { margin:0 0 2px; font-size:15px;
+}
+#view[data-game="hollywood"] .lot .meta { font-size:12px; color:var(--ink-dim);
+}
+#view[data-game="hollywood"] .lot .bid { display:flex; gap:8px; align-items:center; margin-top:10px;
+}
+#view[data-game="hollywood"] .lot input { width:100px; background:var(--bg-2); border:1px solid var(--line); color:var(--ink);
+               border-radius:8px; padding:7px 9px; font-family:var(--mono);
+}
+#view[data-game="hollywood"] .heat { display:grid; grid-template-columns:auto 1fr auto; gap:5px 9px; align-items:center; font-size:12.5px;
+}
+#view[data-game="hollywood"] .heat i { display:block; height:9px; border-radius:99px; background:var(--accent);
+}
+#view[data-game="hollywood"] .heat .track { background:#1b2745; border-radius:99px; overflow:hidden;
+}
+#view[data-game="hollywood"] .card { border:1px solid var(--line); border-radius:9px; padding:8px 10px; background:var(--panel-2);
+          cursor:pointer; font-size:13px;
+}
+#view[data-game="hollywood"] .card.sel { border-color:var(--accent); background:#1d3a6e;
+}
+#view[data-game="hollywood"] .card.dim { opacity:.45;
+}
+#view[data-game="hollywood"] .card b { display:block;
+}
+#view[data-game="hollywood"] .card span { color:var(--ink-dim); font-size:11.5px;
+}
+#view[data-game="hollywood"] .slot { display:grid; gap:8px;
+}
+#view[data-game="hollywood"] .slot h4 { margin:12px 0 2px; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim);
+}
+#view[data-game="geobridge"] .legend { display:grid; grid-template-columns:auto 1fr; gap:6px 10px; font-size:12.5px; color:var(--ink-dim); align-items:center;
+}
+#view[data-game="geobridge"] .sw { width:14px; height:14px; border-radius:3px;
+}
+#view[data-game="geobridge"] .gauge { height:10px; border-radius:99px; background:#1b2745; overflow:hidden; margin-top:6px;
+}
+#view[data-game="geobridge"] .gauge i { display:block; height:100%; background:var(--accent);
+}
+</style>
+
+<div id="hub">
+<div class="wrap">
+  <div class="hero">
+    <h1>Synthesis Camp Games</h1>
+    <p>Playable versions of the collaborative strategy games run at <b style="color:var(--ink)">Synthesis</b> —
+    the programme that started as a class at Ad&nbsp;Astra, the school Elon Musk set up on the SpaceX campus.</p>
+    <p>The originals are multiplayer, moderated, and deliberately taught without rules: children are dropped into
+    the simulation mid-stream and have to work out what is going on. These are single-player reconstructions of the
+    same mechanics — shifting scoring, common-pool resources, sealed bids, an opponent that is a system rather than
+    a person. Every one runs in the browser with no build step and no network.</p>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <footer>
+    Original game concepts belong to Synthesis. These are independent implementations written from published
+    descriptions of how each game plays — no Synthesis code, art or content is used.
+    Open <code>index.html</code> in any browser, or serve the folder statically.
+  </footer>
+</div>
+</div>
+
+<div id="view" hidden></div>
+<template data-game="constellation">
+<header class="topbar">
+  <a class="back" href="#/">← All games</a>
+  <h1>Constellation</h1>
+  <span class="pill">Shifting scoring</span>
+  <span class="spacer"></span>
+  <button id="new">New game</button>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+    <div>
+      <div id="banner" class="banner">Claim a star. You, Vega and Rigel take turns — 8 stars each.</div>
+      <div class="board-wrap"><canvas id="board" aria-label="Star map"></canvas></div>
+      <details class="rules-box">
+        <summary>How it works</summary>
+        <div class="rules panel">
+          <p>You are never told which pattern will pay. <b>Three scoring variables</b> are live at once, and one of
+          them is swapped out after rounds 3 and 6 — a constellation built for the old rules may be worth nothing
+          under the new ones.</p>
+          <ul>
+            <li>Three claimants take turns taking one unclaimed star, 8 rounds.</li>
+            <li>Every live variable scores your whole constellation, every round. The board score you see is current, not final.</li>
+            <li>Stars have a <b>colour</b> (spectral class) and a <b>magnitude</b> of 1–4.</li>
+            <li>Adjacency means orthogonally touching on the grid; alignment means a straight run in any of the 8 directions.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Live scoring variables</h2>
+        <div id="rules-live" class="rules"></div>
+      </div>
+      <div class="panel">
+        <h2>Standings</h2>
+        <table class="grid" id="scores"></table>
+      </div>
+      <div class="panel">
+        <h2>Log</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+</template>
+<template data-game="constellation-3d">
+<header class="topbar">
+  <a class="back" href="#/">← All games</a>
+  <h1>Constellation 3D</h1>
+  <span class="pill">4 × 4 × 4</span>
+  <span class="spacer"></span>
+  <button id="new">New game</button>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+    <div>
+      <div id="banner" class="banner">Four stacked layers form one cube. Hover a star to see every line running through it.</div>
+      <div class="board-wrap"><canvas id="board" aria-label="Cube of stars"></canvas></div>
+      <details class="rules-box">
+        <summary>How it works</summary>
+        <div class="rules panel">
+          <p>The map from <a href="#/constellation">Constellation</a> lifted into a cube. Depth is the
+          whole difficulty: a star that looks isolated on its layer may be the middle of a diagonal running corner
+          to corner through the stack.</p>
+          <ul>
+            <li>You and <b>Altair</b> alternate, 16 stars each, out of 64.</li>
+            <li>There are <b>76 straight lines of four</b> through the cube — 48 flat, 24 through the layers, 4 corner-to-corner diagonals.</li>
+            <li>A line pays only the claimant who holds it <b>uncontested</b>: 1 star = 1, two = 3, three = 7, all four = <b>15</b>.</li>
+            <li>Contest a line and neither of you scores it, so blocking is worth real points.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Standings</h2>
+        <table class="grid" id="scores"></table>
+        <div class="divider"></div>
+        <div class="stat"><span>Stars left</span><b id="left">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>Lines through the hovered star</h2>
+        <div id="lines" class="rules" style="font-size:12.5px">Hover the board.</div>
+      </div>
+      <div class="panel">
+        <h2>Log</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+</template>
+<template data-game="proxima">
+<header class="topbar">
+  <a class="back" href="#/">← All games</a>
+  <h1>Proxima</h1>
+  <span class="pill">One ship · one tank</span>
+  <span class="spacer"></span>
+  <button id="new">New expedition</button>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+    <div>
+      <div id="banner" class="banner">Find the habitable world, then get home. Nobody is coming to refuel you.</div>
+      <div class="board-wrap"><canvas id="board" aria-label="Star chart"></canvas></div>
+      <div class="panel">
+        <div class="row" style="justify-content:space-between">
+          <div id="hint" style="font-size:13.5px;color:var(--ink-dim)">Click a linked system to burn for it.</div>
+          <div class="row">
+            <button id="scan">Deep scan (8 fuel)</button>
+            <button id="mine">Work the system</button>
+          </div>
+        </div>
+      </div>
+      <details class="rules-box">
+        <summary>How it works</summary>
+        <div class="rules panel">
+          <p>Somewhere on this chart is <b>Proxima b</b>, the one world in the cluster that can hold a colony.
+          Your survey only counts if you <b>bring it home</b>.</p>
+          <ul>
+            <li>Every arrival gives a <b>carrier delay</b> — how many jumps you are from Proxima b through the link
+            network. It is exact, and it is the whole map.</li>
+            <li>Burning a link costs fuel proportional to its length. There is no refuelling except what you find.</li>
+            <li>A <b>deep scan</b> reveals what is sitting in every unvisited system linked to you. Cheaper than
+            arriving somewhere with pirates in it.</li>
+            <li><b>Work the system</b> once per system: depots give fuel, belts give ore, derelicts give whatever
+            is left aboard.</li>
+            <li>Run out of fuel between stars, or lose the hull, and the expedition ends where it stands.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Ship</h2>
+        <div class="stat"><span>Fuel</span><b id="fuel">—</b></div>
+        <div class="gauge"><i id="gfuel" style="background:var(--accent)"></i></div>
+        <div class="stat" style="margin-top:8px"><span>Hull</span><b id="hull">—</b></div>
+        <div class="gauge"><i id="ghull" style="background:var(--good)"></i></div>
+        <div class="stat" style="margin-top:8px"><span>Ore</span><b id="ore">—</b></div>
+        <div class="stat"><span>Jumps made</span><b id="jumps">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>Carrier delay</h2>
+        <div id="delay" style="font-family:var(--mono);font-size:22px;font-weight:700">—</div>
+        <div class="sig" id="sig"></div>
+        <div style="font-size:12px;color:var(--ink-faint);margin-top:6px">Jumps from here to Proxima b.</div>
+      </div>
+      <div class="panel">
+        <h2>Log</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+</template>
+<template data-game="fish">
+<header class="topbar">
+  <a class="back" href="#/">← All games</a>
+  <h1>Fish</h1>
+  <span class="pill">12 seasons · shared water</span>
+  <span class="spacer"></span>
+  <button id="new">New game</button>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+    <div>
+      <div id="banner" class="banner">Four fleets, one stock of fish. Land as much as you can — the water is shared.</div>
+      <div class="board-wrap"><canvas id="chart" aria-label="Stock and landings over time"></canvas></div>
+
+      <div class="panel">
+        <h2>Season <span id="season">1</span> — set your quota</h2>
+        <div class="stat"><span>Your quota this season</span><b class="quota" id="qval">300 t</b></div>
+        <input type="range" id="quota" min="0" max="800" step="10" value="300">
+        <div class="row" style="justify-content:space-between;font-size:12px;color:var(--ink-faint)">
+          <span>0 t</span><span>hold capacity 800 t</span>
+        </div>
+        <div class="divider"></div>
+        <div class="row">
+          <label for="cap" style="font-size:13px;color:var(--ink-dim)">Propose a shared cap of</label>
+          <input type="number" id="cap" value="350" min="0" max="800" step="10"
+                 style="width:88px;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+                        border-radius:8px;padding:6px 8px;font-family:var(--mono)">
+          <span style="font-size:13px;color:var(--ink-dim)">t per fleet</span>
+          <button id="propose">Announce</button>
+        </div>
+        <div id="pledge" class="rules" style="margin-top:8px;font-size:12.5px;color:var(--ink-faint)">
+          No cap announced. Everyone fishes as they like.
+        </div>
+        <div class="divider"></div>
+        <button class="primary" id="go" style="width:100%">Fish the season →</button>
+      </div>
+
+      <details class="rules-box">
+        <summary>How it works</summary>
+        <div class="rules panel">
+          <p>Nobody owns the water. Every fleet's catch comes out of the same stock, and what is left
+          <b>regrows</b> before the next season — fastest when the stock sits near the middle of its range,
+          barely at all once it is stripped.</p>
+          <ul>
+            <li>Regrowth is logistic: <span style="font-family:var(--mono)">S ← S + 0.6·S·(1 − S/10000)</span>, so total landings above roughly <b>1,500 t a season</b> eat into the stock.</li>
+            <li>If the fleets ask for more fish than exist, the catch is shared out pro-rata and the stock craters.</li>
+            <li>Below <b>500 t</b> the fishery <b>collapses</b> — it closes for good and nobody lands anything else.</li>
+            <li>Whatever is still swimming at the end is sold off as quota rights worth <b>25% of the final stock</b> — but the split is weighted by <b>who actually kept to the announced caps</b>. Break every cap and you get nothing from it.</li>
+            <li>An announced cap is not binding. The other skippers weigh your record of keeping your own word.</li>
+          </ul>
+          <p>You are measured against <b>4,500 t</b> — a quarter of everything a perfectly managed fishery could
+          have yielded in twelve seasons. Fishing flat out in a fishery that collapses lands roughly 3,200 t, and
+          beats the other three fleets while doing it. Placing first is not the same as doing well.</p>
+        </div>
+      </details>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>The water</h2>
+        <div class="stat"><span>Stock</span><b id="stock">—</b></div>
+        <div class="stat"><span>Regrowth next season</span><b id="growth">—</b></div>
+        <div class="stat"><span>Seasons left</span><b id="left">—</b></div>
+        <div class="divider"></div>
+        <div class="stat"><span>Your landings</span><b id="mine">—</b></div>
+        <div class="stat"><span>A managed share pays</span><b id="target">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>Fleets</h2>
+        <table class="grid" id="fleets"></table>
+      </div>
+      <div class="panel">
+        <h2>Log</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+</template>
+<template data-game="fire">
+<header class="topbar">
+  <a class="back" href="#/">← All games</a>
+  <h1>Fire</h1>
+  <span class="pill">The opponent is the fire</span>
+  <span class="spacer"></span>
+  <button id="new">New fire</button>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+    <div>
+      <div id="banner" class="banner">Four crew actions an hour. Spend them, then let the hour run.</div>
+      <div class="board-wrap"><canvas id="board" aria-label="Fire map"></canvas></div>
+      <div class="panel">
+        <div class="row" style="justify-content:space-between">
+          <div class="row">
+            <b style="font-family:var(--mono)">Hour <span id="hour">0</span>/24</b>
+            <span style="color:var(--ink-dim)">·</span>
+            <span>Crew actions left: <b id="ap" style="font-family:var(--mono)">4</b></span>
+          </div>
+          <div class="row">
+            <button id="skip">Hold crews</button>
+            <button class="primary" id="tick">Run the hour →</button>
+          </div>
+        </div>
+      </div>
+      <details class="rules-box">
+        <summary>How it works</summary>
+        <div class="rules panel">
+          <p>Nobody is playing against you. The fire follows the wind, the fuel and the slope, and it does the
+          same thing whether you understand it or not.</p>
+          <ul>
+            <li>Each hour every burning cell tries to light its neighbours. Chance goes up with <b>fuel</b>,
+            up sharply <b>downwind</b>, and down with <b>moisture</b>.</li>
+            <li>A cell burns for two hours, then it is spent — and spent ground is the only reliable firebreak.</li>
+            <li>The wind shifts on its own. A break cut for yesterday's wind protects nothing.</li>
+            <li>You get <b>4 crew actions an hour</b>. Water is immediate but temporary; cutting line is slow but permanent.</li>
+            <li>Score is the <b>homes still standing</b> first, unburned hectares second.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Crew orders</h2>
+        <div class="tools">
+          <button class="tool sel" data-tool="cut"><span>🪓</span><span>Cut line<small>Strip the fuel from a cell. Permanent, useless once lit.</small></span></button>
+          <button class="tool" data-tool="water"><span>💧</span><span>Water drop<small>Soaks a 3×3 area and puts out flame. Dries out over ~4 hours.</small></span></button>
+          <button class="tool" data-tool="burn"><span>🔥</span><span>Backburn<small>Light a low-fuel cell on purpose to starve the main front.</small></span></button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Conditions</h2>
+        <div class="stat"><span>Wind</span><b id="wind">—</b></div>
+        <div class="stat"><span>Homes standing</span><b id="homes">—</b></div>
+        <div class="stat"><span>Burning</span><b id="burning">—</b></div>
+        <div class="stat"><span>Burned</span><b id="burned">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>Map</h2>
+        <div class="legend">
+          <span class="sw" style="background:#2f6b3a"></span><span>Forest — heavy fuel</span>
+          <span class="sw" style="background:#8a9a4a"></span><span>Brush — dry, fast</span>
+          <span class="sw" style="background:#5c7a3a"></span><span>Grass — light fuel</span>
+          <span class="sw" style="background:#2b4a7a"></span><span>Water — will not burn</span>
+          <span class="sw" style="background:#c9d3e6"></span><span>Home — protect these</span>
+          <span class="sw" style="background:#3b3b42"></span><span>Spent ground</span>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Log</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+</template>
+<template data-game="art-for-all">
+<header class="topbar">
+  <a class="back" href="#/">← All games</a>
+  <h1>Art For All</h1>
+  <span class="pill">14 lots · open outcry</span>
+  <span class="spacer"></span>
+  <button id="new">New season</button>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+    <div>
+      <div id="banner" class="banner">You direct a museum with $1,200k and a board that expects a collection, not a pile.</div>
+      <div class="panel" id="stage"></div>
+      <details class="rules-box">
+        <summary>How it works</summary>
+        <div class="rules panel">
+          <p>Fourteen works come up, one at a time, in an <b>open ascending auction</b>. Raise or pass; when
+          everyone else has passed, the work is yours at the price on the board.</p>
+          <ul>
+            <li><b>Prestige</b> is what critics score. <b>Appeal</b> is what gets people through the door.</li>
+            <li><b>Depth</b>: three works of one movement pays <b>+60</b>, five pays <b>+160</b>.</li>
+            <li><b>Breadth</b>: <b>+12</b> for each distinct movement on the walls.</li>
+            <li>The museum with the highest total appeal takes the <b>people's vote, +50</b>.</li>
+            <li>Unspent money is not a virtue — it returns to the city at <b>1 point per $40k</b>. But a bidding war you win at triple the estimate is worse.</li>
+            <li>Rival directors have <b>tastes</b>. Once you know what they collect, you know how far they will chase a lot.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Your museum</h2>
+        <div class="stat"><span>Funds left</span><b id="funds">—</b></div>
+        <div class="stat"><span>Works</span><b id="works">—</b></div>
+        <div class="stat"><span>Prestige</span><b id="prestige">—</b></div>
+        <div class="stat"><span>Appeal</span><b id="appeal">—</b></div>
+        <div class="divider"></div>
+        <div class="stat"><span>Projected score</span><b id="score">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>Directors</h2>
+        <table class="grid" id="rivals"></table>
+      </div>
+      <div class="panel">
+        <h2>On your walls</h2>
+        <div class="coll" id="coll"><span class="empty">Nothing yet.</span></div>
+      </div>
+      <div class="panel">
+        <h2>Hammer</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+</template>
+<template data-game="hollywood">
+<header class="topbar">
+  <a class="back" href="#/">← All games</a>
+  <h1>Hollywood</h1>
+  <span class="pill">5 seasons · sealed bids</span>
+  <span class="spacer"></span>
+  <button id="new">New studio</button>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+    <div>
+      <div id="banner" class="banner">You run a studio. Buy the talent, read the audience, release one film a season.</div>
+      <div class="board-wrap"><canvas id="chart" aria-label="Box office by studio"></canvas></div>
+
+      <div class="panel" id="stage"></div>
+
+      <details class="rules-box">
+        <summary>How it works</summary>
+        <div class="rules panel">
+          <p>Everything about a film is bought before anyone knows what audiences will want. The talent is auctioned
+          in <b>sealed bids</b> — you never see what the other studios offered until the lot is gone.</p>
+          <ul>
+            <li>Five seasons. Each season three lots go up: scripts, stars and directors, each with a genre and a quality of 1–10.</li>
+            <li>You bid in millions. High bid takes the lot and pays what it bid. Ties go to the studio that bid first, which is never you.</li>
+            <li>Then you cut <b>one film</b> from what you own: a script is required, a star and a director are optional and are consumed with it.</li>
+            <li>Gross = the talent on screen × <b>how hot that genre is this season</b> × luck. Genre heat moves every season; the tracking report guesses next season's, badly.</li>
+            <li>You are scored on <b>profit</b> — gross minus production minus what you paid at auction. A masterpiece bought at a stupid price is still a loss.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Season <span id="year">1</span> of 5</h2>
+        <div class="stat"><span>Cash</span><b id="cash">—</b></div>
+        <div class="stat"><span>Profit to date</span><b id="profit">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>Genre heat — this season</h2>
+        <div class="heat" id="heat"></div>
+        <div class="divider"></div>
+        <h2>Tracking for next season</h2>
+        <div class="heat" id="track"></div>
+      </div>
+      <div class="panel">
+        <h2>Studios</h2>
+        <table class="grid" id="studios"></table>
+      </div>
+      <div class="panel">
+        <h2>Trades</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+</template>
+<template data-game="geobridge">
+<header class="topbar">
+  <a class="back" href="#/">← All games</a>
+  <h1>GeoBridge</h1>
+  <span class="pill">Connect the valley</span>
+  <span class="spacer"></span>
+  <button id="new">New valley</button>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+    <div>
+      <div id="banner" class="banner">Link every town to the capital before the money runs out. The river will take one of your bridges.</div>
+      <div class="board-wrap"><canvas id="board" aria-label="Valley map"></canvas></div>
+      <div class="panel">
+        <div class="row" style="justify-content:space-between">
+          <div id="hint" style="font-size:13.5px;color:var(--ink-dim)">Hover a route for its estimate. Click to build it.</div>
+          <div class="row">
+            <button id="mode">Mode: build</button>
+            <button class="primary" id="done">Open the network →</button>
+          </div>
+        </div>
+      </div>
+      <details class="rules-box">
+        <summary>How it works</summary>
+        <div class="rules panel">
+          <p>Every town is worth its <b>population</b>, but only if it can reach the <b>capital</b> over routes you
+          have built. What you are really buying is a connected graph, and the cheapest connected graph is a
+          <b>tree</b> — which is also the one a flood can cut in half.</p>
+          <ul>
+            <li>Routes are priced by <b>length</b>, by the <b>climb</b> they cross, and worst of all by the <b>river</b> — a bridge costs roughly two and a half times a road.</li>
+            <li>The price on the map is an <b>estimate</b>. The real bill lands when you build, anywhere from 35% under to 35% over.</li>
+            <li>A <b>survey</b> costs 8% of the estimate and pins the real number before you commit.</li>
+            <li>When you open the network the spring flood takes out <b>one bridge</b>, chosen at random. Towns cut off from the capital score nothing.</li>
+            <li>Score = population still connected + a tenth of the money you never spent.</li>
+          </ul>
+          <p>A second bridge you never needed is insurance. Insurance you didn't need is wasted budget. That is the whole game.</p>
+        </div>
+      </details>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Budget</h2>
+        <div class="stat"><span>Left</span><b id="budget">—</b></div>
+        <div class="gauge"><i id="gbud"></i></div>
+        <div class="stat" style="margin-top:8px"><span>Spent on routes</span><b id="spent">—</b></div>
+        <div class="stat"><span>Spent on surveys</span><b id="surveys">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>Network</h2>
+        <div class="stat"><span>Towns connected</span><b id="conn">—</b></div>
+        <div class="stat"><span>Population served</span><b id="pop">—</b></div>
+        <div class="stat"><span>Bridges built</span><b id="bridges">—</b></div>
+        <div class="stat"><span>Towns on one bridge</span><b id="fragile">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>Map</h2>
+        <div class="legend">
+          <span class="sw" style="background:#2f6b3a"></span><span>Lowland — cheap going</span>
+          <span class="sw" style="background:#7d7a5e"></span><span>Upland — costs more</span>
+          <span class="sw" style="background:#9aa3ad"></span><span>Ridge — expensive</span>
+          <span class="sw" style="background:#2b6fb0"></span><span>River — needs a bridge</span>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Works log</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+</template>
+
+<script>
+// Small shared helpers used by every game in the collection.
+// Plain script (not an ES module) so every game also runs straight from file://.
+(function (global) {
+
+/** Deterministic-ish PRNG (mulberry32) so a seed reproduces a scenario. */
+function rng(seed = Date.now() >>> 0) {
+  let a = seed >>> 0;
+  return function next() {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const randInt = (r, lo, hi) => lo + Math.floor(r() * (hi - lo + 1));
+const pick = (r, arr) => arr[Math.floor(r() * arr.length)];
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+
+function shuffle(r, arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(r() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/** Append a line to a `.log` container, newest last, auto-scrolled. */
+function logger(el) {
+  return function log(msg, cls = '') {
+    const d = document.createElement('div');
+    if (cls) d.className = cls;
+    d.innerHTML = msg;
+    el.appendChild(d);
+    el.scrollTop = el.scrollHeight;
+    while (el.children.length > 200) el.removeChild(el.firstChild);
+  };
+}
+
+/** Canvas sized for the device pixel ratio; returns a ctx in CSS pixels. */
+function fitCanvas(canvas, w, h) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return ctx;
+}
+
+/** Pointer position in canvas CSS pixels, mouse or touch. */
+function pointerPos(canvas, ev) {
+  const r = canvas.getBoundingClientRect();
+  const p = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+  return {
+    x: (p.clientX - r.left) * (canvas.style.width ? parseFloat(canvas.style.width) / r.width : 1),
+    y: (p.clientY - r.top) * (canvas.style.height ? parseFloat(canvas.style.height) / r.height : 1),
+  };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+/** Starfield backdrop shared by the space-themed boards. */
+function starfield(ctx, w, h, r, count = 90) {
+  ctx.save();
+  for (let i = 0; i < count; i++) {
+    const x = r() * w, y = r() * h, a = 0.15 + r() * 0.5, s = r() < 0.9 ? 1 : 1.8;
+    ctx.fillStyle = `rgba(200,220,255,${a})`;
+    ctx.fillRect(x, y, s, s);
+  }
+  ctx.restore();
+}
+
+const fmt = (n, d = 0) => Number(n).toLocaleString(undefined, {
+  minimumFractionDigits: d, maximumFractionDigits: d,
+});
+
+  global.SG = {
+    rng, randInt, pick, clamp, lerp, shuffle, logger,
+    fitCanvas, pointerPos, roundRect, starfield, fmt,
+  };
+})(window);
+
+</script>
+
+<script>
+// The hub: paints a thumbnail per card and wires each one to its route.
+
+(function () {
+  const { rng, randInt, starfield } = window.SG;
+
+  const GAMES = [
+    { dir: 'constellation', title: 'Constellation', art: 'stars',
+      blurb: 'Claim stars from a shared map while the rules for what a good constellation is keep changing under you.',
+      tags: ['3 players', 'shifting scoring', 'blocking'] },
+    { dir: 'constellation-3d', title: 'Constellation 3D', art: 'cube',
+      blurb: 'The same map, four layers deep. 76 lines run through the cube and most of them are invisible until you look.',
+      tags: ['2 players', 'spatial', 'abstract'] },
+    { dir: 'proxima', title: 'Proxima', art: 'graph',
+      blurb: 'One ship, one tank of fuel, a chart full of unknowns. Find the habitable world and bring the survey home.',
+      tags: ['exploration', 'routing', 'risk'] },
+    { dir: 'fish', title: 'Fish', art: 'fish',
+      blurb: 'Four fleets, one stock of fish. Everyone can see the arithmetic; nobody can make anyone else respect it.',
+      tags: ['commons', 'negotiation', '12 seasons'] },
+    { dir: 'fire', title: 'Fire', art: 'fire',
+      blurb: 'The opponent is not another player, it is the fire. Cut line, drop water, and watch the wind swing.',
+      tags: ['co-operative', 'simulation', 'wind'] },
+    { dir: 'art-for-all', title: 'Art For All', art: 'art',
+      blurb: 'Build a museum at auction. Depth pays, breadth pays, and the bidding war you win is the one that ruins you.',
+      tags: ['auction', 'set collection', '14 lots'] },
+    { dir: 'hollywood', title: 'Hollywood', art: 'holly',
+      blurb: 'Buy scripts, stars and directors in sealed bids, then release one film into an audience that already moved on.',
+      tags: ['sealed bid', 'forecasting', '5 seasons'] },
+    { dir: 'geobridge', title: 'GeoBridge', art: 'bridge',
+      blurb: 'Connect every town to the capital on a budget, knowing the spring flood will take one bridge at random.',
+      tags: ['networks', 'estimation', 'redundancy'] },
+  ];
+
+  const W = 340, H = 128;
+
+  const ART = {
+    stars(g, r) {
+      starfield(g, W, H, r, 90);
+      const pts = Array.from({ length: 7 }, () => ({ x: 30 + r() * (W - 60), y: 20 + r() * (H - 40) }));
+      g.strokeStyle = '#6ea8ff88'; g.lineWidth = 2;
+      g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke();
+      for (const p of pts) {
+        const c = ['#7cc4ff', '#ffd166', '#ff7b7b', '#e8edf9'][randInt(r, 0, 3)];
+        const grd = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, 16);
+        grd.addColorStop(0, c); grd.addColorStop(1, c + '00');
+        g.fillStyle = grd; g.beginPath(); g.arc(p.x, p.y, 16, 0, 6.28); g.fill();
+      }
+    },
+    cube(g, r) {
+      starfield(g, W, H, r, 60);
+      for (let z = 0; z < 4; z++) {
+        const ox = 40 + z * 68, oy = 22 + z * 6;
+        g.strokeStyle = '#22304f'; g.lineWidth = 1;
+        g.strokeRect(ox, oy, 56, 56);
+        for (let k = 0; k < 16; k++) {
+          const x = ox + 7 + (k % 4) * 14, y = oy + 7 + ((k / 4) | 0) * 14;
+          const on = r() < 0.3;
+          g.fillStyle = on ? (r() < 0.5 ? '#6ea8ff' : '#f87171') : '#2a3855';
+          g.beginPath(); g.arc(x, y, on ? 4 : 2.2, 0, 6.28); g.fill();
+        }
+      }
+    },
+    graph(g, r) {
+      starfield(g, W, H, r, 120);
+      const n = Array.from({ length: 9 }, () => ({ x: 26 + r() * (W - 52), y: 20 + r() * (H - 40) }));
+      g.strokeStyle = '#22304f'; g.lineWidth = 1;
+      for (const a of n) {
+        const near = n.filter(b => b !== a).sort((p, q) =>
+          Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(a.x - q.x, a.y - q.y)).slice(0, 2);
+        for (const b of near) { g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); }
+      }
+      n.forEach((p, i) => {
+        const c = i === 0 ? '#4ade80' : i === 1 ? '#e8edf9' : '#4a5570';
+        g.fillStyle = '#0d1426'; g.beginPath(); g.arc(p.x, p.y, 8, 0, 6.28); g.fill();
+        g.strokeStyle = c; g.lineWidth = 2; g.stroke();
+      });
+    },
+    fish(g, r) {
+      g.fillStyle = '#0d1a2e'; g.fillRect(0, 0, W, H);
+      for (let k = 0; k < 5; k++) {
+        g.strokeStyle = `rgba(110,168,255,${0.06 + k * 0.03})`; g.lineWidth = 2;
+        g.beginPath();
+        for (let x = 0; x <= W; x += 8) g.lineTo(x, 30 + k * 18 + Math.sin(x * 0.05 + k) * 5);
+        g.stroke();
+      }
+      // stock curve that rises then crashes
+      g.strokeStyle = '#7cc4ff'; g.lineWidth = 2.5; g.beginPath();
+      for (let x = 0; x <= W; x += 6) {
+        const t = x / W;
+        const y = H - 18 - (Math.sin(t * 3.1) * 60 + 25) * (1 - t * 0.85);
+        g.lineTo(x, y);
+      }
+      g.stroke();
+      for (let k = 0; k < 9; k++) {
+        const x = 20 + r() * (W - 40), y = 22 + r() * (H - 44);
+        g.fillStyle = '#ffd16688';
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x - 9, y - 4); g.lineTo(x - 9, y + 4); g.closePath(); g.fill();
+      }
+    },
+    fire(g, r) {
+      for (let y = 0; y < H; y += 8) for (let x = 0; x < W; x += 8) {
+        const n = Math.sin(x * 0.05) * Math.cos(y * 0.07) + r() * 0.3;
+        g.fillStyle = n > 0.5 ? '#2f6b3a' : n > 0 ? '#8a9a4a' : '#5c7a3a';
+        g.fillRect(x, y, 8, 8);
+      }
+      for (let k = 0; k < 26; k++) {
+        const x = 40 + r() * 150, y = 20 + r() * (H - 40);
+        const grd = g.createRadialGradient(x, y, 1, x, y, 22);
+        grd.addColorStop(0, 'rgba(255,240,150,.95)');
+        grd.addColorStop(.45, 'rgba(255,140,40,.75)');
+        grd.addColorStop(1, 'rgba(180,40,10,0)');
+        g.fillStyle = grd; g.fillRect(x - 22, y - 22, 44, 44);
+      }
+      g.fillStyle = '#3b3b42';
+      for (let k = 0; k < 40; k++) g.fillRect(r() * 90, r() * H, 8, 8);
+    },
+    art(g, r) {
+      g.fillStyle = '#12151d'; g.fillRect(0, 0, W, H);
+      const hues = [35, 205, 5, 120, 275];
+      for (let k = 0; k < 5; k++) {
+        const x = 20 + k * 62, y = 24, w = 50, h = 78;
+        g.fillStyle = '#6b5836'; g.fillRect(x - 4, y - 4, w + 8, h + 8);
+        const hue = hues[k];
+        g.fillStyle = `hsl(${hue},22%,16%)`; g.fillRect(x, y, w, h);
+        for (let j = 0; j < 14; j++) {
+          g.fillStyle = `hsla(${hue + (r() - .5) * 60},${30 + r() * 50}%,${25 + r() * 50}%,.85)`;
+          g.fillRect(x + r() * w * .8, y + r() * h * .8, 6 + r() * 16, 5 + r() * 18);
+        }
+      }
+    },
+    holly(g, r) {
+      g.fillStyle = '#0d1426'; g.fillRect(0, 0, W, H);
+      const cols = ['#7cc4ff', '#ffd166', '#c08cff', '#93a1c0', '#f87171'];
+      for (let k = 0; k < 5; k++) {
+        for (let s = 0; s < 4; s++) {
+          const h = 10 + r() * 80;
+          g.fillStyle = cols[k] + (s === 0 ? 'ff' : '77');
+          g.fillRect(24 + k * 62 + s * 12, H - 20 - h, 10, h);
+        }
+      }
+      g.strokeStyle = '#22304f'; g.lineWidth = 1;
+      for (let y = 20; y < H - 18; y += 22) { g.beginPath(); g.moveTo(14, y); g.lineTo(W - 14, y); g.stroke(); }
+    },
+    bridge(g, r) {
+      for (let y = 0; y < H; y += 10) for (let x = 0; x < W; x += 10) {
+        const h = 0.5 + 0.42 * Math.sin(x * 0.02) * Math.cos(y * 0.03) + 0.2 * Math.sin(y * 0.05);
+        const c = h < 0.42 ? [47, 107, 58] : h < 0.62 ? [125, 122, 94] : [154, 163, 173];
+        const k = 0.72 + h * 0.4;
+        g.fillStyle = `rgb(${c[0] * k | 0},${c[1] * k | 0},${c[2] * k | 0})`;
+        g.fillRect(x, y, 10, 10);
+      }
+      g.strokeStyle = '#3f8fd6'; g.lineWidth = 9; g.lineCap = 'round';
+      g.beginPath();
+      for (let y = 0; y <= H; y += 10) g.lineTo(W / 2 + Math.sin(y * 0.05) * 26, y);
+      g.stroke();
+      const pts = Array.from({ length: 6 }, () => ({ x: 26 + r() * (W - 52), y: 20 + r() * (H - 40) }));
+      g.strokeStyle = '#f3f6ff'; g.lineWidth = 3;
+      for (let i = 1; i < pts.length; i++) {
+        g.beginPath(); g.moveTo(pts[i - 1].x, pts[i - 1].y); g.lineTo(pts[i].x, pts[i].y); g.stroke();
+      }
+      for (const p of pts) {
+        g.fillStyle = '#e8edf9'; g.strokeStyle = '#0a1122'; g.lineWidth = 3;
+        g.beginPath(); g.arc(p.x, p.y, 6, 0, 6.28); g.fill(); g.stroke();
+      }
+    },
+  };
+
+  const host = document.getElementById('cards');
+  GAMES.forEach((game, i) => {
+    const a = document.createElement('a');
+    a.className = 'card';
+    a.href = `#/${game.dir}`;
+    a.innerHTML = `<canvas></canvas><div class="body">
+        <h2>${game.title}</h2><p>${game.blurb}</p>
+        <div class="tags">${game.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+      </div>`;
+    host.appendChild(a);
+    const canvas = a.querySelector('canvas');
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    const g = canvas.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.fillStyle = '#0a1122'; g.fillRect(0, 0, W, H);
+    ART[game.art](g, rng(0xC0FFEE + i * 7919));
+  });
+})();
+
+</script>
+
+<script>
+// Each game's original inline script, re-runnable as an init function.
+const GAME_INIT = {};
+GAME_INIT['constellation'] = function () {
+
+(function () {
+  const { rng, randInt, pick, shuffle, logger, fitCanvas, pointerPos, starfield } = window.SG;
+
+  const N = 6;                       // 6 x 6 star map
+  const PICKS = 8;                   // stars per claimant
+  const CELL = 88, PAD = 26;
+  const SIZE = N * CELL + PAD * 2;
+
+  const COLOURS = [
+    { key: 'O', name: 'blue',   css: '#7cc4ff' },
+    { key: 'G', name: 'gold',   css: '#ffd166' },
+    { key: 'R', name: 'red',    css: '#ff7b7b' },
+    { key: 'W', name: 'white',  css: '#e8edf9' },
+  ];
+
+  const PLAYERS = [
+    { name: 'You',   css: '#6ea8ff', human: true },
+    { name: 'Vega',  css: '#f87171', human: false },
+    { name: 'Rigel', css: '#4ade80', human: false },
+  ];
+
+  // Every variable scores one claimant's whole set of stars.
+  const VARIABLES = [
+    { id: 'align',  label: 'Alignment',  desc: 'Longest straight run of your stars × 5',
+      score: (s, g) => longestRun(s) * 5 },
+    { id: 'mag',    label: 'Magnitude',  desc: 'Sum of the magnitudes you hold',
+      score: (s, g) => s.reduce((a, c) => a + c.mag, 0) },
+    { id: 'clust',  label: 'Cluster',    desc: 'Largest touching group × 6',
+      score: (s, g) => largestCluster(s) * 6 },
+    { id: 'spec',   label: 'Spectrum',   desc: 'Stars of your most-held colour × 4',
+      score: (s, g) => {
+        const t = tally(s); return (Math.max(0, ...Object.values(t))) * 4; } },
+    { id: 'rare',   label: 'Rarity',     desc: 'Stars of the map’s rarest colour × 8',
+      score: (s, g) => s.filter(c => c.col === g.rarest).length * 8 },
+    { id: 'edge',   label: 'Rim',        desc: 'Each star on the rim of the map × 3',
+      score: (s, g) => s.filter(c => c.x === 0 || c.y === 0 || c.x === N - 1 || c.y === N - 1).length * 3 },
+    { id: 'void',   label: 'Void',       desc: 'Each star with no claimed star beside it × 5',
+      score: (s, g) => s.filter(c => !neighbours(c).some(n => g.cells[n].owner !== null)).length * 5 },
+    { id: 'twin',   label: 'Twins',      desc: 'Each touching same-colour pair you own × 5',
+      score: (s, g) => {
+        let p = 0;
+        for (const c of s) for (const n of neighbours(c)) {
+          const o = g.cells[n];
+          if (o.owner === c.owner && o.col === c.col && o.i > c.i) p++;
+        }
+        return p * 5; } },
+    { id: 'core',   label: 'Core',       desc: 'Each star in the central 2×2 block × 9',
+      score: (s, g) => s.filter(c => c.x >= 2 && c.x <= 3 && c.y >= 2 && c.y <= 3).length * 9 },
+    { id: 'spread', label: 'Spread',     desc: 'Distinct colours you hold, squared × 3',
+      score: (s, g) => { const t = tally(s); return Object.keys(t).length ** 2 * 3; } },
+  ];
+
+  const idx = (x, y) => y * N + x;
+  const tally = (s) => s.reduce((a, c) => (a[c.col] = (a[c.col] || 0) + 1, a), {});
+
+  function neighbours(c) {
+    const out = [];
+    if (c.x > 0) out.push(idx(c.x - 1, c.y));
+    if (c.x < N - 1) out.push(idx(c.x + 1, c.y));
+    if (c.y > 0) out.push(idx(c.x, c.y - 1));
+    if (c.y < N - 1) out.push(idx(c.x, c.y + 1));
+    return out;
+  }
+
+  function longestRun(s) {
+    if (!s.length) return 0;
+    const own = new Set(s.map(c => c.i));
+    const dirs = [[1, 0], [0, 1], [1, 1], [1, -1]];
+    let best = 0;
+    for (const c of s) for (const [dx, dy] of dirs) {
+      let n = 1, x = c.x + dx, y = c.y + dy;
+      while (x >= 0 && y >= 0 && x < N && y < N && own.has(idx(x, y))) { n++; x += dx; y += dy; }
+      best = Math.max(best, n);
+    }
+    return best;
+  }
+
+  function largestCluster(s) {
+    const own = new Set(s.map(c => c.i));
+    const seen = new Set();
+    let best = 0;
+    for (const c of s) {
+      if (seen.has(c.i)) continue;
+      let n = 0;
+      const stack = [c.i];
+      seen.add(c.i);
+      while (stack.length) {
+        const i = stack.pop(); n++;
+        const cc = { x: i % N, y: (i / N) | 0 };
+        for (const j of neighbours(cc)) {
+          if (own.has(j) && !seen.has(j)) { seen.add(j); stack.push(j); }
+        }
+      }
+      best = Math.max(best, n);
+    }
+    return best;
+  }
+
+  const canvas = document.getElementById('board');
+  const ctx = fitCanvas(canvas, SIZE, SIZE);
+  const log = logger(document.getElementById('log'));
+  const banner = document.getElementById('banner');
+  let G = null, hover = -1, busy = false;
+
+  function newGame() {
+    const seed = (Math.random() * 1e9) >>> 0;
+    const r = rng(seed);
+    const cells = [];
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      cells.push({
+        i: idx(x, y), x, y, owner: null,
+        col: pick(r, COLOURS).key,
+        mag: randInt(r, 1, 4),
+        tw: r() * Math.PI * 2,
+      });
+    }
+    const counts = tally(cells);
+    const rarest = Object.keys(counts).sort((a, b) => counts[a] - counts[b])[0];
+    const deck = shuffle(r, VARIABLES);
+    G = {
+      r, cells, rarest, seed,
+      deck, live: deck.slice(0, 3), next: 3,
+      turn: 0, round: 1, over: false,
+      stars: rng(seed ^ 0x9e37),
+    };
+    hover = -1; busy = false;
+    document.getElementById('log').innerHTML = '';
+    log(`Star map seeded. Rarest class: <b class="hi">${COLOURS.find(c => c.key === rarest).name}</b>.`);
+    banner.className = 'banner';
+    banner.textContent = 'Round 1 — your move. Click a star to claim it.';
+    draw(); renderSide();
+  }
+
+  const owned = (p) => G.cells.filter(c => c.owner === p);
+
+  function scoreOf(p) {
+    const s = owned(p);
+    return G.live.reduce((a, v) => a + v.score(s, G), 0);
+  }
+
+  function scoreBreakdown(p) {
+    const s = owned(p);
+    return G.live.map(v => ({ label: v.label, val: v.score(s, G) }));
+  }
+
+  function claim(i, p) {
+    G.cells[i].owner = p;
+    const c = G.cells[i];
+    log(`<b class="hi">${PLAYERS[p].name}</b> takes ${'ABCDEF'[c.x]}${c.y + 1} ` +
+        `(${COLOURS.find(k => k.key === c.col).name}, mag ${c.mag})`);
+  }
+
+  function advance() {
+    let swapped = false;
+    G.turn++;
+    if (G.turn >= PLAYERS.length) {
+      G.turn = 0;
+      G.round++;
+      if (G.round === 4 || G.round === 7) swapped = swapVariable();
+      if (G.round > PICKS) return finish();
+    }
+    if (!PLAYERS[G.turn].human) {
+      busy = true;
+      setTimeout(() => { aiMove(G.turn); busy = false; }, 380);
+    } else if (!swapped) {
+      banner.className = 'banner';
+      banner.textContent = `Round ${G.round} — your move.`;
+    }
+    draw(); renderSide();
+  }
+
+  function swapVariable() {
+    const out = G.live[randInt(G.r, 0, G.live.length - 1)];
+    const pool = G.deck.filter(v => !G.live.includes(v));
+    if (!pool.length) return false;
+    const inn = pool[G.next++ % pool.length];
+    G.live = G.live.map(v => (v === out ? inn : v));
+    log(`<b class="bad">${out.label}</b> stops counting. <b class="good">${inn.label}</b> is now live.`, 'hi');
+    banner.className = 'banner bad';
+    banner.innerHTML = `<b>The variables shifted.</b> ${out.label} is out, ${inn.label} is in — ` +
+      `${inn.desc}. Round ${G.round}, your move.`;
+    return true;
+  }
+
+  function aiMove(p) {
+    const free = G.cells.filter(c => c.owner === null);
+    if (!free.length) return finish();
+    const before = scoreOf(p);
+    let best = null, bestVal = -Infinity;
+    for (const c of free) {
+      c.owner = p;
+      // Value the move by our gain minus the best gain we deny the leader.
+      const gain = scoreOf(p) - before;
+      c.owner = null;
+      // How much the current leader would gain from the same star, to price blocking it.
+      const leader = PLAYERS.map((_, k) => k).filter(k => k !== p)
+        .sort((a, b) => scoreOf(b) - scoreOf(a))[0];
+      const lb = scoreOf(leader);
+      c.owner = leader; const la = scoreOf(leader); c.owner = null;
+      const val = gain + (la - lb) * 0.45 + G.r() * 2.5;
+      if (val > bestVal) { bestVal = val; best = c; }
+    }
+    claim(best.i, p);
+    advance();
+  }
+
+  function finish() {
+    G.over = true;
+    const totals = PLAYERS.map((pl, p) => ({ p, name: pl.name, val: scoreOf(p) }))
+      .sort((a, b) => b.val - a.val);
+    const win = totals[0];
+    banner.className = 'banner ' + (win.p === 0 ? 'good' : 'bad');
+    banner.innerHTML = win.p === 0
+      ? `<b>You win with ${win.val} points.</b> ${totals[1].name} finished on ${totals[1].val}.`
+      : `<b>${win.name} wins with ${win.val} points.</b> You finished on ${totals.find(t => t.p === 0).val}.`;
+    log(`Final: ${totals.map(t => `${t.name} ${t.val}`).join(' · ')}`, 'hi');
+    draw(); renderSide();
+  }
+
+  function renderSide() {
+    document.getElementById('rules-live').innerHTML =
+      '<ul style="margin:0;padding-left:18px">' + G.live.map(v =>
+        `<li><b>${v.label}</b> — ${v.desc}</li>`).join('') + '</ul>' +
+      (G.round <= 6 ? `<div style="margin-top:8px;font-size:12px;color:var(--ink-faint)">One variable is
+        replaced after round ${G.round <= 3 ? 3 : 6}.</div>` : '');
+
+    const rows = PLAYERS.map((pl, p) => {
+      const bd = scoreBreakdown(p);
+      const tot = bd.reduce((a, b) => a + b.val, 0);
+      return `<tr class="${p === 0 ? 'me' : ''}">
+        <td><span style="color:${pl.css}">●</span> ${pl.name}</td>
+        <td class="num" style="color:var(--ink-faint)">${bd.map(b => b.val).join(' + ')}</td>
+        <td class="num"><b>${tot}</b></td></tr>`;
+    }).join('');
+    document.getElementById('scores').innerHTML =
+      `<tr><th>Claimant</th><th class="num">Parts</th><th class="num">Now</th></tr>${rows}`;
+  }
+
+  function draw() {
+    const g = ctx;
+    g.fillStyle = '#0a1122';
+    g.fillRect(0, 0, SIZE, SIZE);
+    starfield(g, SIZE, SIZE, rng(G.seed ^ 0x1234), 140);
+
+    // grid
+    g.strokeStyle = '#1b2745';
+    g.lineWidth = 1;
+    for (let k = 0; k <= N; k++) {
+      const t = PAD + k * CELL;
+      g.beginPath(); g.moveTo(PAD, t); g.lineTo(SIZE - PAD, t); g.stroke();
+      g.beginPath(); g.moveTo(t, PAD); g.lineTo(t, SIZE - PAD); g.stroke();
+    }
+
+    // links between same-owner adjacent stars, so constellations read as shapes
+    for (const c of G.cells) {
+      if (c.owner === null) continue;
+      for (const j of neighbours(c)) {
+        const o = G.cells[j];
+        if (o.owner === c.owner && o.i > c.i) {
+          g.strokeStyle = PLAYERS[c.owner].css + '66';
+          g.lineWidth = 3;
+          g.beginPath();
+          g.moveTo(cx(c), cy(c)); g.lineTo(cx(o), cy(o)); g.stroke();
+        }
+      }
+    }
+
+    for (const c of G.cells) {
+      const x = cx(c), y = cy(c);
+      const col = COLOURS.find(k => k.key === c.col).css;
+      const rad = 8 + c.mag * 3.5;
+
+      if (hover === c.i && c.owner === null && !G.over && !busy) {
+        g.fillStyle = '#6ea8ff22';
+        g.fillRect(PAD + c.x * CELL, PAD + c.y * CELL, CELL, CELL);
+      }
+
+      // glow
+      const grd = g.createRadialGradient(x, y, 0, x, y, rad * 2.4);
+      grd.addColorStop(0, col + 'aa');
+      grd.addColorStop(1, col + '00');
+      g.fillStyle = grd;
+      g.beginPath(); g.arc(x, y, rad * 2.4, 0, Math.PI * 2); g.fill();
+
+      g.fillStyle = col;
+      g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.fill();
+
+      if (c.owner !== null) {
+        g.strokeStyle = PLAYERS[c.owner].css;
+        g.lineWidth = 3.5;
+        g.beginPath(); g.arc(x, y, rad + 7, 0, Math.PI * 2); g.stroke();
+      }
+
+      g.fillStyle = '#06101f';
+      g.font = '700 11px ui-monospace, monospace';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(String(c.mag), x, y + 0.5);
+    }
+
+    // coordinates
+    g.fillStyle = '#5c6c92';
+    g.font = '600 11px ui-monospace, monospace';
+    for (let k = 0; k < N; k++) {
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('ABCDEF'[k], PAD + k * CELL + CELL / 2, 13);
+      g.fillText(String(k + 1), 13, PAD + k * CELL + CELL / 2);
+    }
+  }
+
+  const cx = (c) => PAD + c.x * CELL + CELL / 2;
+  const cy = (c) => PAD + c.y * CELL + CELL / 2;
+
+  function cellAt(px, py) {
+    const x = Math.floor((px - PAD) / CELL), y = Math.floor((py - PAD) / CELL);
+    if (x < 0 || y < 0 || x >= N || y >= N) return -1;
+    return idx(x, y);
+  }
+
+  canvas.addEventListener('mousemove', (e) => {
+    const p = pointerPos(canvas, e);
+    const i = cellAt(p.x, p.y);
+    if (i !== hover) { hover = i; draw(); }
+  });
+  canvas.addEventListener('mouseleave', () => { hover = -1; draw(); });
+  canvas.addEventListener('click', (e) => {
+    if (G.over || busy || !PLAYERS[G.turn].human) return;
+    const p = pointerPos(canvas, e);
+    const i = cellAt(p.x, p.y);
+    if (i < 0 || G.cells[i].owner !== null) return;
+    claim(i, 0);
+    advance();
+  });
+  document.getElementById('new').addEventListener('click', newGame);
+
+  newGame();
+})();
+
+};
+GAME_INIT['constellation-3d'] = function () {
+
+(function () {
+  const { rng, logger, fitCanvas, pointerPos, starfield } = window.SG;
+
+  const N = 4, CELL = 62, LPAD = 14, GAP = 26, MARGIN = 20;
+  const LAYER = N * CELL + LPAD * 2;
+  const SIZE = MARGIN * 2 + LAYER * 2 + GAP;
+
+  const PLAYERS = [
+    { name: 'You',    css: '#6ea8ff' },
+    { name: 'Altair', css: '#f87171' },
+  ];
+  const VALUE = [0, 1, 3, 7, 15];   // payout by uncontested stars held in a line
+
+  const id = (x, y, z) => z * 16 + y * 4 + x;
+
+  const LINES = (() => {
+    const dirs = [];
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+      if (dx === 0 && dy === 0 && dz === 0) continue;
+      // keep one of each opposite pair
+      if (dz > 0 || (dz === 0 && (dy > 0 || (dy === 0 && dx > 0)))) dirs.push([dx, dy, dz]);
+    }
+    const out = [];
+    for (let z = 0; z < N; z++) for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      for (const [dx, dy, dz] of dirs) {
+        const ex = x + dx * 3, ey = y + dy * 3, ez = z + dz * 3;
+        if (ex < 0 || ey < 0 || ez < 0 || ex >= N || ey >= N || ez >= N) continue;
+        const line = [];
+        for (let k = 0; k < N; k++) line.push(id(x + dx * k, y + dy * k, z + dz * k));
+        out.push(line);
+      }
+    }
+    return out;
+  })();
+
+  const canvas = document.getElementById('board');
+  const ctx = fitCanvas(canvas, SIZE, SIZE);
+  const log = logger(document.getElementById('log'));
+  const banner = document.getElementById('banner');
+  let G = null, hover = -1, busy = false;
+
+  function newGame() {
+    const seed = (Math.random() * 1e9) >>> 0;
+    const r = rng(seed);
+    G = {
+      seed, r,
+      owner: new Array(64).fill(null),
+      turn: 0, placed: 0, over: false,
+    };
+    hover = -1; busy = false;
+    document.getElementById('log').innerHTML = '';
+    log(`Cube open. ${LINES.length} scoring lines.`);
+    banner.className = 'banner';
+    banner.textContent = 'Your move — claim any unowned star.';
+    draw(); renderSide();
+  }
+
+  function scoreOf(p) {
+    let s = 0;
+    for (const line of LINES) {
+      let mine = 0, theirs = 0;
+      for (const i of line) {
+        if (G.owner[i] === p) mine++;
+        else if (G.owner[i] !== null) theirs++;
+      }
+      if (theirs === 0) s += VALUE[mine];
+    }
+    return s;
+  }
+
+  function claim(i, p) {
+    G.owner[i] = p;
+    G.placed++;
+    const z = (i / 16) | 0, y = ((i % 16) / 4) | 0, x = i % 4;
+    log(`<b class="hi">${PLAYERS[p].name}</b> takes L${z + 1}·${'ABCD'[x]}${y + 1}`);
+  }
+
+  function advance() {
+    if (G.placed >= 32) return finish();
+    G.turn = 1 - G.turn;
+    if (G.turn === 1) {
+      busy = true;
+      setTimeout(() => { aiMove(); busy = false; }, 320);
+    } else {
+      banner.className = 'banner';
+      banner.textContent = 'Your move.';
+    }
+    draw(); renderSide();
+  }
+
+  function aiMove() {
+    const before = [scoreOf(0), scoreOf(1)];
+    let best = -1, bestVal = -Infinity;
+    for (let i = 0; i < 64; i++) {
+      if (G.owner[i] !== null) continue;
+      G.owner[i] = 1;
+      const gain = scoreOf(1) - before[1];
+      G.owner[i] = 0;
+      const deny = scoreOf(0) - before[0];   // what the human would have gained here
+      G.owner[i] = null;
+      const val = gain + deny * 0.8 + G.r() * 1.2;
+      if (val > bestVal) { bestVal = val; best = i; }
+    }
+    claim(best, 1);
+    advance();
+  }
+
+  function finish() {
+    G.over = true;
+    const a = scoreOf(0), b = scoreOf(1);
+    banner.className = 'banner ' + (a >= b ? 'good' : 'bad');
+    banner.innerHTML = a > b ? `<b>You win ${a} – ${b}.</b>`
+      : a === b ? `<b>Dead heat, ${a} – ${b}.</b>`
+      : `<b>Altair wins ${b} – ${a}.</b>`;
+    log(`Final: You ${a} · Altair ${b}`, 'hi');
+    draw(); renderSide();
+  }
+
+  function renderSide() {
+    const rows = PLAYERS.map((pl, p) => `<tr class="${p === 0 ? 'me' : ''}">
+      <td><span style="color:${pl.css}">●</span> ${pl.name}</td>
+      <td class="num"><b>${scoreOf(p)}</b></td></tr>`).join('');
+    document.getElementById('scores').innerHTML =
+      `<tr><th>Claimant</th><th class="num">Score</th></tr>${rows}`;
+    document.getElementById('left').textContent = String(32 - G.placed);
+
+    const box = document.getElementById('lines');
+    if (hover < 0) { box.textContent = 'Hover the board.'; return; }
+    const through = LINES.filter(l => l.includes(hover));
+    box.innerHTML = through.map(l => {
+      const cells = l.map(i => {
+        const o = G.owner[i];
+        const c = o === null ? '#3d4a69' : PLAYERS[o].css;
+        return `<span style="color:${c}">${i === hover ? '◉' : o === null ? '○' : '●'}</span>`;
+      }).join(' ');
+      let mine = 0, theirs = 0;
+      for (const i of l) { if (G.owner[i] === 0) mine++; else if (G.owner[i] !== null) theirs++; }
+      const worth = theirs === 0 ? `+${VALUE[mine]}` : 'dead';
+      return `<div style="padding:2px 0">${cells} <span style="color:var(--ink-faint)">${worth}</span></div>`;
+    }).join('') || '<i>no lines</i>';
+  }
+
+  // layer k is drawn in a 2x2 arrangement: (0,0) (1,0) / (0,1) (1,1)
+  function layerOrigin(z) {
+    return {
+      ox: MARGIN + (z % 2) * (LAYER + GAP),
+      oy: MARGIN + ((z / 2) | 0) * (LAYER + GAP),
+    };
+  }
+  function cellCentre(i) {
+    const z = (i / 16) | 0, y = ((i % 16) / 4) | 0, x = i % 4;
+    const { ox, oy } = layerOrigin(z);
+    return { x: ox + LPAD + x * CELL + CELL / 2, y: oy + LPAD + y * CELL + CELL / 2 };
+  }
+
+  function draw() {
+    const g = ctx;
+    g.fillStyle = '#0a1122';
+    g.fillRect(0, 0, SIZE, SIZE);
+    starfield(g, SIZE, SIZE, rng(G.seed ^ 0x77), 150);
+
+    const through = hover >= 0 ? LINES.filter(l => l.includes(hover)) : [];
+    const lit = new Set(through.flat());
+
+    for (let z = 0; z < N; z++) {
+      const { ox, oy } = layerOrigin(z);
+      g.fillStyle = '#0d1426cc';
+      g.strokeStyle = '#22304f';
+      g.lineWidth = 1;
+      g.fillRect(ox, oy, LAYER, LAYER);
+      g.strokeRect(ox + .5, oy + .5, LAYER - 1, LAYER - 1);
+
+      g.fillStyle = '#5c6c92';
+      g.font = '700 10px ui-monospace, monospace';
+      g.textAlign = 'left'; g.textBaseline = 'top';
+      g.fillText('LAYER ' + (z + 1), ox + 6, oy + 4);
+
+      for (let k = 0; k <= N; k++) {
+        const t = LPAD + k * CELL;
+        g.strokeStyle = '#1a2440';
+        g.beginPath(); g.moveTo(ox + LPAD, oy + t); g.lineTo(ox + LAYER - LPAD, oy + t); g.stroke();
+        g.beginPath(); g.moveTo(ox + t, oy + LPAD); g.lineTo(ox + t, oy + LAYER - LPAD); g.stroke();
+      }
+    }
+
+    // highlight the lines through the hovered star, layer by layer
+    if (through.length) {
+      for (const line of through) {
+        for (let k = 0; k + 1 < line.length; k++) {
+          const a = line[k], b = line[k + 1];
+          if (((a / 16) | 0) !== ((b / 16) | 0)) continue;   // only draw the in-layer segments
+          const p = cellCentre(a), q = cellCentre(b);
+          g.strokeStyle = '#6ea8ff33'; g.lineWidth = 6;
+          g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(q.x, q.y); g.stroke();
+        }
+      }
+    }
+
+    for (let i = 0; i < 64; i++) {
+      const { x, y } = cellCentre(i);
+      const o = G.owner[i];
+      const col = o === null ? '#33415f' : PLAYERS[o].css;
+      const rad = o === null ? 8 : 13;
+
+      if (lit.has(i)) {
+        g.fillStyle = '#6ea8ff18';
+        g.beginPath(); g.arc(x, y, 22, 0, Math.PI * 2); g.fill();
+      }
+      if (o !== null) {
+        const grd = g.createRadialGradient(x, y, 0, x, y, 26);
+        grd.addColorStop(0, col + '99'); grd.addColorStop(1, col + '00');
+        g.fillStyle = grd;
+        g.beginPath(); g.arc(x, y, 26, 0, Math.PI * 2); g.fill();
+      }
+      g.fillStyle = col;
+      g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.fill();
+      if (i === hover) {
+        g.strokeStyle = '#fff'; g.lineWidth = 2;
+        g.beginPath(); g.arc(x, y, rad + 5, 0, Math.PI * 2); g.stroke();
+      }
+    }
+  }
+
+  function cellAt(px, py) {
+    for (let z = 0; z < N; z++) {
+      const { ox, oy } = layerOrigin(z);
+      const lx = px - ox - LPAD, ly = py - oy - LPAD;
+      if (lx < 0 || ly < 0 || lx >= N * CELL || ly >= N * CELL) continue;
+      return id(Math.floor(lx / CELL), Math.floor(ly / CELL), z);
+    }
+    return -1;
+  }
+
+  canvas.addEventListener('mousemove', (e) => {
+    const p = pointerPos(canvas, e);
+    const i = cellAt(p.x, p.y);
+    if (i !== hover) { hover = i; draw(); renderSide(); }
+  });
+  canvas.addEventListener('mouseleave', () => { hover = -1; draw(); renderSide(); });
+  canvas.addEventListener('click', (e) => {
+    if (G.over || busy || G.turn !== 0) return;
+    const p = pointerPos(canvas, e);
+    const i = cellAt(p.x, p.y);
+    if (i < 0 || G.owner[i] !== null) return;
+    claim(i, 0);
+    advance();
+  });
+  document.getElementById('new').addEventListener('click', newGame);
+
+  newGame();
+})();
+
+};
+GAME_INIT['proxima'] = function () {
+
+(function () {
+  const { rng, randInt, pick, shuffle, clamp, logger, fitCanvas, pointerPos, starfield, roundRect } = window.SG;
+
+  const CW = 720, CH = 470, NODES = 16;
+
+  const KINDS = {
+    empty:    { label: 'Dead system',  css: '#4a5570', glyph: '·' },
+    depot:    { label: 'Ice depot',    css: '#7cc4ff', glyph: '⛽' },
+    belt:     { label: 'Ore belt',     css: '#ffd166', glyph: '⛏' },
+    derelict: { label: 'Derelict',     css: '#c08cff', glyph: '⌘' },
+    nebula:   { label: 'Nebula',       css: '#ff9de2', glyph: '≈' },
+    pirates:  { label: 'Raiders',      css: '#f87171', glyph: '☠' },
+    target:   { label: 'PROXIMA B',    css: '#4ade80', glyph: '◉' },
+    home:     { label: 'Home colony',  css: '#e8edf9', glyph: '⌂' },
+  };
+
+  const canvas = document.getElementById('board');
+  const ctx = fitCanvas(canvas, CW, CH);
+  const log = logger(document.getElementById('log'));
+  const banner = document.getElementById('banner');
+  const $ = (id) => document.getElementById(id);
+  let G, hover = -1;
+
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const cost = (a, b) => Math.max(3, Math.round(dist(a, b) / 11));
+
+  function buildMap(r) {
+    const nodes = [];
+    let guard = 0;
+    while (nodes.length < NODES && guard++ < 20000) {
+      const p = { x: 60 + r() * (CW - 120), y: 55 + r() * (CH - 110) };
+      if (nodes.every(n => dist(n, p) > 92)) nodes.push({ ...p, i: nodes.length, links: [] });
+    }
+    // link every node to its 3 nearest, then force connectivity with a spanning pass
+    for (const n of nodes) {
+      const near = nodes.filter(m => m !== n).sort((a, b) => dist(n, a) - dist(n, b)).slice(0, 3);
+      for (const m of near) link(n, m);
+    }
+    const seen = new Set([0]), stack = [nodes[0]];
+    while (stack.length) {
+      const n = stack.pop();
+      for (const j of n.links) if (!seen.has(j)) { seen.add(j); stack.push(nodes[j]); }
+    }
+    for (const n of nodes) {
+      if (seen.has(n.i)) continue;
+      const m = nodes.filter(o => seen.has(o.i)).sort((a, b) => dist(n, a) - dist(n, b))[0];
+      link(n, m); seen.add(n.i); stack.push(n);
+      while (stack.length) {
+        const q = stack.pop();
+        for (const j of q.links) if (!seen.has(j)) { seen.add(j); stack.push(nodes[j]); }
+      }
+    }
+    return nodes;
+
+    function link(a, b) {
+      if (!a.links.includes(b.i)) a.links.push(b.i);
+      if (!b.links.includes(a.i)) b.links.push(a.i);
+    }
+  }
+
+  function hops(nodes, from) {
+    const d = new Array(nodes.length).fill(Infinity);
+    d[from] = 0;
+    const q = [from];
+    while (q.length) {
+      const n = q.shift();
+      for (const j of nodes[n].links) if (d[j] === Infinity) { d[j] = d[n] + 1; q.push(j); }
+    }
+    return d;
+  }
+
+  function newGame() {
+    const seed = (Math.random() * 1e9) >>> 0;
+    const r = rng(seed);
+    const nodes = buildMap(r);
+    const home = 0;
+    const fromHome = hops(nodes, home);
+    // Put Proxima b as far out as the chart allows, so the trip actually costs something.
+    const far = nodes.map((n, i) => ({ i, d: fromHome[i] })).sort((a, b) => b.d - a.d);
+    const target = far[randInt(r, 0, Math.min(2, far.length - 1))].i;
+
+    const pool = shuffle(r, ['depot', 'depot', 'depot', 'belt', 'belt', 'belt',
+                             'derelict', 'derelict', 'nebula', 'nebula', 'pirates', 'pirates',
+                             'empty', 'empty', 'empty', 'empty']);
+    let k = 0;
+    for (const n of nodes) {
+      n.kind = n.i === home ? 'home' : n.i === target ? 'target' : pool[k++ % pool.length];
+      n.seen = n.i === home;
+      n.visited = n.i === home;
+      n.worked = false;
+      n.name = starName(r, n.i);
+    }
+
+    G = { seed, r, nodes, home, target, at: home, fuel: 100, maxFuel: 100,
+          hull: 100, ore: 0, jumps: 0, over: false, found: false,
+          delay: hops(nodes, target) };
+
+    $('log').innerHTML = '';
+    banner.className = 'banner';
+    banner.textContent = 'Find the habitable world, then get home. Nobody is coming to refuel you.';
+    log(`Cleared the ring at <b class="hi">${nodes[home].name}</b>. ` +
+        `Carrier delay reads <b class="hi">${G.delay[home]} jumps</b>.`);
+    hover = -1;
+    sync();
+  }
+
+  const SYLL = ['ka', 'ru', 'tal', 'vex', 'or', 'ni', 'sha', 'dor', 'lys', 'em', 'ath', 'zu', 'per', 'cyg'];
+  function starName(r, i) {
+    return (pick(r, SYLL) + pick(r, SYLL)).replace(/^./, c => c.toUpperCase()) + '-' + (100 + i * 7);
+  }
+
+  function arrive(i) {
+    const n = G.nodes[i];
+    n.visited = true; n.seen = true;
+    const K = KINDS[n.kind];
+    log(`Arrived <b class="hi">${n.name}</b> — ${K.label}. Carrier delay ${G.delay[i]}.`);
+
+    if (n.kind === 'pirates' && !n.worked) {
+      const dmg = randInt(G.r, 12, 26);
+      const stolen = Math.min(G.ore, randInt(G.r, 0, 3));
+      G.hull -= dmg; G.ore -= stolen;
+      log(`Raiders. Hull −${dmg}${stolen ? `, ore −${stolen}` : ''}.`, 'bad');
+    } else if (n.kind === 'nebula') {
+      const dmg = randInt(G.r, 5, 14);
+      G.hull -= dmg;
+      log(`Nebula grit scours the hull, −${dmg}.`, 'bad');
+    } else if (n.kind === 'target') {
+      G.found = true;
+      log('<b class="good">PROXIMA B.</b> Liquid water, breathable partial pressure. Survey locked — now get it home.', 'good');
+      banner.className = 'banner good';
+      banner.innerHTML = '<b>Proxima b surveyed.</b> The expedition only counts if you make it back to the home colony.';
+    }
+    checkDead();
+    sync();
+  }
+
+  function travel(i) {
+    if (G.over) return;
+    const here = G.nodes[G.at];
+    if (!here.links.includes(i)) return;
+    const c = cost(here, G.nodes[i]);
+    if (c > G.fuel) { log(`Not enough fuel for that burn (${c} needed).`, 'bad'); return; }
+    G.fuel -= c; G.jumps++; G.at = i;
+    arrive(i);
+    if (!G.over && G.found && i === G.home) finish(true);
+  }
+
+  function work() {
+    if (G.over) return;
+    const n = G.nodes[G.at];
+    if (n.worked) { log('Nothing more to take here.'); return; }
+    n.worked = true;
+    switch (n.kind) {
+      case 'depot': {
+        const f = randInt(G.r, 22, 38);
+        G.fuel = Math.min(G.maxFuel, G.fuel + f);
+        log(`Cracked ice for <b class="good">+${f} fuel</b>.`, 'good'); break;
+      }
+      case 'belt': {
+        const o = randInt(G.r, 2, 5);
+        G.ore += o; G.fuel -= 4;
+        log(`Mined <b class="good">${o} ore</b> for 4 fuel.`, 'good'); break;
+      }
+      case 'derelict': {
+        if (G.r() < 0.55) {
+          const f = randInt(G.r, 12, 24); G.fuel = Math.min(G.maxFuel, G.fuel + f);
+          log(`Drained the derelict's tanks, <b class="good">+${f} fuel</b>.`, 'good');
+        } else {
+          const h = randInt(G.r, 10, 22); G.hull = Math.min(100, G.hull + h);
+          log(`Stripped plating off the derelict, <b class="good">hull +${h}</b>.`, 'good');
+        }
+        break;
+      }
+      case 'home': {
+        if (G.ore >= 3) { G.ore -= 3; G.fuel = Math.min(G.maxFuel, G.fuel + 30);
+          log('Traded 3 ore for 30 fuel at the colony.', 'good'); n.worked = false; }
+        else log('The colony wants 3 ore for a tank of fuel.');
+        break;
+      }
+      case 'target': log('Surveying complete. There is nothing here to strip.'); break;
+      default: log('Empty. Sensors find nothing worth the burn.');
+    }
+    checkDead();
+    sync();
+  }
+
+  function scan() {
+    if (G.over) return;
+    if (G.fuel < 8) { log('Not enough fuel to power the array.', 'bad'); return; }
+    G.fuel -= 8;
+    const n = G.nodes[G.at];
+    const found = [];
+    for (const j of n.links) {
+      if (!G.nodes[j].seen) { G.nodes[j].seen = true; found.push(G.nodes[j]); }
+    }
+    log(found.length
+      ? 'Scan: ' + found.map(m => `${m.name} = <b class="hi">${KINDS[m.kind].label}</b>`).join(', ')
+      : 'Scan returns nothing new.');
+    checkDead();
+    sync();
+  }
+
+  function checkDead() {
+    if (G.over) return;
+    if (G.hull <= 0) { G.hull = 0; return finish(false, 'The hull failed.'); }
+    const here = G.nodes[G.at];
+    const cheapest = Math.min(...here.links.map(j => cost(here, G.nodes[j])));
+    if (G.fuel < cheapest && !(here.kind === 'depot' && !here.worked)
+        && !(here.kind === 'derelict' && !here.worked)
+        && !(here.kind === 'home' && G.ore >= 3)) {
+      return finish(false, 'Dry tanks. The ship cannot make another burn.');
+    }
+  }
+
+  function finish(win, why) {
+    G.over = true;
+    if (win) {
+      const score = Math.round(G.fuel + G.ore * 12 + G.hull * 0.5 + Math.max(0, 40 - G.jumps) * 6);
+      banner.className = 'banner good';
+      banner.innerHTML = `<b>Home with the survey.</b> ${G.jumps} jumps, ${G.ore} ore, ` +
+        `${G.fuel} fuel and ${G.hull} hull left — expedition score <b>${score}</b>.`;
+      log(`<b class="good">Expedition complete. Score ${score}.</b>`, 'good');
+    } else {
+      banner.className = 'banner bad';
+      banner.innerHTML = `<b>Expedition lost at ${G.nodes[G.at].name}.</b> ${why} ` +
+        (G.found ? 'The survey never made it back.' : 'Proxima b was never found.');
+      log(`<b class="bad">${why}</b>`, 'bad');
+    }
+    sync();
+  }
+
+  function sync() {
+    $('fuel').textContent = `${Math.max(0, Math.round(G.fuel))} / ${G.maxFuel}`;
+    $('hull').textContent = `${Math.max(0, Math.round(G.hull))} / 100`;
+    $('ore').textContent = String(G.ore);
+    $('jumps').textContent = String(G.jumps);
+    $('gfuel').style.width = clamp(G.fuel / G.maxFuel * 100, 0, 100) + '%';
+    $('ghull').style.width = clamp(G.hull, 0, 100) + '%';
+    $('ghull').style.background = G.hull > 50 ? 'var(--good)' : G.hull > 25 ? 'var(--warn)' : 'var(--bad)';
+
+    const d = G.delay[G.at];
+    $('delay').textContent = G.found && G.at === G.target ? 'HERE' : `${d} jump${d === 1 ? '' : 's'}`;
+    const maxD = Math.max(...G.delay.filter(v => isFinite(v)));
+    $('sig').innerHTML = Array.from({ length: maxD + 1 }, (_, k) =>
+      `<b style="background:${k >= d ? '#4ade80' : '#1b2745'}"></b>`).join('');
+
+    const here = G.nodes[G.at];
+    $('scan').disabled = G.over || G.fuel < 8;
+    $('mine').disabled = G.over || here.worked;
+    $('hint').innerHTML = G.over ? 'Expedition over — start a new one.'
+      : `At <b>${here.name}</b> (${KINDS[here.kind].label}). Linked: ` +
+        here.links.map(j => `${G.nodes[j].name} <span style="color:var(--ink-faint)">${cost(here, G.nodes[j])}f</span>`).join(' · ');
+    draw();
+  }
+
+  function draw() {
+    const g = ctx;
+    g.fillStyle = '#080e1c'; g.fillRect(0, 0, CW, CH);
+    starfield(g, CW, CH, rng(G.seed ^ 0xbeef), 220);
+
+    const here = G.nodes[G.at];
+    for (const n of G.nodes) {
+      for (const j of n.links) {
+        if (j < n.i) continue;
+        const m = G.nodes[j];
+        const live = (n.i === G.at || j === G.at);
+        g.strokeStyle = live ? '#6ea8ff88' : '#22304f';
+        g.lineWidth = live ? 2 : 1;
+        g.beginPath(); g.moveTo(n.x, n.y); g.lineTo(m.x, m.y); g.stroke();
+        if (live) {
+          const mx = (n.x + m.x) / 2, my = (n.y + m.y) / 2;
+          const c = cost(n, m);
+          g.fillStyle = c > G.fuel ? '#f87171' : '#93a1c0';
+          g.font = '600 10px ui-monospace, monospace';
+          g.textAlign = 'center'; g.textBaseline = 'middle';
+          roundRect(g, mx - 13, my - 8, 26, 16, 5);
+          g.save(); g.fillStyle = '#0a1122dd'; g.fill(); g.restore();
+          g.fillStyle = c > G.fuel ? '#f87171' : '#93a1c0';
+          g.fillText(c + 'f', mx, my);
+        }
+      }
+    }
+
+    for (const n of G.nodes) {
+      const known = n.seen || n.visited;
+      const K = KINDS[n.kind];
+      const col = known ? K.css : '#33415f';
+      const rad = n.i === G.at ? 20 : 15;
+
+      if (hover === n.i && here.links.includes(n.i) && !G.over) {
+        g.fillStyle = '#6ea8ff22';
+        g.beginPath(); g.arc(n.x, n.y, rad + 12, 0, Math.PI * 2); g.fill();
+      }
+      const grd = g.createRadialGradient(n.x, n.y, 0, n.x, n.y, rad * 2.2);
+      grd.addColorStop(0, col + '77'); grd.addColorStop(1, col + '00');
+      g.fillStyle = grd;
+      g.beginPath(); g.arc(n.x, n.y, rad * 2.2, 0, Math.PI * 2); g.fill();
+
+      g.fillStyle = '#0d1426';
+      g.beginPath(); g.arc(n.x, n.y, rad, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = col; g.lineWidth = n.visited ? 3 : 1.5;
+      g.stroke();
+
+      g.fillStyle = col;
+      g.font = '13px ui-sans-serif, system-ui';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(known ? K.glyph : '?', n.x, n.y + 1);
+
+      g.fillStyle = n.visited ? '#93a1c0' : '#5c6c92';
+      g.font = '600 10px ui-monospace, monospace';
+      g.textBaseline = 'top';
+      g.fillText(n.name, n.x, n.y + rad + 5);
+      if (n.visited) {
+        g.fillStyle = '#4ade8099';
+        g.fillText('delay ' + G.delay[n.i], n.x, n.y + rad + 17);
+      }
+    }
+
+    // the ship
+    g.save();
+    g.translate(here.x, here.y - 26);
+    g.fillStyle = '#ffd166';
+    g.beginPath(); g.moveTo(0, -8); g.lineTo(6, 6); g.lineTo(0, 3); g.lineTo(-6, 6); g.closePath(); g.fill();
+    g.restore();
+  }
+
+  function nodeAt(px, py) {
+    for (const n of G.nodes) if (Math.hypot(n.x - px, n.y - py) < 22) return n.i;
+    return -1;
+  }
+  canvas.addEventListener('mousemove', (e) => {
+    const p = pointerPos(canvas, e);
+    const i = nodeAt(p.x, p.y);
+    if (i !== hover) { hover = i; draw(); }
+  });
+  canvas.addEventListener('mouseleave', () => { hover = -1; draw(); });
+  canvas.addEventListener('click', (e) => {
+    const p = pointerPos(canvas, e);
+    const i = nodeAt(p.x, p.y);
+    if (i >= 0) travel(i);
+  });
+  $('scan').addEventListener('click', scan);
+  $('mine').addEventListener('click', work);
+  $('new').addEventListener('click', newGame);
+
+  newGame();
+})();
+
+};
+GAME_INIT['fish'] = function () {
+
+(function () {
+  const { rng, clamp, logger, fitCanvas, fmt } = window.SG;
+
+  const K = 10000, GROW = 0.6, START = 6000, CAPACITY = 800;
+  const SEASONS = 12, COLLAPSE = 500;
+  // Maximum sustainable yield is GROW*K/4 a season; a perfectly managed quarter share over the
+  // whole run is what a fleet should measure itself against, not what the others managed to grab.
+  const TARGET = Math.round(SEASONS * (GROW * K / 4) / 4);
+
+  const FLEETS = [
+    { name: 'You',       css: '#6ea8ff', kind: 'human' },
+    { name: 'Delgado',   css: '#f87171', kind: 'greedy',
+      blurb: 'takes what the boat will hold' },
+    { name: 'Nakamura',  css: '#4ade80', kind: 'cautious',
+      blurb: 'fishes the growth, not the stock' },
+    { name: 'Okonjo',    css: '#ffd166', kind: 'mirror',
+      blurb: 'does what the fleet did last season' },
+  ];
+
+  const chart = document.getElementById('chart');
+  const CW = 720, CH = 300;
+  const ctx = fitCanvas(chart, CW, CH);
+  const log = logger(document.getElementById('log'));
+  const banner = document.getElementById('banner');
+  const $ = (id) => document.getElementById(id);
+  let G;
+
+  function newGame() {
+    G = {
+      r: rng((Math.random() * 1e9) >>> 0),
+      stock: START,
+      season: 1,
+      over: false,
+      landed: FLEETS.map(() => 0),
+      last: FLEETS.map(() => 0),
+      complied: FLEETS.map(() => 0),
+      capSeasons: 0,
+      history: [{ stock: START, catches: null }],
+      cap: null,
+      pledgeKept: 0, pledgeMade: 0,
+      trust: 0.5,
+    };
+    $('log').innerHTML = '';
+    $('quota').value = 300; $('cap').value = 350;
+    $('quota').disabled = false; $('go').disabled = false; $('propose').disabled = false;
+    $('pledge').textContent = 'No cap announced. Everyone fishes as they like.';
+    banner.className = 'banner';
+    banner.textContent = 'Four fleets, one stock of fish. Land as much as you can — the water is shared.';
+    log(`Season 1. Stock <b class="hi">${fmt(START)} t</b>. Sustainable total is about 1,500 t a season.`);
+    sync();
+  }
+
+  const growthAt = (s) => Math.max(0, GROW * s * (1 - s / K));
+
+  function aiQuota(f, i) {
+    const share = growthAt(G.stock) / FLEETS.length;      // its "fair" slice of the regrowth
+    const noise = 0.85 + G.r() * 0.3;
+    const endgame = G.season >= SEASONS - 1;              // last chance to cash out
+    let q;
+    switch (f.kind) {
+      case 'greedy':
+        q = endgame ? CAPACITY : Math.min(CAPACITY, Math.max(share * 1.9, G.stock * 0.11));
+        break;
+      case 'cautious':
+        q = Math.min(CAPACITY, share * (G.stock < 2500 ? 0.45 : 0.95));
+        break;
+      case 'mirror': {
+        const others = G.last.filter((_, k) => k !== i);
+        const avg = G.history.length > 1 ? others.reduce((a, b) => a + b, 0) / others.length : share;
+        q = Math.min(CAPACITY, avg);
+        break;
+      }
+      default: q = share;
+    }
+    if (G.cap !== null) {
+      // Honour the cap in proportion to how far it is believed — trust plus a personality bias.
+      const bias = { greedy: -0.35, cautious: 0.35, mirror: 0.1 }[f.kind] || 0;
+      const believe = clamp(G.trust + bias, 0, 1);
+      if (G.r() < believe) q = Math.min(q, G.cap);
+      else q = Math.min(CAPACITY, Math.max(q, G.cap * 1.25));
+    }
+    return Math.max(0, Math.round(q * noise));
+  }
+
+  function runSeason() {
+    if (G.over) return;
+    const mine = Number($('quota').value);
+    const asks = FLEETS.map((f, i) => (i === 0 ? mine : aiQuota(f, i)));
+    const demand = asks.reduce((a, b) => a + b, 0);
+
+    let catches = asks;
+    let scarce = false;
+    if (demand > G.stock) {
+      scarce = true;
+      catches = asks.map(a => Math.floor(a * (G.stock / demand)));
+    }
+
+    if (G.cap !== null) {
+      G.pledgeMade++;
+      G.capSeasons++;
+      if (mine <= G.cap) { G.pledgeKept++; }
+      FLEETS.forEach((f, i) => { if (catches[i] <= G.cap + 1) G.complied[i]++; });
+      const breakers = FLEETS.map((f, i) => (catches[i] > G.cap + 1 ? f.name : null)).filter(Boolean);
+      G.trust = clamp(G.pledgeKept / Math.max(1, G.pledgeMade), 0.05, 0.95);
+      log(breakers.length
+        ? `Cap of ${G.cap} t: <b class="bad">broken by ${breakers.join(', ')}</b>.`
+        : `Cap of ${G.cap} t: <b class="good">everyone held to it</b>.`);
+    }
+
+    FLEETS.forEach((f, i) => { G.landed[i] += catches[i]; });
+    G.last = catches;
+    const taken = catches.reduce((a, b) => a + b, 0);
+    G.stock = Math.max(0, G.stock - taken);
+
+    log(`Season ${G.season}: ` + FLEETS.map((f, i) =>
+      `<span style="color:${f.css}">${f.name.slice(0, 3)} ${catches[i]}</span>`).join(' · ') +
+      ` — ${fmt(taken)} t landed${scarce ? ' <b class="bad">(nets came up short)</b>' : ''}.`);
+
+    if (G.stock < COLLAPSE) {
+      G.history.push({ stock: G.stock, catches });
+      return collapse();
+    }
+
+    const g = growthAt(G.stock);
+    G.stock = Math.min(K, G.stock + g);
+    G.history.push({ stock: G.stock, catches });
+    log(`Stock regrew ${fmt(g)} t to <b class="hi">${fmt(G.stock)} t</b>.`,
+        g < taken ? 'bad' : 'good');
+
+    G.cap = null;
+    $('pledge').textContent = 'No cap announced. Everyone fishes as they like.';
+    G.season++;
+    if (G.season > SEASONS) return finish();
+    sync();
+  }
+
+  function collapse() {
+    G.over = true;
+    log('<b class="bad">COLLAPSE.</b> No further seasons.', 'bad');
+    report(true);
+    endTable();
+  }
+
+  /** The verdict: your own tonnage against a perfectly managed share, then the placings. */
+  function report(collapsed) {
+    const rank = FLEETS.map((f, i) => ({ i, name: f.name, v: G.landed[i] })).sort((a, b) => b.v - a.v);
+    const place = rank.findIndex(r => r.i === 0) + 1;
+    const pct = Math.round(G.landed[0] / TARGET * 100);
+    const head = collapsed
+      ? `<b>The fishery collapsed in season ${G.season}.</b> Under ${COLLAPSE} t the stock cannot recover
+         and the water is closed for good.`
+      : `<b>The fishery survived, closing at ${fmt(G.stock)} t of a possible ${fmt(K)}.</b>`;
+    banner.className = 'banner ' + (collapsed ? 'bad' : pct >= 95 ? 'good' : '');
+    banner.innerHTML = `${head} You landed <b>${fmt(G.landed[0])} t</b> — ${pct}% of the ` +
+      `${fmt(TARGET)} t a perfectly managed quarter share would have paid over ${SEASONS} seasons. ` +
+      `${rank[0].name} landed the most at ${fmt(rank[0].v)} t; you placed ` +
+      `${place}${['st', 'nd', 'rd', 'th'][Math.min(place - 1, 3)]}.`;
+    log(`Final: ${rank.map(r => `${r.name} ${fmt(r.v)}`).join(' · ')}`, 'hi');
+  }
+
+  function finish() {
+    G.over = true;
+    // Surviving stock is sold off as quota rights, weighted by who actually kept to the caps.
+    const pot = G.stock * 0.5;
+    const weight = FLEETS.map((_, i) => (G.capSeasons ? G.complied[i] / G.capSeasons : 1));
+    const wsum = weight.reduce((a, b) => a + b, 0) || 1;
+    FLEETS.forEach((f, i) => {
+      const share = Math.round(pot * weight[i] / wsum);
+      G.landed[i] += share;
+      if (G.capSeasons) {
+        log(`${f.name} kept ${G.complied[i]}/${G.capSeasons} caps — quota rights ${fmt(share)} t.`,
+            i === 0 ? 'good' : '');
+      }
+    });
+    log(`Fishery survived with ${fmt(G.stock)} t. Quota rights worth ${fmt(Math.round(pot))} t in total.`, 'good');
+    report(false);
+    endTable();
+  }
+
+  function endTable() {
+    $('quota').disabled = true; $('go').disabled = true; $('propose').disabled = true;
+    sync();
+  }
+
+  function sync() {
+    $('season').textContent = String(Math.min(G.season, SEASONS));
+    $('stock').textContent = fmt(G.stock) + ' t';
+    $('growth').textContent = '+' + fmt(growthAt(G.stock)) + ' t';
+    $('left').textContent = String(Math.max(0, SEASONS - G.season + 1));
+    $('qval').textContent = $('quota').value + ' t';
+    $('mine').textContent = fmt(G.landed[0]) + ' t';
+    $('target').textContent = fmt(TARGET) + ' t';
+
+    $('fleets').innerHTML = '<tr><th>Fleet</th><th class="num">Last</th><th class="num">Landed</th></tr>' +
+      FLEETS.map((f, i) => `<tr class="${i === 0 ? 'me' : ''}">
+        <td><span class="dot" style="background:${f.css}"></span> ${f.name}
+          ${f.blurb ? `<div style="font-size:11px;color:var(--ink-faint)">${f.blurb}</div>` : ''}</td>
+        <td class="num">${G.last[i] ? fmt(G.last[i]) : '—'}</td>
+        <td class="num"><b>${fmt(G.landed[i])}</b></td></tr>`).join('');
+
+    draw();
+  }
+
+  function draw() {
+    const g = ctx;
+    g.fillStyle = '#0d1426'; g.fillRect(0, 0, CW, CH);
+    const L = 52, R = CW - 16, T = 16, B = CH - 28;
+    const n = SEASONS;
+    const xAt = (k) => L + (R - L) * (k / n);
+    const yAt = (v) => B - (B - T) * (v / K);
+
+    // gridlines
+    g.strokeStyle = '#1b2745'; g.fillStyle = '#5c6c92';
+    g.font = '10px ui-monospace, monospace'; g.textAlign = 'right'; g.textBaseline = 'middle';
+    for (let v = 0; v <= K; v += 2000) {
+      g.beginPath(); g.moveTo(L, yAt(v)); g.lineTo(R, yAt(v)); g.stroke();
+      g.fillText(fmt(v), L - 6, yAt(v));
+    }
+
+    // collapse band
+    g.fillStyle = '#f8717118';
+    g.fillRect(L, yAt(COLLAPSE), R - L, B - yAt(COLLAPSE));
+    g.fillStyle = '#f8717199'; g.textAlign = 'left';
+    g.fillText('collapse', L + 4, yAt(COLLAPSE) + 8);
+
+    // catch bars, stacked per season
+    const bw = (R - L) / n * 0.5;
+    G.history.forEach((h, k) => {
+      if (!h.catches) return;
+      let acc = 0;
+      h.catches.forEach((c, i) => {
+        const y0 = B - (B - T) * (acc / K), y1 = B - (B - T) * ((acc + c) / K);
+        g.fillStyle = FLEETS[i].css + '55';
+        g.fillRect(xAt(k) - bw / 2, y1, bw, y0 - y1);
+        acc += c;
+      });
+    });
+
+    // stock line
+    g.strokeStyle = '#7cc4ff'; g.lineWidth = 2.5;
+    g.beginPath();
+    G.history.forEach((h, k) => (k ? g.lineTo(xAt(k), yAt(h.stock)) : g.moveTo(xAt(k), yAt(h.stock))));
+    g.stroke();
+    G.history.forEach((h, k) => {
+      g.fillStyle = '#7cc4ff';
+      g.beginPath(); g.arc(xAt(k), yAt(h.stock), 3, 0, Math.PI * 2); g.fill();
+    });
+
+    g.fillStyle = '#5c6c92'; g.textAlign = 'center'; g.textBaseline = 'top';
+    for (let k = 0; k <= n; k += 2) g.fillText(k === 0 ? 'start' : 'S' + k, xAt(k), B + 8);
+    g.textAlign = 'left';
+    g.fillText('stock (t)', L, T - 4);
+  }
+
+  $('quota').addEventListener('input', () => { $('qval').textContent = $('quota').value + ' t'; });
+  $('go').addEventListener('click', runSeason);
+  $('propose').addEventListener('click', () => {
+    G.cap = clamp(Math.round(Number($('cap').value)), 0, CAPACITY);
+    const rep = G.pledgeMade ? ` They remember you keeping ${G.pledgeKept} of ${G.pledgeMade} pledges.` : '';
+    $('pledge').innerHTML = `You announced a cap of <b>${G.cap} t</b> per fleet.${rep}`;
+    log(`You announce a cap of <b class="hi">${G.cap} t</b> per fleet.`);
+  });
+  $('new').addEventListener('click', newGame);
+
+  newGame();
+})();
+
+};
+GAME_INIT['fire'] = function () {
+
+(function () {
+  const { rng, randInt, clamp, logger, fitCanvas, pointerPos, fmt } = window.SG;
+
+  const W = 26, H = 19, CS = 25;
+  const CW = W * CS, CH = H * CS;
+  const HOURS = 24, AP = 4;
+
+  const TERRAIN = {
+    grass:  { fuel: 1.0, css: '#5c7a3a' },
+    brush:  { fuel: 1.7, css: '#8a9a4a' },
+    forest: { fuel: 2.4, css: '#2f6b3a' },
+    water:  { fuel: 0.0, css: '#2b4a7a' },
+    home:   { fuel: 1.4, css: '#c9d3e6' },
+    bare:   { fuel: 0.0, css: '#3b3b42' },
+  };
+  const DIRS8 = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+  const WINDS = [
+    { name: 'N',  v: [0, 1] },  { name: 'NE', v: [-1, 1] },
+    { name: 'E',  v: [-1, 0] }, { name: 'SE', v: [-1, -1] },
+    { name: 'S',  v: [0, -1] }, { name: 'SW', v: [1, -1] },
+    { name: 'W',  v: [1, 0] },  { name: 'NW', v: [1, 1] },
+  ];
+
+  const canvas = document.getElementById('board');
+  const ctx = fitCanvas(canvas, CW, CH);
+  const log = logger(document.getElementById('log'));
+  const banner = document.getElementById('banner');
+  const $ = (id) => document.getElementById(id);
+  let G, tool = 'cut', hover = null;
+
+  const at = (x, y) => G.cells[y * W + x];
+  const inside = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+
+  function newGame() {
+    const seed = (Math.random() * 1e9) >>> 0;
+    const r = rng(seed);
+    const cells = [];
+    // Terrain from a couple of smooth noise bands, so the map reads as landscape not confetti.
+    const ax = r() * 6.28, ay = r() * 6.28, bx = r() * 6.28, by = r() * 6.28;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const n = Math.sin(x * 0.34 + ax) * Math.cos(y * 0.41 + ay)
+              + Math.sin(x * 0.13 + bx) * Math.sin(y * 0.19 + by) * 0.8;
+      let t = n > 0.55 ? 'forest' : n > -0.1 ? 'brush' : n > -1.1 ? 'grass' : 'water';
+      cells.push({ x, y, t, moist: t === 'water' ? 1 : 0.05 + r() * 0.12, fire: 0, burned: false, lit: 0 });
+    }
+    // a lake or two
+    for (let k = 0; k < 2; k++) {
+      const cx0 = randInt(r, 3, W - 4), cy0 = randInt(r, 3, H - 4), rad = randInt(r, 2, 3);
+      for (let y = -rad; y <= rad; y++) for (let x = -rad; x <= rad; x++) {
+        if (x * x + y * y > rad * rad) continue;
+        if (!inside(cx0 + x, cy0 + y)) continue;
+        const c = cells[(cy0 + y) * W + (cx0 + x)];
+        c.t = 'water'; c.moist = 1;
+      }
+    }
+    // homes, kept off the water and away from the ignition edge
+    const homes = [];
+    while (homes.length < 6) {
+      const x = randInt(r, 2, W - 3), y = randInt(r, 2, H - 3);
+      const c = cells[y * W + x];
+      if (c.t === 'water' || c.t === 'home') continue;
+      if (homes.some(h => Math.abs(h.x - x) < 3 && Math.abs(h.y - y) < 3)) continue;
+      c.t = 'home'; c.moist = 0.15;
+      homes.push({ x, y });
+    }
+
+    G = { seed, r, cells, homes, hour: 0, ap: AP, over: false,
+          wind: WINDS[randInt(r, 0, 7)], windStr: 0.6 + r() * 0.7, burnedCount: 0 };
+
+    // ignition: a small front on the upwind edge, nudged onto real fuel so it always takes hold
+    let ix = clamp(Math.round(W / 2 - G.wind.v[0] * (W / 2 - 3)), 1, W - 2);
+    let iy = clamp(Math.round(H / 2 - G.wind.v[1] * (H / 2 - 3)), 1, H - 2);
+    const fuelly = G.cells.filter(c => c.t === 'forest' || c.t === 'brush');
+    if (fuelly.length && !['forest', 'brush'].includes(at(ix, iy).t)) {
+      const near = fuelly.sort((a, b) =>
+        Math.hypot(a.x - ix, a.y - iy) - Math.hypot(b.x - ix, b.y - iy))[0];
+      ix = clamp(near.x, 1, W - 2); iy = clamp(near.y, 1, H - 2);
+    }
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1]]) {
+      if (!inside(ix + dx, iy + dy)) continue;
+      const c = at(ix + dx, iy + dy);
+      if (c.t !== 'water') { c.fire = 2; c.lit = 0; }
+    }
+
+    $('log').innerHTML = '';
+    banner.className = 'banner';
+    banner.textContent = 'Four crew actions an hour. Spend them, then let the hour run.';
+    log(`Ignition at ${ix},${iy}. Wind <b class="hi">${G.wind.name}</b> at ${(G.windStr * 30).toFixed(0)} km/h.`);
+    $('tick').disabled = false; $('skip').disabled = false;
+    sync();
+  }
+
+  function spreadChance(from, to) {
+    if (to.t === 'water' || to.burned || to.fire > 0) return 0;
+    const fuel = TERRAIN[to.t].fuel;
+    if (fuel === 0) return 0;
+    const dx = Math.sign(to.x - from.x), dy = Math.sign(to.y - from.y);
+    const dot = dx * G.wind.v[0] + dy * G.wind.v[1];      // -2..2, downwind is positive
+    const windF = 1 + dot * 0.55 * G.windStr;
+    const diag = (dx !== 0 && dy !== 0) ? 0.72 : 1;
+    return clamp(0.16 * fuel * Math.max(0.08, windF) * diag * (1 - to.moist), 0, 0.92);
+  }
+
+  function runHour() {
+    if (G.over) return;
+    G.hour++;
+    const igniting = [];
+    for (const c of G.cells) {
+      if (c.fire <= 0) continue;
+      for (const [dx, dy] of DIRS8) {
+        if (!inside(c.x + dx, c.y + dy)) continue;
+        const n = at(c.x + dx, c.y + dy);
+        if (G.r() < spreadChance(c, n)) igniting.push(n);
+      }
+    }
+    // age the existing fire before lighting the new cells
+    let lost = 0;
+    for (const c of G.cells) {
+      if (c.fire > 0) {
+        c.lit++;
+        if (c.lit >= 2) {
+          c.fire = 0; c.burned = true; G.burnedCount++;
+          if (c.t === 'home') { c.t = 'bare'; lost++; }
+          else c.t = 'bare';
+        }
+      }
+      c.moist = c.t === 'water' ? 1 : Math.max(0.05 + (c.t === 'forest' ? 0.03 : 0), c.moist - 0.14);
+    }
+    for (const n of igniting) { if (!n.burned && n.fire === 0 && n.t !== 'water') { n.fire = 2; n.lit = 0; } }
+
+    if (lost) log(`<b class="bad">${lost} home${lost > 1 ? 's' : ''} lost.</b>`, 'bad');
+
+    if (G.r() < 0.28) {
+      const shift = G.r() < 0.5 ? 1 : -1;
+      G.wind = WINDS[(WINDS.indexOf(G.wind) + shift + 8) % 8];
+      G.windStr = clamp(G.windStr + (G.r() - 0.45) * 0.4, 0.3, 1.6);
+      log(`Wind swings to <b class="hi">${G.wind.name}</b>, ${(G.windStr * 30).toFixed(0)} km/h.`, 'bad');
+    }
+
+    const burning = G.cells.filter(c => c.fire > 0).length;
+    log(`Hour ${G.hour}: ${burning} cells alight, ${G.burnedCount} burned.`);
+
+    G.ap = AP;
+    if (burning === 0) return finish(true);
+    if (G.hour >= HOURS) return finish(false);
+    sync();
+  }
+
+  function finish(out) {
+    G.over = true;
+    $('tick').disabled = true; $('skip').disabled = true;
+    const standing = G.homes.filter(h => at(h.x, h.y).t === 'home').length;
+    const total = W * H;
+    const saved = Math.round((1 - G.burnedCount / total) * 100);
+    const good = standing === G.homes.length;
+    banner.className = 'banner ' + (good ? 'good' : standing >= 4 ? '' : 'bad');
+    banner.innerHTML = out
+      ? `<b>The fire is out after ${G.hour} hours.</b> ${standing} of ${G.homes.length} homes standing, ` +
+        `${saved}% of the map unburned.`
+      : `<b>Sunrise on day two — the fire is still running.</b> ${standing} of ${G.homes.length} homes standing, ` +
+        `${saved}% unburned.`;
+    log(`Final: ${standing}/${G.homes.length} homes, ${G.burnedCount} cells burned.`, good ? 'good' : 'bad');
+    sync();
+  }
+
+  function act(x, y) {
+    if (G.over || G.ap <= 0 || !inside(x, y)) return;
+    const c = at(x, y);
+    if (tool === 'cut') {
+      if (c.t === 'water' || c.t === 'bare' || c.fire > 0) return;
+      if (c.t === 'home') { log('Crews will not bulldoze a home.', 'bad'); return; }
+      c.t = 'bare'; c.burned = false;
+      log(`Line cut at ${x},${y}.`);
+    } else if (tool === 'water') {
+      let hit = 0;
+      for (const [dx, dy] of [[0,0],...DIRS8]) {
+        if (!inside(x + dx, y + dy)) continue;
+        const n = at(x + dx, y + dy);
+        if (n.t === 'water') continue;
+        n.moist = Math.min(0.95, n.moist + (dx === 0 && dy === 0 ? 0.75 : 0.45));
+        if (n.fire > 0 && (dx === 0 && dy === 0 ? true : G.r() < 0.55)) { n.fire = 0; n.lit = 0; hit++; }
+      }
+      log(`Drop on ${x},${y}${hit ? ` — knocked down ${hit} cell${hit > 1 ? 's' : ''}` : ''}.`, hit ? 'good' : '');
+    } else if (tool === 'burn') {
+      if (c.t === 'water' || c.t === 'bare' || c.t === 'home' || c.fire > 0 || c.burned) return;
+      c.fire = 2; c.lit = 0;
+      log(`Backburn lit at ${x},${y}.`, 'bad');
+    }
+    G.ap--;
+    sync();
+  }
+
+  function sync() {
+    $('hour').textContent = String(G.hour);
+    $('ap').textContent = String(G.ap);
+    $('wind').textContent = `${G.wind.name} · ${(G.windStr * 30).toFixed(0)} km/h`;
+    $('homes').textContent = `${G.homes.filter(h => at(h.x, h.y).t === 'home').length} / ${G.homes.length}`;
+    $('burning').textContent = fmt(G.cells.filter(c => c.fire > 0).length);
+    $('burned').textContent = fmt(G.burnedCount);
+    draw();
+  }
+
+  function draw() {
+    const g = ctx;
+    g.fillStyle = '#0a1122'; g.fillRect(0, 0, CW, CH);
+    for (const c of G.cells) {
+      const px = c.x * CS, py = c.y * CS;
+      g.fillStyle = TERRAIN[c.t].css;
+      g.fillRect(px, py, CS, CS);
+      if (c.moist > 0.35 && c.t !== 'water') {
+        g.fillStyle = `rgba(90,160,255,${(c.moist - 0.3) * 0.5})`;
+        g.fillRect(px, py, CS, CS);
+      }
+      if (c.t === 'home') {
+        g.fillStyle = '#26324a';
+        g.beginPath();
+        g.moveTo(px + 5, py + CS - 6); g.lineTo(px + CS / 2, py + 5); g.lineTo(px + CS - 5, py + CS - 6);
+        g.closePath(); g.fill();
+      }
+      if (c.fire > 0) {
+        const t = c.lit === 0 ? 1 : 0.7;
+        const grd = g.createRadialGradient(px + CS / 2, py + CS / 2, 1, px + CS / 2, py + CS / 2, CS);
+        grd.addColorStop(0, `rgba(255,240,150,${t})`);
+        grd.addColorStop(0.45, `rgba(255,140,40,${t})`);
+        grd.addColorStop(1, 'rgba(180,40,10,0)');
+        g.fillStyle = grd;
+        g.fillRect(px - CS / 2, py - CS / 2, CS * 2, CS * 2);
+      }
+      g.strokeStyle = '#00000022'; g.lineWidth = 1;
+      g.strokeRect(px + .5, py + .5, CS - 1, CS - 1);
+    }
+
+    if (hover && !G.over) {
+      const r = tool === 'water' ? 1 : 0;
+      g.strokeStyle = tool === 'burn' ? '#fb923c' : tool === 'water' ? '#7cc4ff' : '#e8edf9';
+      g.lineWidth = 2;
+      g.strokeRect((hover.x - r) * CS + 1, (hover.y - r) * CS + 1, CS * (2 * r + 1) - 2, CS * (2 * r + 1) - 2);
+    }
+
+    // wind arrow
+    const ax = CW - 46, ay = 40;
+    g.save();
+    g.translate(ax, ay);
+    g.fillStyle = '#0a1122cc';
+    g.beginPath(); g.arc(0, 0, 28, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#3d4a69'; g.lineWidth = 1; g.stroke();
+    g.rotate(Math.atan2(G.wind.v[1], G.wind.v[0]));
+    g.strokeStyle = '#ffd166'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(-16, 0); g.lineTo(12, 0); g.stroke();
+    g.beginPath(); g.moveTo(18, 0); g.lineTo(8, -7); g.lineTo(8, 7); g.closePath();
+    g.fillStyle = '#ffd166'; g.fill();
+    g.restore();
+    g.fillStyle = '#ffd166'; g.font = '700 11px ui-monospace, monospace';
+    g.textAlign = 'center'; g.textBaseline = 'top';
+    g.fillText(G.wind.name, ax, ay + 30);
+  }
+
+  canvas.addEventListener('mousemove', (e) => {
+    const p = pointerPos(canvas, e);
+    const x = Math.floor(p.x / CS), y = Math.floor(p.y / CS);
+    const h = inside(x, y) ? { x, y } : null;
+    if (!h !== !hover || (h && hover && (h.x !== hover.x || h.y !== hover.y))) { hover = h; draw(); }
+  });
+  canvas.addEventListener('mouseleave', () => { hover = null; draw(); });
+  canvas.addEventListener('click', (e) => {
+    const p = pointerPos(canvas, e);
+    act(Math.floor(p.x / CS), Math.floor(p.y / CS));
+  });
+  document.querySelectorAll('.tool').forEach(b => b.addEventListener('click', () => {
+    tool = b.dataset.tool;
+    document.querySelectorAll('.tool').forEach(o => o.classList.toggle('sel', o === b));
+    draw();
+  }));
+  $('tick').addEventListener('click', runHour);
+  $('skip').addEventListener('click', () => { G.ap = 0; sync(); });
+  $('new').addEventListener('click', newGame);
+
+  newGame();
+})();
+
+};
+GAME_INIT['art-for-all'] = function () {
+
+(function () {
+  const { rng, randInt, pick, shuffle, clamp, logger, fmt } = window.SG;
+
+  const LOTS = 14, BUDGET = 1200, INC = 25;
+  const MOVEMENTS = [
+    { name: 'Baroque',       css: '#c9a227' },
+    { name: 'Impressionism', css: '#7cc4ff' },
+    { name: 'Modernism',     css: '#f87171' },
+    { name: 'Folk',          css: '#4ade80' },
+    { name: 'Digital',       css: '#c08cff' },
+  ];
+
+  const MUSEUMS = [
+    { name: 'You',        css: '#6ea8ff', taste: null,            nerve: 1.0 },
+    { name: 'Thorne Hall',css: '#f87171', taste: 'Modernism',     nerve: 1.25 },
+    { name: 'Vasari Inst',css: '#4ade80', taste: 'Baroque',       nerve: 1.0 },
+    { name: 'The Meridian',css: '#ffd166', taste: 'Impressionism', nerve: 0.85 },
+  ];
+
+  const ARTISTS = ['R. Okonkwo', 'M. Salvatierra', 'H. Lindqvist', 'A. Duval', 'P. Marchetti',
+    'K. Osei', 'T. Nakashima', 'E. Varga', 'S. Almeida', 'L. Brennan', 'D. Ferreira', 'N. Halvorsen',
+    'Y. Bekele', 'C. Whitlock', 'F. Aoyama', 'G. Rusnak'];
+  const TITLES = ['Study of a Falling Room', 'The Blue Hour', 'Harvest, Interrupted', 'Nine Winters',
+    'Portrait of the Cartographer', 'Untitled (Machine)', 'The Long Table', 'Weather Over the Estuary',
+    'Saint With a Broken Hand', 'Composition in Rust', 'The Quiet Wing', 'Signal Fire',
+    'Two Sisters, Waiting', 'The Last Ferry', 'Interior With Dogs', 'Field Notes'];
+
+  const log = logger(document.getElementById('log'));
+  const banner = document.getElementById('banner');
+  const $ = (id) => document.getElementById(id);
+  let G;
+
+  const cash = (m) => '$' + fmt(m) + 'k';
+
+  function newGame() {
+    const r = rng((Math.random() * 1e9) >>> 0);
+    const artists = shuffle(r, ARTISTS), titles = shuffle(r, TITLES);
+    const lots = Array.from({ length: LOTS }, (_, i) => {
+      const mv = pick(r, MOVEMENTS).name;
+      const prestige = randInt(r, 8, 40);
+      const appeal = randInt(r, 5, 35);
+      const estimate = Math.round((prestige * 4 + appeal * 3) / 5) * 5 + randInt(r, -20, 20);
+      return {
+        i, mv, prestige, appeal,
+        estimate: Math.max(40, estimate),
+        artist: artists[i % artists.length],
+        title: titles[i % titles.length],
+        seed: (r() * 1e9) >>> 0,
+      };
+    });
+    G = {
+      r, lots, lot: 0, over: false,
+      funds: MUSEUMS.map(() => BUDGET),
+      owned: MUSEUMS.map(() => []),
+      price: 0, high: -1, active: [], vals: [],
+    };
+    $('log').innerHTML = '';
+    banner.className = 'banner';
+    banner.textContent = 'You direct a museum with $1,200k and a board that expects a collection, not a pile.';
+    openLot();
+  }
+
+  /** What a rival will chase a lot to, before nerve. */
+  function valuation(i, lot) {
+    const m = MUSEUMS[i];
+    const mine = G.owned[i].filter(a => a.mv === lot.mv).length;
+    const depth = mine === 2 ? 1.45 : mine === 4 ? 1.6 : mine >= 1 ? 1.15 : 1;
+    const taste = m.taste === lot.mv ? 1.4 : 1;
+    const base = lot.prestige * 5.5 + lot.appeal * 3.5;
+    return Math.round(base * depth * taste * m.nerve * (0.82 + G.r() * 0.36));
+  }
+
+  function openLot() {
+    if (G.lot >= LOTS) return finish();
+    const lot = G.lots[G.lot];
+    G.price = Math.max(25, Math.round(lot.estimate * 0.35 / INC) * INC);
+    G.high = -1;
+    G.active = MUSEUMS.map((_, i) => G.funds[i] >= G.price);
+    G.vals = MUSEUMS.map((_, i) => (i === 0 ? 0 : valuation(i, lot)));
+    log(`<b class="hi">Lot ${G.lot + 1}</b>: ${lot.title} — ${lot.artist} (${lot.mv}), ` +
+        `estimate ${cash(lot.estimate)}. Opening at ${cash(G.price)}.`);
+    resolve();
+  }
+
+  /** One pass down the rivals. A rival that will not meet the next step drops out for good. */
+  function rivalSweep() {
+    let raised = false;
+    for (let i = 1; i < MUSEUMS.length; i++) {
+      if (!G.active[i] || G.high === i) continue;
+      const next = G.high === -1 ? G.price : G.price + INC;
+      if (next <= G.vals[i] && next <= G.funds[i]) {
+        G.price = next; G.high = i; raised = true;
+        if (G.active[0]) return true;          // hand it straight back to the human
+      } else {
+        G.active[i] = false;
+      }
+    }
+    return raised;
+  }
+
+  /** Run the auction forward until it needs the human again, or the lot is settled. */
+  function resolve() {
+    if (G.active[0]) {
+      if (rivalSweep()) return render();       // a rival raised — your call
+      if (G.high === 0) return award(0);       // nobody came back at you
+      return render();                         // open, or a rival holds and only you are left
+    }
+    let guard = 0;
+    while (guard++ < 500 && rivalSweep()) { /* rivals fight it out */ }
+    if (G.high >= 0) return award(G.high);
+    log('Passed in — no bids.', 'bad');
+    G.lot++;
+    openLot();
+  }
+
+  function award(i) {
+    const lot = G.lots[G.lot];
+    G.funds[i] -= G.price;
+    G.owned[i].push({ ...lot, paid: G.price });
+    log(`Hammer: <b class="${i === 0 ? 'good' : 'hi'}">${MUSEUMS[i].name}</b> at ${cash(G.price)}` +
+        (G.price > lot.estimate * 1.4 ? ' <span class="bad">(well over estimate)</span>' : ''),
+        i === 0 ? 'good' : '');
+    G.lot++;
+    openLot();
+  }
+
+  function raise() {
+    const next = G.high === -1 ? G.price : G.price + INC;
+    if (next > G.funds[0]) { log('You cannot cover that bid.', 'bad'); return; }
+    G.price = next; G.high = 0;
+    resolve();
+  }
+
+  function pass() {
+    G.active[0] = false;
+    log('You pass.');
+    resolve();
+  }
+
+  function scoreOf(i, withVote) {
+    const own = G.owned[i];
+    const prestige = own.reduce((a, w) => a + w.prestige, 0);
+    const appeal = own.reduce((a, w) => a + w.appeal, 0);
+    const by = {};
+    for (const w of own) by[w.mv] = (by[w.mv] || 0) + 1;
+    let depth = 0;
+    for (const n of Object.values(by)) { if (n >= 5) depth += 160; else if (n >= 3) depth += 60; }
+    const breadth = Object.keys(by).length * 12;
+    const thrift = Math.floor(G.funds[i] / 40);
+    let vote = 0;
+    if (withVote) {
+      const best = MUSEUMS.map((_, k) => G.owned[k].reduce((a, w) => a + w.appeal, 0));
+      if (appeal === Math.max(...best) && appeal > 0) vote = 50;
+    }
+    return { prestige, appeal, depth, breadth, thrift, vote,
+             total: prestige + appeal + depth + breadth + thrift + vote };
+  }
+
+  function finish() {
+    G.over = true;
+    const rank = MUSEUMS.map((m, i) => ({ i, name: m.name, s: scoreOf(i, true) }))
+      .sort((a, b) => b.s.total - a.s.total);
+    const mine = rank.findIndex(r => r.i === 0) + 1;
+    banner.className = 'banner ' + (mine === 1 ? 'good' : mine <= 2 ? '' : 'bad');
+    banner.innerHTML = `<b>${rank[0].name} takes the season with ${rank[0].s.total} points.</b> ` +
+      `You placed ${mine}${['st', 'nd', 'rd', 'th'][Math.min(mine - 1, 3)]} on ${scoreOf(0, true).total}.`;
+    log('Season closed.', 'hi');
+    render();
+  }
+
+  // ---- rendering -----------------------------------------------------------
+
+  /** Deterministic abstract "painting" so every lot looks like a distinct work. */
+  function paint(canvas, lot, size) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = size * dpr; canvas.height = size * dpr;
+    canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
+    const g = canvas.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const r = rng(lot.seed);
+    const mv = MOVEMENTS.find(m => m.name === lot.mv);
+    const hueBase = { Baroque: 35, Impressionism: 205, Modernism: 5, Folk: 120, Digital: 275 }[lot.mv];
+
+    g.fillStyle = `hsl(${hueBase}, 22%, ${lot.mv === 'Baroque' ? 12 : 16}%)`;
+    g.fillRect(0, 0, size, size);
+
+    const n = { Baroque: 9, Impressionism: 260, Modernism: 7, Folk: 30, Digital: 90 }[lot.mv];
+    for (let k = 0; k < n; k++) {
+      const h = hueBase + (r() - 0.5) * 70;
+      const s = 30 + r() * 55, l = 25 + r() * 55;
+      g.fillStyle = `hsla(${h}, ${s}%, ${l}%, ${lot.mv === 'Impressionism' ? 0.5 : 0.85})`;
+      const x = r() * size, y = r() * size;
+      if (lot.mv === 'Impressionism') {
+        g.beginPath(); g.ellipse(x, y, 3 + r() * 5, 2 + r() * 3, r() * 3.14, 0, 6.28); g.fill();
+      } else if (lot.mv === 'Modernism') {
+        g.fillRect(x - size * 0.1, y - size * 0.1, size * (0.15 + r() * 0.4), size * (0.1 + r() * 0.45));
+      } else if (lot.mv === 'Digital') {
+        g.fillRect(Math.floor(x / 8) * 8, Math.floor(y / 8) * 8, 8, 8 * (1 + Math.floor(r() * 3)));
+      } else if (lot.mv === 'Folk') {
+        g.beginPath();
+        for (let a = 0; a < 6; a++) {
+          const ang = a / 6 * 6.28, rad = 6 + r() * 14;
+          g[a ? 'lineTo' : 'moveTo'](x + Math.cos(ang) * rad, y + Math.sin(ang) * rad);
+        }
+        g.closePath(); g.fill();
+      } else {
+        const grd = g.createRadialGradient(x, y, 2, x, y, size * 0.45);
+        grd.addColorStop(0, `hsla(${h}, ${s}%, ${Math.min(88, l + 30)}%, .9)`);
+        grd.addColorStop(1, 'hsla(30, 40%, 8%, 0)');
+        g.fillStyle = grd;
+        g.beginPath(); g.arc(x, y, size * 0.45, 0, 6.28); g.fill();
+      }
+    }
+    g.strokeStyle = mv.css + '55'; g.lineWidth = 2;
+    g.strokeRect(1, 1, size - 2, size - 2);
+  }
+
+  function render() {
+    const s0 = scoreOf(0, true);
+    $('funds').textContent = cash(G.funds[0]);
+    $('works').textContent = String(G.owned[0].length);
+    $('prestige').textContent = String(s0.prestige);
+    $('appeal').textContent = String(s0.appeal);
+    $('score').textContent = String(s0.total);
+
+    $('rivals').innerHTML = '<tr><th>Museum</th><th>Collects</th><th class="num">Funds</th><th class="num">Score</th></tr>' +
+      MUSEUMS.map((m, i) => `<tr class="${i === 0 ? 'me' : ''}">
+        <td><span style="color:${m.css}">●</span> ${m.name}</td>
+        <td style="font-size:12px;color:var(--ink-dim)">${m.taste || '—'}</td>
+        <td class="num">${cash(G.funds[i])}</td>
+        <td class="num"><b>${scoreOf(i, true).total}</b></td></tr>`).join('');
+
+    const coll = $('coll');
+    if (!G.owned[0].length) coll.innerHTML = '<span class="empty">Nothing yet.</span>';
+    else {
+      coll.innerHTML = '';
+      for (const w of G.owned[0]) {
+        const c = document.createElement('canvas');
+        c.title = `${w.title} — ${w.artist} (${w.mv})\nprestige ${w.prestige} · appeal ${w.appeal} · paid ${cash(w.paid)}`;
+        coll.appendChild(c);
+        paint(c, w, 64);
+      }
+    }
+
+    if (G.over) return renderOver(s0);
+
+    const lot = G.lots[G.lot];
+    const nextBid = G.high === -1 ? G.price : G.price + INC;
+    $('stage').innerHTML = `
+      <h2>Lot ${G.lot + 1} of ${LOTS}</h2>
+      <div class="lot-art">
+        <canvas class="frame" id="art"></canvas>
+        <div style="flex:1;min-width:0">
+          <h3 style="margin:0 0 2px;font-size:19px">${lot.title}</h3>
+          <div style="color:var(--ink-dim);font-size:13px">${lot.artist} ·
+            <span style="color:${MOVEMENTS.find(m => m.name === lot.mv).css}">${lot.mv}</span></div>
+          <div class="divider"></div>
+          <div class="stat"><span>Prestige</span><b>${lot.prestige}</b></div>
+          <div class="stat"><span>Appeal</span><b>${lot.appeal}</b></div>
+          <div class="stat"><span>Estimate</span><b>${cash(lot.estimate)}</b></div>
+          <div class="divider"></div>
+          <div style="color:var(--ink-dim);font-size:12px">Standing bid</div>
+          <div class="price" style="color:${G.high === 0 ? 'var(--accent)' : 'var(--ink)'}">${cash(G.price)}</div>
+          <div style="font-size:12.5px;color:var(--ink-dim)">
+            ${G.high === -1 ? 'No bids yet.' : `Held by <b style="color:${MUSEUMS[G.high].css}">${MUSEUMS[G.high].name}</b>`}</div>
+          <div class="bidders">${MUSEUMS.map((m, i) => `
+            <div class="bidder ${G.active[i] ? '' : 'out'} ${G.high === i ? 'high' : ''}">
+              <span style="color:${m.css}">${m.name}</span>
+              <span style="color:var(--ink-dim)">${G.active[i] ? (G.high === i ? 'holding' : 'in') : 'out'}</span>
+            </div>`).join('')}</div>
+          <div class="row" style="margin-top:12px">
+            <button class="primary" id="raise" ${G.active[0] && nextBid <= G.funds[0] ? '' : 'disabled'}>
+              ${G.high === 0 ? 'Holding' : 'Bid ' + cash(nextBid)}</button>
+            <button id="pass" ${G.active[0] && G.high !== 0 ? '' : 'disabled'}>Pass</button>
+          </div>
+        </div>
+      </div>`;
+    paint($('art'), lot, 178);
+    const rb = $('raise'); if (rb) rb.onclick = raise;
+    const pb = $('pass'); if (pb) pb.onclick = pass;
+  }
+
+  function renderOver(s0) {
+    $('stage').innerHTML = `<h2>Final judging</h2>
+      <table class="grid">
+        <tr><th>Museum</th><th class="num">Prestige</th><th class="num">Appeal</th>
+            <th class="num">Depth</th><th class="num">Breadth</th><th class="num">Thrift</th>
+            <th class="num">Vote</th><th class="num">Total</th></tr>` +
+      MUSEUMS.map((m, i) => ({ i, m, s: scoreOf(i, true) })).sort((a, b) => b.s.total - a.s.total)
+        .map(({ i, m, s }) => `<tr class="${i === 0 ? 'me' : ''}">
+          <td><span style="color:${m.css}">●</span> ${m.name}</td>
+          <td class="num">${s.prestige}</td><td class="num">${s.appeal}</td>
+          <td class="num">${s.depth}</td><td class="num">${s.breadth}</td>
+          <td class="num">${s.thrift}</td><td class="num">${s.vote || '—'}</td>
+          <td class="num"><b>${s.total}</b></td></tr>`).join('') +
+      `</table><div class="divider"></div>
+       <button class="primary" id="again" style="width:100%">Another season</button>`;
+    $('again').onclick = newGame;
+  }
+
+  $('new').addEventListener('click', newGame);
+  newGame();
+})();
+
+};
+GAME_INIT['hollywood'] = function () {
+
+(function () {
+  const { rng, randInt, pick, clamp, logger, fitCanvas, fmt } = window.SG;
+
+  const YEARS = 5, LOTS = 3, START_CASH = 140;
+  const GENRES = ['Sci-fi', 'Comedy', 'Horror', 'Drama', 'Action'];
+  const GCSS = { 'Sci-fi': '#7cc4ff', Comedy: '#ffd166', Horror: '#c08cff', Drama: '#93a1c0', Action: '#f87171' };
+
+  const STUDIOS = [
+    { name: 'You',        css: '#6ea8ff', greed: 0 },
+    { name: 'Monolith',   css: '#f87171', greed: 1.1 },
+    { name: 'Halcyon',    css: '#4ade80', greed: 0.95 },
+    { name: 'Vireo Pics', css: '#ffd166', greed: 1.0 },
+  ];
+
+  const FIRST = ['Ada', 'Rex', 'Juno', 'Cass', 'Milo', 'Nico', 'Vera', 'Otto', 'Iris', 'Dane', 'Lux', 'Bo'];
+  const LAST = ['Marlowe', 'Okafor', 'Reyes', 'Sato', 'Volkov', 'Bright', 'Nakai', 'Cortez', 'Hale', 'Adeyemi'];
+  const TITLE_A = ['Last', 'Silent', 'Crimson', 'Eleventh', 'Hollow', 'Iron', 'Gentle', 'Broken', 'Long'];
+  const TITLE_B = ['Signal', 'Harvest', 'Orbit', 'Marriage', 'Kingdom', 'Winter', 'Machine', 'Choir', 'Mile'];
+
+  const chart = document.getElementById('chart');
+  const CW = 720, CH = 240;
+  const ctx = fitCanvas(chart, CW, CH);
+  const log = logger(document.getElementById('log'));
+  const banner = document.getElementById('banner');
+  const $ = (id) => document.getElementById(id);
+  let G;
+
+  const money = (m) => (m < 0 ? '−$' : '$') + fmt(Math.abs(m), 1) + 'M';
+
+  function newGame() {
+    const r = rng((Math.random() * 1e9) >>> 0);
+    G = {
+      r, year: 1, phase: 'bid', over: false,
+      heat: Object.fromEntries(GENRES.map(g => [g, 0.7 + r() * 0.9])),
+      cash: STUDIOS.map(() => START_CASH),
+      spent: STUDIOS.map(() => 0),
+      gross: STUDIOS.map(() => 0),
+      lib: STUDIOS.map(() => []),
+      history: [],
+      lots: null, sel: { script: null, star: null, director: null },
+    };
+    G.track = forecast();
+    $('log').innerHTML = '';
+    banner.className = 'banner';
+    banner.textContent = 'You run a studio. Buy the talent, read the audience, release one film a season.';
+    openBidding();
+  }
+
+  function forecast() {
+    // Next season's heat, plus the error the trade press never admits to.
+    return Object.fromEntries(GENRES.map(g =>
+      [g, clamp(G.heat[g] + (G.r() - 0.5) * 0.55, 0.35, 1.9)]));
+  }
+
+  function makeAsset() {
+    const kind = pick(G.r, ['script', 'script', 'star', 'director']);
+    const genre = pick(G.r, GENRES);
+    const q = randInt(G.r, 3, 10);
+    const name = kind === 'script'
+      ? `“The ${pick(G.r, TITLE_A)} ${pick(G.r, TITLE_B)}”`
+      : `${pick(G.r, FIRST)} ${pick(G.r, LAST)}`;
+    return { kind, genre, q, name, id: Math.random().toString(36).slice(2, 8) };
+  }
+
+  const WEIGHT = { script: 8, star: 5, director: 4 };
+  const GROSS = 1.6;          // gross per point of talent, at neutral heat
+  const FIXED = 6, UNIT = 0.18;    // production cost: fixed overhead plus talent
+  const BID = 0.40;                // rivals bid this share of an asset's marginal profit
+  const PACK = 1.15;               // the average package bonus and luck a released film sees
+
+  /** Marginal profit an asset is expected to add, at a given read of the market.
+   *  Revenue is half the gross, so an asset earns 0.8 x heat per point of talent and costs UNIT to shoot. */
+  function value(a, heatMap) {
+    const heat = heatMap[a.genre] || 1;
+    return Math.max(1, WEIGHT[a.kind] * a.q * (0.8 * PACK * heat - UNIT));
+  }
+
+  function openBidding() {
+    G.phase = 'bid';
+    G.lots = Array.from({ length: LOTS }, makeAsset);
+    render();
+  }
+
+  function resolveBids(myBids) {
+    G.lots.forEach((lot, li) => {
+      const bids = STUDIOS.map((s, i) => {
+        if (i === 0) return clamp(myBids[li], 0, G.cash[0]);
+        // Rivals price off a blend of this season's heat and the tracking report.
+        const blend = Object.fromEntries(GENRES.map(g => [g, (G.heat[g] + G.track[g]) / 2]));
+        // A studio only shoots one film a season, so a second unused star is worth much less than the first.
+        const held = G.lib[i].filter(a => a.kind === lot.kind).length;
+        const sat = 1 / (1 + 0.8 * held);
+        const desperate = lot.kind === 'script' && !G.lib[i].some(a => a.kind === 'script') ? 1.35 : 1;
+        const want = value(lot, blend) * BID * s.greed * sat * desperate * (0.85 + G.r() * 0.3);
+        const room = G.cash[i] * (lot.kind === 'script' ? 0.55 : 0.4);
+        return Math.max(0, Math.round(Math.min(want, room) * 10) / 10);
+      });
+      let win = 0;
+      for (let i = 1; i < STUDIOS.length; i++) if (bids[i] > bids[win]) win = i;
+      if (bids[win] <= 0) { log(`${lot.name} — no bids, withdrawn.`); return; }
+      G.cash[win] -= bids[win];
+      G.spent[win] += bids[win];
+      G.lib[win].push(lot);
+      const line = STUDIOS.map((s, i) => `${s.name.split(' ')[0]} ${money(bids[i])}`).join(' · ');
+      log(`${lot.name} → <b class="${win === 0 ? 'good' : 'hi'}">${STUDIOS[win].name}</b> at ${money(bids[win])}` +
+          `<div style="color:var(--ink-faint)">${line}</div>`);
+    });
+    G.phase = 'assemble';
+    G.sel = { script: null, star: null, director: null };
+    render();
+  }
+
+  function releaseFilm() {
+    const s = G.sel;
+    const parts = [s.script, s.star, s.director].filter(Boolean);
+    const talent = parts.reduce((a, p) => a + WEIGHT[p.kind] * p.q, 0);
+    const genre = s.script.genre;
+    const bonus = 1 + 0.12 * parts.filter(p => p.genre === genre).length;   // a matched package plays better
+    const luck = 0.85 + G.r() * 0.35;
+    const gross = talent * G.heat[genre] * bonus * luck * GROSS;
+    const prod = FIXED + talent * UNIT;
+
+    G.cash[0] += gross * 0.5 - prod;
+    G.gross[0] += gross;
+    G.lib[0] = G.lib[0].filter(a => !parts.includes(a));
+
+    const rows = [{ studio: 0, title: s.script.name, genre, gross, prod }];
+
+    // Rivals cut their own film from whatever they hold.
+    for (let i = 1; i < STUDIOS.length; i++) {
+      const scripts = G.lib[i].filter(a => a.kind === 'script');
+      if (!scripts.length) { log(`${STUDIOS[i].name} has nothing to release.`); continue; }
+      const sc = scripts.sort((a, b) => value(b, G.heat) - value(a, G.heat))[0];
+      const st = G.lib[i].filter(a => a.kind === 'star').sort((a, b) => b.q - a.q)[0];
+      const di = G.lib[i].filter(a => a.kind === 'director').sort((a, b) => b.q - a.q)[0];
+      const pk = [sc, st, di].filter(Boolean);
+      const tal = pk.reduce((a, p) => a + WEIGHT[p.kind] * p.q, 0);
+      const bn = 1 + 0.12 * pk.filter(p => p.genre === sc.genre).length;
+      const gr = tal * G.heat[sc.genre] * bn * (0.85 + G.r() * 0.35) * GROSS;
+      const pr = FIXED + tal * UNIT;
+      G.cash[i] += gr * 0.5 - pr;
+      G.gross[i] += gr;
+      G.lib[i] = G.lib[i].filter(a => !pk.includes(a));
+      rows.push({ studio: i, title: sc.name, genre: sc.genre, gross: gr, prod: pr });
+    }
+
+    rows.sort((a, b) => b.gross - a.gross);
+    G.history.push({ year: G.year, rows });
+    log(`<b class="hi">Season ${G.year} box office</b> — ` +
+        rows.map(r => `${STUDIOS[r.studio].name.split(' ')[0]} ${money(r.gross)}`).join(' · '));
+
+    G.phase = 'results';
+    render();
+  }
+
+  function nextYear() {
+    G.year++;
+    // The heat moves toward the tracking report, but never all the way.
+    for (const g of GENRES) {
+      G.heat[g] = clamp(G.heat[g] * 0.45 + G.track[g] * 0.55 + (G.r() - 0.5) * 0.3, 0.35, 1.95);
+    }
+    G.track = forecast();
+    G.cash = G.cash.map(c => c + 45);          // seasonal financing
+    if (G.year > YEARS) return finish();
+    log(`<b class="hi">Season ${G.year}.</b> Financing tops every studio up by $45.0M.`);
+    openBidding();
+  }
+
+  const profitOf = (i) => G.gross[i] * 0.5 - G.spent[i] -
+    G.history.reduce((a, h) => a + (h.rows.find(r => r.studio === i)?.prod || 0), 0);
+
+  function finish() {
+    G.over = true; G.phase = 'over';
+    const rank = STUDIOS.map((s, i) => ({ i, name: s.name, p: profitOf(i) })).sort((a, b) => b.p - a.p);
+    const mine = rank.findIndex(r => r.i === 0) + 1;
+    banner.className = 'banner ' + (mine === 1 ? 'good' : mine <= 2 ? '' : 'bad');
+    banner.innerHTML = `<b>${rank[0].name} finishes the decade on ${money(rank[0].p)} of profit.</b> ` +
+      `You came ${mine}${['st', 'nd', 'rd', 'th'][Math.min(mine - 1, 3)]} on ${money(profitOf(0))} ` +
+      `from ${money(G.gross[0])} of gross.`;
+    log(`Final profit: ${rank.map(r => `${r.name} ${money(r.p)}`).join(' · ')}`, 'hi');
+    render();
+  }
+
+  // ---- rendering -----------------------------------------------------------
+
+  function render() {
+    $('year').textContent = String(Math.min(G.year, YEARS));
+    $('cash').textContent = money(G.cash[0]);
+    $('profit').textContent = money(profitOf(0));
+
+    $('heat').innerHTML = GENRES.map(g =>
+      `<span style="color:${GCSS[g]}">${g}</span>
+       <span class="track"><i style="width:${clamp(G.heat[g] / 2 * 100, 3, 100)}%;background:${GCSS[g]}"></i></span>
+       <span style="font-family:var(--mono)">${G.heat[g].toFixed(2)}×</span>`).join('');
+    $('track').innerHTML = GENRES.map(g => {
+      const d = G.track[g] - G.heat[g];
+      return `<span style="color:var(--ink-dim)">${g}</span>
+       <span class="track"><i style="width:${clamp(G.track[g] / 2 * 100, 3, 100)}%;background:${GCSS[g]}66"></i></span>
+       <span style="font-family:var(--mono);color:${d > 0.05 ? 'var(--good)' : d < -0.05 ? 'var(--bad)' : 'var(--ink-dim)'}">
+         ${d > 0 ? '+' : ''}${d.toFixed(2)}</span>`;
+    }).join('');
+
+    $('studios').innerHTML = '<tr><th>Studio</th><th class="num">Cash</th><th class="num">Gross</th><th class="num">Profit</th></tr>' +
+      STUDIOS.map((s, i) => `<tr class="${i === 0 ? 'me' : ''}">
+        <td><span style="color:${s.css}">●</span> ${s.name}</td>
+        <td class="num">${money(G.cash[i])}</td>
+        <td class="num">${money(G.gross[i])}</td>
+        <td class="num"><b>${money(profitOf(i))}</b></td></tr>`).join('');
+
+    drawChart();
+    if (G.phase === 'bid') renderBid();
+    else if (G.phase === 'assemble') renderAssemble();
+    else if (G.phase === 'results') renderResults();
+    else renderOver();
+  }
+
+  function renderBid() {
+    $('stage').innerHTML = `<h2>Season ${G.year} — sealed bids</h2>
+      <div class="lots">` + G.lots.map((a, i) => `
+        <div class="lot">
+          <h3>${a.name}</h3>
+          <div class="meta">${a.kind.toUpperCase()} · <span style="color:${GCSS[a.genre]}">${a.genre}</span>
+            · quality <b style="color:var(--ink)">${a.q}</b>
+            · worth about <b style="color:var(--ink)">${money(value(a, G.heat))}</b> at today's heat</div>
+          <div class="bid"><label>Bid</label>
+            <input type="number" id="b${i}" min="0" step="0.5" value="0"> <span style="color:var(--ink-dim)">M</span>
+          </div>
+        </div>`).join('') + `</div>
+      <div class="divider"></div>
+      <button class="primary" id="submit" style="width:100%">Submit sealed bids</button>`;
+    $('submit').onclick = () => {
+      const bids = G.lots.map((_, i) => Number($('b' + i).value) || 0);
+      const total = bids.reduce((a, b) => a + b, 0);
+      if (total > G.cash[0]) {
+        alert(`Your bids total ${money(total)} but you only have ${money(G.cash[0])}.`);
+        return;
+      }
+      resolveBids(bids);
+    };
+  }
+
+  function renderAssemble() {
+    const lib = G.lib[0];
+    const group = (k) => lib.filter(a => a.kind === k);
+    const cardHtml = (a, k) => `<div class="card ${G.sel[k] === a ? 'sel' : ''}" data-k="${k}" data-id="${a.id}">
+        <b>${a.name}</b><span style="color:${GCSS[a.genre]}">${a.genre}</span>
+        <span>quality ${a.q} · heat ${G.heat[a.genre].toFixed(2)}×</span></div>`;
+
+    const s = G.sel;
+    const parts = [s.script, s.star, s.director].filter(Boolean);
+    const talent = parts.reduce((a, p) => a + WEIGHT[p.kind] * p.q, 0);
+    const genre = s.script ? s.script.genre : null;
+    const bonus = genre ? 1 + 0.12 * parts.filter(p => p.genre === genre).length : 1;
+    const mid = genre ? talent * G.heat[genre] * bonus * GROSS : 0;
+    const prod = FIXED + talent * UNIT;
+
+    $('stage').innerHTML = `<h2>Season ${G.year} — cut the film</h2>
+      <div class="rules" style="margin-bottom:6px">Pick a script (required); a star and a director are optional
+      and are used up with it. Everything you keep rolls into next season.</div>
+      <div class="slot"><h4>Scripts</h4>${group('script').map(a => cardHtml(a, 'script')).join('') || '<i style="color:var(--ink-faint)">none owned</i>'}
+        <h4>Stars</h4>${group('star').map(a => cardHtml(a, 'star')).join('') || '<i style="color:var(--ink-faint)">none owned</i>'}
+        <h4>Directors</h4>${group('director').map(a => cardHtml(a, 'director')).join('') || '<i style="color:var(--ink-faint)">none owned</i>'}
+      </div>
+      <div class="divider"></div>
+      <div class="stat"><span>Projected gross (before luck)</span><b>${money(mid)}</b></div>
+      <div class="stat"><span>Production cost</span><b>${money(prod)}</b></div>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="release" ${s.script ? '' : 'disabled'} style="flex:1">Release the film →</button>
+        <button id="skipfilm">Sit the season out</button>
+      </div>`;
+
+    $('stage').querySelectorAll('.card').forEach(el => el.onclick = () => {
+      const k = el.dataset.k;
+      const a = lib.find(x => x.id === el.dataset.id);
+      G.sel[k] = G.sel[k] === a ? null : a;
+      render();
+    });
+    const rel = $('release'); if (rel) rel.onclick = releaseFilm;
+    $('skipfilm').onclick = () => {
+      log('You hold everything back and release nothing.');
+      G.sel = { script: null, star: null, director: null };
+      // rivals still release
+      G.phase = 'assemble';
+      releaseNothingButRivals();
+    };
+  }
+
+  function releaseNothingButRivals() {
+    const rows = [];
+    for (let i = 1; i < STUDIOS.length; i++) {
+      const scripts = G.lib[i].filter(a => a.kind === 'script');
+      if (!scripts.length) continue;
+      const sc = scripts.sort((a, b) => value(b, G.heat) - value(a, G.heat))[0];
+      const st = G.lib[i].filter(a => a.kind === 'star').sort((a, b) => b.q - a.q)[0];
+      const di = G.lib[i].filter(a => a.kind === 'director').sort((a, b) => b.q - a.q)[0];
+      const pk = [sc, st, di].filter(Boolean);
+      const tal = pk.reduce((a, p) => a + WEIGHT[p.kind] * p.q, 0);
+      const bn = 1 + 0.12 * pk.filter(p => p.genre === sc.genre).length;
+      const gr = tal * G.heat[sc.genre] * bn * (0.85 + G.r() * 0.35) * GROSS;
+      const pr = FIXED + tal * UNIT;
+      G.cash[i] += gr * 0.5 - pr; G.gross[i] += gr;
+      G.lib[i] = G.lib[i].filter(a => !pk.includes(a));
+      rows.push({ studio: i, title: sc.name, genre: sc.genre, gross: gr, prod: pr });
+    }
+    rows.sort((a, b) => b.gross - a.gross);
+    G.history.push({ year: G.year, rows });
+    G.phase = 'results';
+    render();
+  }
+
+  function renderResults() {
+    const h = G.history[G.history.length - 1];
+    $('stage').innerHTML = `<h2>Season ${G.year} — the weekend</h2>
+      <table class="grid">
+        <tr><th>Film</th><th>Genre</th><th class="num">Gross</th><th class="num">Net</th></tr>` +
+      h.rows.map(r => `<tr class="${r.studio === 0 ? 'me' : ''}">
+          <td>${r.title}<div style="font-size:11px;color:var(--ink-faint)">${STUDIOS[r.studio].name}</div></td>
+          <td style="color:${GCSS[r.genre]}">${r.genre}</td>
+          <td class="num">${money(r.gross)}</td>
+          <td class="num" style="color:${r.gross * 0.5 - r.prod >= 0 ? 'var(--good)' : 'var(--bad)'}">
+            ${money(r.gross * 0.5 - r.prod)}</td></tr>`).join('') +
+      `</table><div class="divider"></div>
+       <button class="primary" id="next" style="width:100%">${G.year >= YEARS ? 'Close the books' : 'On to season ' + (G.year + 1)} →</button>`;
+    $('next').onclick = nextYear;
+  }
+
+  function renderOver() {
+    $('stage').innerHTML = `<h2>Final accounts</h2>
+      <table class="grid"><tr><th>Studio</th><th class="num">Gross</th><th class="num">Bought</th><th class="num">Profit</th></tr>` +
+      STUDIOS.map((s, i) => ({ i, s, p: profitOf(i) })).sort((a, b) => b.p - a.p)
+        .map(({ i, s, p }) => `<tr class="${i === 0 ? 'me' : ''}">
+          <td><span style="color:${s.css}">●</span> ${s.name}</td>
+          <td class="num">${money(G.gross[i])}</td>
+          <td class="num">${money(G.spent[i])}</td>
+          <td class="num"><b>${money(p)}</b></td></tr>`).join('') +
+      `</table><div class="divider"></div>
+       <button class="primary" id="again" style="width:100%">Run it again</button>`;
+    $('again').onclick = newGame;
+  }
+
+  function drawChart() {
+    const g = ctx;
+    g.fillStyle = '#0d1426'; g.fillRect(0, 0, CW, CH);
+    const L = 54, R = CW - 14, T = 18, B = CH - 26;
+    const max = Math.max(60, ...G.history.flatMap(h => h.rows.map(r => r.gross)));
+    const yAt = (v) => B - (B - T) * (v / max);
+
+    g.strokeStyle = '#1b2745'; g.fillStyle = '#5c6c92';
+    g.font = '10px ui-monospace, monospace'; g.textAlign = 'right'; g.textBaseline = 'middle';
+    for (let k = 0; k <= 4; k++) {
+      const v = max * k / 4;
+      g.beginPath(); g.moveTo(L, yAt(v)); g.lineTo(R, yAt(v)); g.stroke();
+      g.fillText('$' + fmt(v, 0) + 'M', L - 6, yAt(v));
+    }
+
+    const slotW = (R - L) / YEARS;
+    for (let y = 0; y < YEARS; y++) {
+      const h = G.history[y];
+      g.fillStyle = '#5c6c92'; g.textAlign = 'center'; g.textBaseline = 'top';
+      g.fillText('S' + (y + 1), L + slotW * (y + 0.5), B + 8);
+      if (!h) continue;
+      const bw = slotW / (STUDIOS.length + 1);
+      STUDIOS.forEach((s, i) => {
+        const row = h.rows.find(r => r.studio === i);
+        if (!row) return;
+        const x = L + slotW * y + bw * (i + 0.6);
+        g.fillStyle = s.css + (i === 0 ? 'ff' : '99');
+        g.fillRect(x, yAt(row.gross), bw * 0.82, B - yAt(row.gross));
+      });
+    }
+    g.fillStyle = '#93a1c0'; g.textAlign = 'left'; g.textBaseline = 'top';
+    g.font = '600 11px ui-monospace, monospace';
+    g.fillText('box office by season', L, 2);
+  }
+
+  $('new').addEventListener('click', newGame);
+  newGame();
+})();
+
+};
+GAME_INIT['geobridge'] = function () {
+
+(function () {
+  const { rng, randInt, pick, clamp, logger, fitCanvas, pointerPos, roundRect, fmt } = window.SG;
+
+  const CW = 720, CH = 470, TOWNS = 11, BUDGET = 2200, GS = 10;
+
+  const canvas = document.getElementById('board');
+  const ctx = fitCanvas(canvas, CW, CH);
+  const log = logger(document.getElementById('log'));
+  const banner = document.getElementById('banner');
+  const $ = (id) => document.getElementById(id);
+  let G, hover = -1, mode = 'build';
+
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+  function newGame() {
+    const seed = (Math.random() * 1e9) >>> 0;
+    const r = rng(seed);
+
+    // --- terrain -----------------------------------------------------------
+    const ax = r() * 6.28, ay = r() * 6.28, bx = r() * 6.28;
+    const height = (x, y) =>
+      clamp(0.5 + 0.42 * Math.sin(x * 0.0092 + ax) * Math.cos(y * 0.0125 + ay)
+              + 0.24 * Math.sin(y * 0.021 + bx), 0, 1);
+
+    // river: a wandering polyline from one edge to the other
+    const river = [];
+    const vertical = r() < 0.5;
+    let t = vertical ? 120 + r() * (CW - 240) : 100 + r() * (CH - 200);
+    for (let k = 0; k <= 22; k++) {
+      const p = k / 22;
+      t += (r() - 0.5) * 46;
+      river.push(vertical
+        ? { x: clamp(t, 40, CW - 40), y: p * CH }
+        : { x: p * CW, y: clamp(t, 40, CH - 40) });
+    }
+
+    // --- towns -------------------------------------------------------------
+    const towns = [];
+    let guard = 0;
+    while (towns.length < TOWNS && guard++ < 20000) {
+      const p = { x: 46 + r() * (CW - 92), y: 46 + r() * (CH - 92) };
+      if (nearRiver(p, river) < 26) continue;
+      if (towns.some(o => dist(o, p) < 96)) continue;
+      towns.push({ ...p, i: towns.length, pop: randInt(r, 4, 30) * 1000, name: townName(r) });
+    }
+    towns[0].pop = 45000;
+    towns[0].capital = true;
+    towns[0].name = 'Marrow';
+
+    // --- candidate routes --------------------------------------------------
+    const routes = [];
+    const key = (a, b) => Math.min(a, b) + '-' + Math.max(a, b);
+    const made = new Set();
+    for (const a of towns) {
+      const near = towns.filter(b => b !== a).sort((p, q) => dist(a, p) - dist(a, q)).slice(0, 4);
+      for (const b of near) {
+        if (made.has(key(a.i, b.i))) continue;
+        made.add(key(a.i, b.i));
+        const len = dist(a, b);
+        const bridge = crossesRiver(a, b, river);
+        let climb = 0;
+        for (let k = 0; k <= 10; k++) {
+          const x = a.x + (b.x - a.x) * k / 10, y = a.y + (b.y - a.y) * k / 10;
+          climb += height(x, y);
+        }
+        climb /= 11;
+        const base = len * (0.55 + climb * 1.15) * (bridge ? 2.6 : 1);
+        const est = Math.round(base / 5) * 5;
+        routes.push({
+          a: a.i, b: b.i, est, bridge, climb,
+          real: Math.round(est * (0.65 + r() * 0.7) / 5) * 5,
+          built: false, surveyed: false, washed: false,
+        });
+      }
+    }
+
+    G = { seed, r, height, river, towns, routes, budget: BUDGET,
+          spent: 0, surveyed: 0, over: false, flooded: null };
+
+    $('log').innerHTML = '';
+    banner.className = 'banner';
+    banner.textContent = 'Link every town to the capital before the money runs out. The river will take one of your bridges.';
+    log(`Valley surveyed. ${towns.length} towns, ${routes.length} possible routes, ` +
+        `<b class="hi">${fmt(BUDGET)}</b> to spend.`);
+    hover = -1;
+    sync();
+  }
+
+  const NAMES_A = ['Ash', 'Bram', 'Cold', 'Dun', 'Fern', 'Gled', 'Hal', 'Kirk', 'Mor', 'Ness', 'Ort', 'Pike', 'Quarry', 'Thorn', 'Wyn'];
+  const NAMES_B = ['ford', 'holt', 'bury', 'stead', 'mere', 'gate', 'combe', 'wick', 'ridge', 'fell'];
+  function townName(r) { return pick(r, NAMES_A) + pick(r, NAMES_B); }
+
+  function nearRiver(p, river) {
+    let best = Infinity;
+    for (let k = 0; k + 1 < river.length; k++) best = Math.min(best, segPointDist(river[k], river[k + 1], p));
+    return best;
+  }
+  function segPointDist(a, b, p) {
+    const vx = b.x - a.x, vy = b.y - a.y;
+    const t = clamp(((p.x - a.x) * vx + (p.y - a.y) * vy) / (vx * vx + vy * vy || 1), 0, 1);
+    return Math.hypot(a.x + vx * t - p.x, a.y + vy * t - p.y);
+  }
+  function crossesRiver(a, b, river) {
+    for (let k = 0; k + 1 < river.length; k++) if (segInt(a, b, river[k], river[k + 1])) return true;
+    return false;
+  }
+  function segInt(p1, p2, p3, p4) {
+    const d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
+    if (Math.abs(d) < 1e-9) return false;
+    const u = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d;
+    const v = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / d;
+    return u >= 0 && u <= 1 && v >= 0 && v <= 1;
+  }
+
+  /** Towns reachable from the capital over built (and un-washed) routes. */
+  function reachable(ignore) {
+    const adj = G.towns.map(() => []);
+    for (const rt of G.routes) {
+      if (!rt.built || rt.washed || rt === ignore) continue;
+      adj[rt.a].push(rt.b); adj[rt.b].push(rt.a);
+    }
+    const seen = new Set([0]), st = [0];
+    while (st.length) {
+      const n = st.pop();
+      for (const m of adj[n]) if (!seen.has(m)) { seen.add(m); st.push(m); }
+    }
+    return seen;
+  }
+
+  function build(rt) {
+    if (G.over || rt.built) return;
+    const bill = rt.real;
+    if (bill > G.budget) {
+      log(`${label(rt)} came in at <b class="bad">${fmt(bill)}</b> — more than you have left.`, 'bad');
+      return;
+    }
+    rt.built = true;
+    G.budget -= bill; G.spent += bill;
+    const over = bill - rt.est;
+    log(`Built ${label(rt)} for <b class="hi">${fmt(bill)}</b>` +
+        (rt.surveyed ? '' : over > 0 ? ` <span class="bad">(${fmt(over)} over estimate)</span>`
+                                     : ` <span class="good">(${fmt(-over)} under)</span>`),
+        over > 0 && !rt.surveyed ? 'bad' : '');
+    sync();
+  }
+
+  function survey(rt) {
+    if (G.over || rt.surveyed || rt.built) return;
+    const fee = Math.max(2, Math.round(rt.est * 0.08));
+    if (fee > G.budget) { log('No money left for surveys.', 'bad'); return; }
+    rt.surveyed = true;
+    G.budget -= fee; G.surveyed += fee;
+    log(`Surveyed ${label(rt)} for ${fmt(fee)} — the real price is <b class="hi">${fmt(rt.real)}</b> ` +
+        `against an estimate of ${fmt(rt.est)}.`);
+    sync();
+  }
+
+  const label = (rt) => `${G.towns[rt.a].name}–${G.towns[rt.b].name}${rt.bridge ? ' bridge' : ''}`;
+
+  function finish() {
+    G.over = true;
+    const bridges = G.routes.filter(rt => rt.built && rt.bridge);
+    if (bridges.length) {
+      const gone = bridges[randInt(G.r, 0, bridges.length - 1)];
+      gone.washed = true;
+      G.flooded = gone;
+      log(`<b class="bad">Spring flood.</b> The ${label(gone)} is gone.`, 'bad');
+    } else {
+      log('No bridges to lose — the flood does nothing.');
+    }
+    const seen = reachable();
+    const pop = G.towns.filter(t => seen.has(t.i)).reduce((a, t) => a + t.pop, 0);
+    const total = G.towns.reduce((a, t) => a + t.pop, 0);
+    const thrift = Math.round(G.budget / 10);
+    const score = Math.round(pop / 1000) + thrift;
+    const pct = Math.round(pop / total * 100);
+    banner.className = 'banner ' + (pct === 100 ? 'good' : pct >= 70 ? '' : 'bad');
+    banner.innerHTML = `<b>${fmt(pop)} of ${fmt(total)} people (${pct}%) can still reach the capital.</b> ` +
+      `Score ${score} — ${Math.round(pop / 1000)} for population served, ${thrift} for the ${fmt(G.budget)} left over.`;
+    log(`Final score <b class="hi">${score}</b>.`, pct === 100 ? 'good' : 'bad');
+    $('done').disabled = true;
+    sync();
+  }
+
+  function sync() {
+    const seen = reachable();
+    const pop = G.towns.filter(t => seen.has(t.i)).reduce((a, t) => a + t.pop, 0);
+    const bridges = G.routes.filter(rt => rt.built && rt.bridge && !rt.washed).length;
+
+    // towns that a single bridge failure would cut off
+    let fragile = 0;
+    for (const rt of G.routes) {
+      if (!rt.built || !rt.bridge || rt.washed) continue;
+      const without = reachable(rt);
+      fragile = Math.max(fragile, seen.size - without.size);
+    }
+
+    $('budget').textContent = fmt(G.budget);
+    $('gbud').style.width = clamp(G.budget / BUDGET * 100, 0, 100) + '%';
+    $('gbud').style.background = G.budget > BUDGET * 0.3 ? 'var(--accent)' : 'var(--warn)';
+    $('spent').textContent = fmt(G.spent);
+    $('surveys').textContent = fmt(G.surveyed);
+    $('conn').textContent = `${seen.size - 1} / ${G.towns.length - 1}`;
+    $('pop').textContent = fmt(pop);
+    $('bridges').textContent = String(bridges);
+    $('fragile').textContent = fragile ? `${fragile} at risk` : 'none';
+    $('mode').textContent = 'Mode: ' + mode;
+    draw();
+  }
+
+  function draw() {
+    const g = ctx;
+    // terrain
+    for (let y = 0; y < CH; y += GS) for (let x = 0; x < CW; x += GS) {
+      const h = G.height(x + GS / 2, y + GS / 2);
+      const c = h < 0.42 ? [47, 107, 58] : h < 0.62 ? [125, 122, 94] : [154, 163, 173];
+      const k = 0.72 + h * 0.4;
+      g.fillStyle = `rgb(${Math.round(c[0] * k)},${Math.round(c[1] * k)},${Math.round(c[2] * k)})`;
+      g.fillRect(x, y, GS, GS);
+    }
+    // river
+    g.strokeStyle = '#2b6fb0'; g.lineJoin = 'round'; g.lineCap = 'round';
+    g.lineWidth = 13; g.globalAlpha = 0.55;
+    g.beginPath(); G.river.forEach((p, k) => (k ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke();
+    g.globalAlpha = 1; g.lineWidth = 8; g.strokeStyle = '#3f8fd6';
+    g.beginPath(); G.river.forEach((p, k) => (k ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke();
+
+    const seen = reachable();
+
+    // routes
+    G.routes.forEach((rt, k) => {
+      const a = G.towns[rt.a], b = G.towns[rt.b];
+      const isHover = k === hover;
+      if (rt.built && !rt.washed) {
+        g.strokeStyle = rt.bridge ? '#ffd166' : '#f3f6ff';
+        g.lineWidth = rt.bridge ? 6 : 4;
+      } else if (rt.washed) {
+        g.strokeStyle = '#f87171'; g.lineWidth = 4; g.setLineDash([7, 7]);
+      } else if (isHover && !G.over) {
+        g.strokeStyle = '#ffffffcc'; g.lineWidth = 3;
+      } else {
+        g.strokeStyle = rt.surveyed ? '#7cc4ff66' : '#0a112255';
+        g.lineWidth = rt.surveyed ? 2.5 : 1.5;
+        g.setLineDash([4, 6]);
+      }
+      g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
+      g.setLineDash([]);
+
+      if (isHover && !rt.built && !G.over) {
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        const txt = rt.surveyed ? fmt(rt.real) : '~' + fmt(rt.est);
+        g.font = '700 12px ui-monospace, monospace';
+        const w = g.measureText(txt).width + 18;
+        roundRect(g, mx - w / 2, my - 12, w, 24, 7);
+        g.fillStyle = '#0a1122ee'; g.fill();
+        g.strokeStyle = rt.bridge ? '#ffd166' : '#3d4a69'; g.lineWidth = 1.5; g.stroke();
+        g.fillStyle = rt.surveyed ? '#7cc4ff' : '#e8edf9';
+        g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(txt, mx, my);
+      }
+    });
+
+    // towns
+    for (const t of G.towns) {
+      const rad = 7 + Math.sqrt(t.pop) / 34;
+      const on = seen.has(t.i);
+      g.fillStyle = t.capital ? '#ffd166' : on ? '#e8edf9' : '#66718f';
+      g.strokeStyle = '#0a1122'; g.lineWidth = 3;
+      g.beginPath(); g.arc(t.x, t.y, rad, 0, Math.PI * 2); g.fill(); g.stroke();
+      if (t.capital) {
+        g.strokeStyle = '#ffd166'; g.lineWidth = 2;
+        g.beginPath(); g.arc(t.x, t.y, rad + 6, 0, Math.PI * 2); g.stroke();
+      }
+      g.font = '700 11px ui-monospace, monospace';
+      g.textAlign = 'center'; g.textBaseline = 'top';
+      g.lineWidth = 3; g.strokeStyle = '#0a1122cc';
+      const cap = `${t.name} ${fmt(t.pop / 1000)}k`;
+      g.strokeText(cap, t.x, t.y + rad + 4);
+      g.fillStyle = on ? '#ffffff' : '#c2c9da';
+      g.fillText(cap, t.x, t.y + rad + 4);
+    }
+  }
+
+  function routeAt(px, py) {
+    let best = -1, bestD = 11;
+    G.routes.forEach((rt, k) => {
+      const d = segPointDist(G.towns[rt.a], G.towns[rt.b], { x: px, y: py });
+      if (d < bestD) { bestD = d; best = k; }
+    });
+    return best;
+  }
+
+  canvas.addEventListener('mousemove', (e) => {
+    const p = pointerPos(canvas, e);
+    const k = routeAt(p.x, p.y);
+    if (k !== hover) {
+      hover = k;
+      const rt = G.routes[k];
+      $('hint').innerHTML = rt
+        ? `${label(rt)} — ${rt.surveyed ? `surveyed at <b style="color:var(--ink)">${fmt(rt.real)}</b>`
+            : `estimate <b style="color:var(--ink)">${fmt(rt.est)}</b>`}` +
+          `${rt.bridge ? ' · <span style="color:var(--accent-2)">river crossing</span>' : ''}` +
+          `${rt.built ? ' · built' : ''}`
+        : 'Hover a route for its estimate. Click to build it.';
+      draw();
+    }
+  });
+  canvas.addEventListener('mouseleave', () => { hover = -1; draw(); });
+  canvas.addEventListener('click', (e) => {
+    if (G.over) return;
+    const p = pointerPos(canvas, e);
+    const k = routeAt(p.x, p.y);
+    if (k < 0) return;
+    (mode === 'build' ? build : survey)(G.routes[k]);
+  });
+  $('mode').addEventListener('click', () => {
+    mode = mode === 'build' ? 'survey' : 'build';
+    sync();
+  });
+  $('done').addEventListener('click', () => { if (!G.over) finish(); });
+  $('new').addEventListener('click', () => { $('done').disabled = false; newGame(); });
+
+  newGame();
+})();
+
+};
+</script>
+
+<script>
+(function () {
+  const hub = document.getElementById('hub');
+  const view = document.getElementById('view');
+  const templates = Object.fromEntries(
+    [...document.querySelectorAll('template[data-game]')].map(t => [t.dataset.game, t]));
+
+  // Games schedule AI turns with setTimeout. Leaving a game mid-turn would let one
+  // fire against markup that is no longer in the document, so track and cancel them.
+  let pending = [];
+  const nativeSetTimeout = window.setTimeout.bind(window);
+  window.setTimeout = function (fn, ms) {
+    const id = nativeSetTimeout(fn, ms);
+    pending.push(id);
+    return id;
+  };
+  function unmount() {
+    pending.forEach(clearTimeout);
+    pending = [];
+    view.innerHTML = '';
+  }
+
+  function show() {
+    const name = location.hash.replace(/^#\/?/, '');
+    if (!name || !templates[name]) {
+      view.hidden = true;
+      unmount();
+      view.removeAttribute('data-game');
+      hub.hidden = false;
+      document.title = 'Synthesis Camp Games';
+    } else {
+      hub.hidden = true;
+      unmount();
+      view.dataset.game = name;
+      view.appendChild(templates[name].content.cloneNode(true));
+      view.hidden = false;
+      GAME_INIT[name]();
+      document.title = view.querySelector('.topbar h1').textContent + ' — Synthesis Camp Games';
+    }
+    window.scrollTo(0, 0);
+  }
+
+  window.addEventListener('hashchange', show);
+  show();
+})();
+</script>
