@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Art For All — Synthesis Camp Games</title>
+<link rel="stylesheet" href="../../shared/theme.css">
+<style>
+  .lot-art { display:flex; gap:16px; align-items:flex-start; }
+  .frame { width:190px; height:190px; border:6px solid #6b5836; border-radius:3px; flex:none;
+           box-shadow:0 8px 24px #0008; background:#111; }
+  .price { font-family:var(--mono); font-size:34px; font-weight:700; letter-spacing:-1px; }
+  .bidders { display:grid; gap:6px; margin-top:10px; }
+  .bidder { display:flex; justify-content:space-between; font-size:13px; padding:4px 8px;
+            border-radius:7px; border:1px solid var(--line); }
+  .bidder.out { opacity:.4; text-decoration:line-through; }
+  .bidder.high { border-color:var(--accent); background:#1d3a6e55; }
+  .coll { display:grid; grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:8px; }
+  .coll .empty { grid-column:1/-1; color:var(--ink-faint); font-size:12px; }
+  .coll canvas { width:100%; height:auto; border:3px solid #6b5836; border-radius:2px; display:block; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="back" href="../../index.html">← All games</a>
+  <h1>Art For All</h1>
+  <span class="pill">14 lots · open outcry</span>
+  <span class="spacer"></span>
+  <button id="new">New season</button>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+    <div>
+      <div id="banner" class="banner">You direct a museum with $1,200k and a board that expects a collection, not a pile.</div>
+      <div class="panel" id="stage"></div>
+      <details class="rules-box">
+        <summary>How it works</summary>
+        <div class="rules panel">
+          <p>Fourteen works come up, one at a time, in an <b>open ascending auction</b>. Raise or pass; when
+          everyone else has passed, the work is yours at the price on the board.</p>
+          <ul>
+            <li><b>Prestige</b> is what critics score. <b>Appeal</b> is what gets people through the door.</li>
+            <li><b>Depth</b>: three works of one movement pays <b>+60</b>, five pays <b>+160</b>.</li>
+            <li><b>Breadth</b>: <b>+12</b> for each distinct movement on the walls.</li>
+            <li>The museum with the highest total appeal takes the <b>people's vote, +50</b>.</li>
+            <li>Unspent money is not a virtue — it returns to the city at <b>1 point per $40k</b>. But a bidding war you win at triple the estimate is worse.</li>
+            <li>Rival directors have <b>tastes</b>. Once you know what they collect, you know how far they will chase a lot.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Your museum</h2>
+        <div class="stat"><span>Funds left</span><b id="funds">—</b></div>
+        <div class="stat"><span>Works</span><b id="works">—</b></div>
+        <div class="stat"><span>Prestige</span><b id="prestige">—</b></div>
+        <div class="stat"><span>Appeal</span><b id="appeal">—</b></div>
+        <div class="divider"></div>
+        <div class="stat"><span>Projected score</span><b id="score">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>Directors</h2>
+        <table class="grid" id="rivals"></table>
+      </div>
+      <div class="panel">
+        <h2>On your walls</h2>
+        <div class="coll" id="coll"><span class="empty">Nothing yet.</span></div>
+      </div>
+      <div class="panel">
+        <h2>Hammer</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script src="../../shared/util.js"></script>
+<script>
+(function () {
+  const { rng, randInt, pick, shuffle, clamp, logger, fmt } = window.SG;
+
+  const LOTS = 14, BUDGET = 1200, INC = 25;
+  const MOVEMENTS = [
+    { name: 'Baroque',       css: '#c9a227' },
+    { name: 'Impressionism', css: '#7cc4ff' },
+    { name: 'Modernism',     css: '#f87171' },
+    { name: 'Folk',          css: '#4ade80' },
+    { name: 'Digital',       css: '#c08cff' },
+  ];
+
+  const MUSEUMS = [
+    { name: 'You',        css: '#6ea8ff', taste: null,            nerve: 1.0 },
+    { name: 'Thorne Hall',css: '#f87171', taste: 'Modernism',     nerve: 1.25 },
+    { name: 'Vasari Inst',css: '#4ade80', taste: 'Baroque',       nerve: 1.0 },
+    { name: 'The Meridian',css: '#ffd166', taste: 'Impressionism', nerve: 0.85 },
+  ];
+
+  const ARTISTS = ['R. Okonkwo', 'M. Salvatierra', 'H. Lindqvist', 'A. Duval', 'P. Marchetti',
+    'K. Osei', 'T. Nakashima', 'E. Varga', 'S. Almeida', 'L. Brennan', 'D. Ferreira', 'N. Halvorsen',
+    'Y. Bekele', 'C. Whitlock', 'F. Aoyama', 'G. Rusnak'];
+  const TITLES = ['Study of a Falling Room', 'The Blue Hour', 'Harvest, Interrupted', 'Nine Winters',
+    'Portrait of the Cartographer', 'Untitled (Machine)', 'The Long Table', 'Weather Over the Estuary',
+    'Saint With a Broken Hand', 'Composition in Rust', 'The Quiet Wing', 'Signal Fire',
+    'Two Sisters, Waiting', 'The Last Ferry', 'Interior With Dogs', 'Field Notes'];
+
+  const log = logger(document.getElementById('log'));
+  const banner = document.getElementById('banner');
+  const $ = (id) => document.getElementById(id);
+  let G;
+
+  const cash = (m) => '$' + fmt(m) + 'k';
+
+  function newGame() {
+    const r = rng((Math.random() * 1e9) >>> 0);
+    const artists = shuffle(r, ARTISTS), titles = shuffle(r, TITLES);
+    const lots = Array.from({ length: LOTS }, (_, i) => {
+      const mv = pick(r, MOVEMENTS).name;
+      const prestige = randInt(r, 8, 40);
+      const appeal = randInt(r, 5, 35);
+      const estimate = Math.round((prestige * 4 + appeal * 3) / 5) * 5 + randInt(r, -20, 20);
+      return {
+        i, mv, prestige, appeal,
+        estimate: Math.max(40, estimate),
+        artist: artists[i % artists.length],
+        title: titles[i % titles.length],
+        seed: (r() * 1e9) >>> 0,
+      };
+    });
+    G = {
+      r, lots, lot: 0, over: false,
+      funds: MUSEUMS.map(() => BUDGET),
+      owned: MUSEUMS.map(() => []),
+      price: 0, high: -1, active: [], vals: [],
+    };
+    $('log').innerHTML = '';
+    banner.className = 'banner';
+    banner.textContent = 'You direct a museum with $1,200k and a board that expects a collection, not a pile.';
+    openLot();
+  }
+
+  /** What a rival will chase a lot to, before nerve. */
+  function valuation(i, lot) {
+    const m = MUSEUMS[i];
+    const mine = G.owned[i].filter(a => a.mv === lot.mv).length;
+    const depth = mine === 2 ? 1.45 : mine === 4 ? 1.6 : mine >= 1 ? 1.15 : 1;
+    const taste = m.taste === lot.mv ? 1.4 : 1;
+    const base = lot.prestige * 5.5 + lot.appeal * 3.5;
+    return Math.round(base * depth * taste * m.nerve * (0.82 + G.r() * 0.36));
+  }
+
+  function openLot() {
+    if (G.lot >= LOTS) return finish();
+    const lot = G.lots[G.lot];
+    G.price = Math.max(25, Math.round(lot.estimate * 0.35 / INC) * INC);
+    G.high = -1;
+    G.active = MUSEUMS.map((_, i) => G.funds[i] >= G.price);
+    G.vals = MUSEUMS.map((_, i) => (i === 0 ? 0 : valuation(i, lot)));
+    log(`<b class="hi">Lot ${G.lot + 1}</b>: ${lot.title} — ${lot.artist} (${lot.mv}), ` +
+        `estimate ${cash(lot.estimate)}. Opening at ${cash(G.price)}.`);
+    resolve();
+  }
+
+  /** One pass down the rivals. A rival that will not meet the next step drops out for good. */
+  function rivalSweep() {
+    let raised = false;
+    for (let i = 1; i < MUSEUMS.length; i++) {
+      if (!G.active[i] || G.high === i) continue;
+      const next = G.high === -1 ? G.price : G.price + INC;
+      if (next <= G.vals[i] && next <= G.funds[i]) {
+        G.price = next; G.high = i; raised = true;
+        if (G.active[0]) return true;          // hand it straight back to the human
+      } else {
+        G.active[i] = false;
+      }
+    }
+    return raised;
+  }
+
+  /** Run the auction forward until it needs the human again, or the lot is settled. */
+  function resolve() {
+    if (G.active[0]) {
+      if (rivalSweep()) return render();       // a rival raised — your call
+      if (G.high === 0) return award(0);       // nobody came back at you
+      return render();                         // open, or a rival holds and only you are left
+    }
+    let guard = 0;
+    while (guard++ < 500 && rivalSweep()) { /* rivals fight it out */ }
+    if (G.high >= 0) return award(G.high);
+    log('Passed in — no bids.', 'bad');
+    G.lot++;
+    openLot();
+  }
+
+  function award(i) {
+    const lot = G.lots[G.lot];
+    G.funds[i] -= G.price;
+    G.owned[i].push({ ...lot, paid: G.price });
+    log(`Hammer: <b class="${i === 0 ? 'good' : 'hi'}">${MUSEUMS[i].name}</b> at ${cash(G.price)}` +
+        (G.price > lot.estimate * 1.4 ? ' <span class="bad">(well over estimate)</span>' : ''),
+        i === 0 ? 'good' : '');
+    G.lot++;
+    openLot();
+  }
+
+  function raise() {
+    const next = G.high === -1 ? G.price : G.price + INC;
+    if (next > G.funds[0]) { log('You cannot cover that bid.', 'bad'); return; }
+    G.price = next; G.high = 0;
+    resolve();
+  }
+
+  function pass() {
+    G.active[0] = false;
+    log('You pass.');
+    resolve();
+  }
+
+  function scoreOf(i, withVote) {
+    const own = G.owned[i];
+    const prestige = own.reduce((a, w) => a + w.prestige, 0);
+    const appeal = own.reduce((a, w) => a + w.appeal, 0);
+    const by = {};
+    for (const w of own) by[w.mv] = (by[w.mv] || 0) + 1;
+    let depth = 0;
+    for (const n of Object.values(by)) { if (n >= 5) depth += 160; else if (n >= 3) depth += 60; }
+    const breadth = Object.keys(by).length * 12;
+    const thrift = Math.floor(G.funds[i] / 40);
+    let vote = 0;
+    if (withVote) {
+      const best = MUSEUMS.map((_, k) => G.owned[k].reduce((a, w) => a + w.appeal, 0));
+      if (appeal === Math.max(...best) && appeal > 0) vote = 50;
+    }
+    return { prestige, appeal, depth, breadth, thrift, vote,
+             total: prestige + appeal + depth + breadth + thrift + vote };
+  }
+
+  function finish() {
+    G.over = true;
+    const rank = MUSEUMS.map((m, i) => ({ i, name: m.name, s: scoreOf(i, true) }))
+      .sort((a, b) => b.s.total - a.s.total);
+    const mine = rank.findIndex(r => r.i === 0) + 1;
+    banner.className = 'banner ' + (mine === 1 ? 'good' : mine <= 2 ? '' : 'bad');
+    banner.innerHTML = `<b>${rank[0].name} takes the season with ${rank[0].s.total} points.</b> ` +
+      `You placed ${mine}${['st', 'nd', 'rd', 'th'][Math.min(mine - 1, 3)]} on ${scoreOf(0, true).total}.`;
+    log('Season closed.', 'hi');
+    render();
+  }
+
+  // ---- rendering -----------------------------------------------------------
+
+  /** Deterministic abstract "painting" so every lot looks like a distinct work. */
+  function paint(canvas, lot, size) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = size * dpr; canvas.height = size * dpr;
+    canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
+    const g = canvas.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const r = rng(lot.seed);
+    const mv = MOVEMENTS.find(m => m.name === lot.mv);
+    const hueBase = { Baroque: 35, Impressionism: 205, Modernism: 5, Folk: 120, Digital: 275 }[lot.mv];
+
+    g.fillStyle = `hsl(${hueBase}, 22%, ${lot.mv === 'Baroque' ? 12 : 16}%)`;
+    g.fillRect(0, 0, size, size);
+
+    const n = { Baroque: 9, Impressionism: 260, Modernism: 7, Folk: 30, Digital: 90 }[lot.mv];
+    for (let k = 0; k < n; k++) {
+      const h = hueBase + (r() - 0.5) * 70;
+      const s = 30 + r() * 55, l = 25 + r() * 55;
+      g.fillStyle = `hsla(${h}, ${s}%, ${l}%, ${lot.mv === 'Impressionism' ? 0.5 : 0.85})`;
+      const x = r() * size, y = r() * size;
+      if (lot.mv === 'Impressionism') {
+        g.beginPath(); g.ellipse(x, y, 3 + r() * 5, 2 + r() * 3, r() * 3.14, 0, 6.28); g.fill();
+      } else if (lot.mv === 'Modernism') {
+        g.fillRect(x - size * 0.1, y - size * 0.1, size * (0.15 + r() * 0.4), size * (0.1 + r() * 0.45));
+      } else if (lot.mv === 'Digital') {
+        g.fillRect(Math.floor(x / 8) * 8, Math.floor(y / 8) * 8, 8, 8 * (1 + Math.floor(r() * 3)));
+      } else if (lot.mv === 'Folk') {
+        g.beginPath();
+        for (let a = 0; a < 6; a++) {
+          const ang = a / 6 * 6.28, rad = 6 + r() * 14;
+          g[a ? 'lineTo' : 'moveTo'](x + Math.cos(ang) * rad, y + Math.sin(ang) * rad);
+        }
+        g.closePath(); g.fill();
+      } else {
+        const grd = g.createRadialGradient(x, y, 2, x, y, size * 0.45);
+        grd.addColorStop(0, `hsla(${h}, ${s}%, ${Math.min(88, l + 30)}%, .9)`);
+        grd.addColorStop(1, 'hsla(30, 40%, 8%, 0)');
+        g.fillStyle = grd;
+        g.beginPath(); g.arc(x, y, size * 0.45, 0, 6.28); g.fill();
+      }
+    }
+    g.strokeStyle = mv.css + '55'; g.lineWidth = 2;
+    g.strokeRect(1, 1, size - 2, size - 2);
+  }
+
+  function render() {
+    const s0 = scoreOf(0, true);
+    $('funds').textContent = cash(G.funds[0]);
+    $('works').textContent = String(G.owned[0].length);
+    $('prestige').textContent = String(s0.prestige);
+    $('appeal').textContent = String(s0.appeal);
+    $('score').textContent = String(s0.total);
+
+    $('rivals').innerHTML = '<tr><th>Museum</th><th>Collects</th><th class="num">Funds</th><th class="num">Score</th></tr>' +
+      MUSEUMS.map((m, i) => `<tr class="${i === 0 ? 'me' : ''}">
+        <td><span style="color:${m.css}">●</span> ${m.name}</td>
+        <td style="font-size:12px;color:var(--ink-dim)">${m.taste || '—'}</td>
+        <td class="num">${cash(G.funds[i])}</td>
+        <td class="num"><b>${scoreOf(i, true).total}</b></td></tr>`).join('');
+
+    const coll = $('coll');
+    if (!G.owned[0].length) coll.innerHTML = '<span class="empty">Nothing yet.</span>';
+    else {
+      coll.innerHTML = '';
+      for (const w of G.owned[0]) {
+        const c = document.createElement('canvas');
+        c.title = `${w.title} — ${w.artist} (${w.mv})\nprestige ${w.prestige} · appeal ${w.appeal} · paid ${cash(w.paid)}`;
+        coll.appendChild(c);
+        paint(c, w, 64);
+      }
+    }
+
+    if (G.over) return renderOver(s0);
+
+    const lot = G.lots[G.lot];
+    const nextBid = G.high === -1 ? G.price : G.price + INC;
+    $('stage').innerHTML = `
+      <h2>Lot ${G.lot + 1} of ${LOTS}</h2>
+      <div class="lot-art">
+        <canvas class="frame" id="art"></canvas>
+        <div style="flex:1;min-width:0">
+          <h3 style="margin:0 0 2px;font-size:19px">${lot.title}</h3>
+          <div style="color:var(--ink-dim);font-size:13px">${lot.artist} ·
+            <span style="color:${MOVEMENTS.find(m => m.name === lot.mv).css}">${lot.mv}</span></div>
+          <div class="divider"></div>
+          <div class="stat"><span>Prestige</span><b>${lot.prestige}</b></div>
+          <div class="stat"><span>Appeal</span><b>${lot.appeal}</b></div>
+          <div class="stat"><span>Estimate</span><b>${cash(lot.estimate)}</b></div>
+          <div class="divider"></div>
+          <div style="color:var(--ink-dim);font-size:12px">Standing bid</div>
+          <div class="price" style="color:${G.high === 0 ? 'var(--accent)' : 'var(--ink)'}">${cash(G.price)}</div>
+          <div style="font-size:12.5px;color:var(--ink-dim)">
+            ${G.high === -1 ? 'No bids yet.' : `Held by <b style="color:${MUSEUMS[G.high].css}">${MUSEUMS[G.high].name}</b>`}</div>
+          <div class="bidders">${MUSEUMS.map((m, i) => `
+            <div class="bidder ${G.active[i] ? '' : 'out'} ${G.high === i ? 'high' : ''}">
+              <span style="color:${m.css}">${m.name}</span>
+              <span style="color:var(--ink-dim)">${G.active[i] ? (G.high === i ? 'holding' : 'in') : 'out'}</span>
+            </div>`).join('')}</div>
+          <div class="row" style="margin-top:12px">
+            <button class="primary" id="raise" ${G.active[0] && nextBid <= G.funds[0] ? '' : 'disabled'}>
+              ${G.high === 0 ? 'Holding' : 'Bid ' + cash(nextBid)}</button>
+            <button id="pass" ${G.active[0] && G.high !== 0 ? '' : 'disabled'}>Pass</button>
+          </div>
+        </div>
+      </div>`;
+    paint($('art'), lot, 178);
+    const rb = $('raise'); if (rb) rb.onclick = raise;
+    const pb = $('pass'); if (pb) pb.onclick = pass;
+  }
+
+  function renderOver(s0) {
+    $('stage').innerHTML = `<h2>Final judging</h2>
+      <table class="grid">
+        <tr><th>Museum</th><th class="num">Prestige</th><th class="num">Appeal</th>
+            <th class="num">Depth</th><th class="num">Breadth</th><th class="num">Thrift</th>
+            <th class="num">Vote</th><th class="num">Total</th></tr>` +
+      MUSEUMS.map((m, i) => ({ i, m, s: scoreOf(i, true) })).sort((a, b) => b.s.total - a.s.total)
+        .map(({ i, m, s }) => `<tr class="${i === 0 ? 'me' : ''}">
+          <td><span style="color:${m.css}">●</span> ${m.name}</td>
+          <td class="num">${s.prestige}</td><td class="num">${s.appeal}</td>
+          <td class="num">${s.depth}</td><td class="num">${s.breadth}</td>
+          <td class="num">${s.thrift}</td><td class="num">${s.vote || '—'}</td>
+          <td class="num"><b>${s.total}</b></td></tr>`).join('') +
+      `</table><div class="divider"></div>
+       <button class="primary" id="again" style="width:100%">Another season</button>`;
+    $('again').onclick = newGame;
+  }
+
+  $('new').addEventListener('click', newGame);
+  newGame();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fire — Synthesis Camp Games</title>
+<link rel="stylesheet" href="../../shared/theme.css">
+<style>
+  .tool { display:flex; gap:8px; align-items:flex-start; width:100%; text-align:left; }
+  .tool.sel { border-color: var(--accent); background:#1d3a6e; }
+  .tool small { display:block; color: var(--ink-faint); font-weight:500; margin-top:2px; }
+  .tools { display:grid; gap:8px; }
+  .legend { display:grid; grid-template-columns:auto 1fr; gap:6px 10px; font-size:12.5px; color:var(--ink-dim); align-items:center; }
+  .sw { width:14px; height:14px; border-radius:3px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="back" href="../../index.html">← All games</a>
+  <h1>Fire</h1>
+  <span class="pill">The opponent is the fire</span>
+  <span class="spacer"></span>
+  <button id="new">New fire</button>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+    <div>
+      <div id="banner" class="banner">Four crew actions an hour. Spend them, then let the hour run.</div>
+      <div class="board-wrap"><canvas id="board" aria-label="Fire map"></canvas></div>
+      <div class="panel">
+        <div class="row" style="justify-content:space-between">
+          <div class="row">
+            <b style="font-family:var(--mono)">Hour <span id="hour">0</span>/24</b>
+            <span style="color:var(--ink-dim)">·</span>
+            <span>Crew actions left: <b id="ap" style="font-family:var(--mono)">4</b></span>
+          </div>
+          <div class="row">
+            <button id="skip">Hold crews</button>
+            <button class="primary" id="tick">Run the hour →</button>
+          </div>
+        </div>
+      </div>
+      <details class="rules-box">
+        <summary>How it works</summary>
+        <div class="rules panel">
+          <p>Nobody is playing against you. The fire follows the wind, the fuel and the slope, and it does the
+          same thing whether you understand it or not.</p>
+          <ul>
+            <li>Each hour every burning cell tries to light its neighbours. Chance goes up with <b>fuel</b>,
+            up sharply <b>downwind</b>, and down with <b>moisture</b>.</li>
+            <li>A cell burns for two hours, then it is spent — and spent ground is the only reliable firebreak.</li>
+            <li>The wind shifts on its own. A break cut for yesterday's wind protects nothing.</li>
+            <li>You get <b>4 crew actions an hour</b>. Water is immediate but temporary; cutting line is slow but permanent.</li>
+            <li>Score is the <b>homes still standing</b> first, unburned hectares second.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Crew orders</h2>
+        <div class="tools">
+          <button class="tool sel" data-tool="cut"><span>🪓</span><span>Cut line<small>Strip the fuel from a cell. Permanent, useless once lit.</small></span></button>
+          <button class="tool" data-tool="water"><span>💧</span><span>Water drop<small>Soaks a 3×3 area and puts out flame. Dries out over ~4 hours.</small></span></button>
+          <button class="tool" data-tool="burn"><span>🔥</span><span>Backburn<small>Light a low-fuel cell on purpose to starve the main front.</small></span></button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Conditions</h2>
+        <div class="stat"><span>Wind</span><b id="wind">—</b></div>
+        <div class="stat"><span>Homes standing</span><b id="homes">—</b></div>
+        <div class="stat"><span>Burning</span><b id="burning">—</b></div>
+        <div class="stat"><span>Burned</span><b id="burned">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>Map</h2>
+        <div class="legend">
+          <span class="sw" style="background:#2f6b3a"></span><span>Forest — heavy fuel</span>
+          <span class="sw" style="background:#8a9a4a"></span><span>Brush — dry, fast</span>
+          <span class="sw" style="background:#5c7a3a"></span><span>Grass — light fuel</span>
+          <span class="sw" style="background:#2b4a7a"></span><span>Water — will not burn</span>
+          <span class="sw" style="background:#c9d3e6"></span><span>Home — protect these</span>
+          <span class="sw" style="background:#3b3b42"></span><span>Spent ground</span>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Log</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script src="../../shared/util.js"></script>
+<script>
+(function () {
+  const { rng, randInt, clamp, logger, fitCanvas, pointerPos, fmt } = window.SG;
+
+  const W = 26, H = 19, CS = 25;
+  const CW = W * CS, CH = H * CS;
+  const HOURS = 24, AP = 4;
+
+  const TERRAIN = {
+    grass:  { fuel: 1.0, css: '#5c7a3a' },
+    brush:  { fuel: 1.7, css: '#8a9a4a' },
+    forest: { fuel: 2.4, css: '#2f6b3a' },
+    water:  { fuel: 0.0, css: '#2b4a7a' },
+    home:   { fuel: 1.4, css: '#c9d3e6' },
+    bare:   { fuel: 0.0, css: '#3b3b42' },
+  };
+  const DIRS8 = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+  const WINDS = [
+    { name: 'N',  v: [0, 1] },  { name: 'NE', v: [-1, 1] },
+    { name: 'E',  v: [-1, 0] }, { name: 'SE', v: [-1, -1] },
+    { name: 'S',  v: [0, -1] }, { name: 'SW', v: [1, -1] },
+    { name: 'W',  v: [1, 0] },  { name: 'NW', v: [1, 1] },
+  ];
+
+  const canvas = document.getElementById('board');
+  const ctx = fitCanvas(canvas, CW, CH);
+  const log = logger(document.getElementById('log'));
+  const banner = document.getElementById('banner');
+  const $ = (id) => document.getElementById(id);
+  let G, tool = 'cut', hover = null;
+
+  const at = (x, y) => G.cells[y * W + x];
+  const inside = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+
+  function newGame() {
+    const seed = (Math.random() * 1e9) >>> 0;
+    const r = rng(seed);
+    const cells = [];
+    // Terrain from a couple of smooth noise bands, so the map reads as landscape not confetti.
+    const ax = r() * 6.28, ay = r() * 6.28, bx = r() * 6.28, by = r() * 6.28;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const n = Math.sin(x * 0.34 + ax) * Math.cos(y * 0.41 + ay)
+              + Math.sin(x * 0.13 + bx) * Math.sin(y * 0.19 + by) * 0.8;
+      let t = n > 0.55 ? 'forest' : n > -0.1 ? 'brush' : n > -1.1 ? 'grass' : 'water';
+      cells.push({ x, y, t, moist: t === 'water' ? 1 : 0.05 + r() * 0.12, fire: 0, burned: false, lit: 0 });
+    }
+    // a lake or two
+    for (let k = 0; k < 2; k++) {
+      const cx0 = randInt(r, 3, W - 4), cy0 = randInt(r, 3, H - 4), rad = randInt(r, 2, 3);
+      for (let y = -rad; y <= rad; y++) for (let x = -rad; x <= rad; x++) {
+        if (x * x + y * y > rad * rad) continue;
+        if (!inside(cx0 + x, cy0 + y)) continue;
+        const c = cells[(cy0 + y) * W + (cx0 + x)];
+        c.t = 'water'; c.moist = 1;
+      }
+    }
+    // homes, kept off the water and away from the ignition edge
+    const homes = [];
+    while (homes.length < 6) {
+      const x = randInt(r, 2, W - 3), y = randInt(r, 2, H - 3);
+      const c = cells[y * W + x];
+      if (c.t === 'water' || c.t === 'home') continue;
+      if (homes.some(h => Math.abs(h.x - x) < 3 && Math.abs(h.y - y) < 3)) continue;
+      c.t = 'home'; c.moist = 0.15;
+      homes.push({ x, y });
+    }
+
+    G = { seed, r, cells, homes, hour: 0, ap: AP, over: false,
+          wind: WINDS[randInt(r, 0, 7)], windStr: 0.6 + r() * 0.7, burnedCount: 0 };
+
+    // ignition: a small front on the upwind edge, nudged onto real fuel so it always takes hold
+    let ix = clamp(Math.round(W / 2 - G.wind.v[0] * (W / 2 - 3)), 1, W - 2);
+    let iy = clamp(Math.round(H / 2 - G.wind.v[1] * (H / 2 - 3)), 1, H - 2);
+    const fuelly = G.cells.filter(c => c.t === 'forest' || c.t === 'brush');
+    if (fuelly.length && !['forest', 'brush'].includes(at(ix, iy).t)) {
+      const near = fuelly.sort((a, b) =>
+        Math.hypot(a.x - ix, a.y - iy) - Math.hypot(b.x - ix, b.y - iy))[0];
+      ix = clamp(near.x, 1, W - 2); iy = clamp(near.y, 1, H - 2);
+    }
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1]]) {
+      if (!inside(ix + dx, iy + dy)) continue;
+      const c = at(ix + dx, iy + dy);
+      if (c.t !== 'water') { c.fire = 2; c.lit = 0; }
+    }
+
+    $('log').innerHTML = '';
+    banner.className = 'banner';
+    banner.textContent = 'Four crew actions an hour. Spend them, then let the hour run.';
+    log(`Ignition at ${ix},${iy}. Wind <b class="hi">${G.wind.name}</b> at ${(G.windStr * 30).toFixed(0)} km/h.`);
+    $('tick').disabled = false; $('skip').disabled = false;
+    sync();
+  }
+
+  function spreadChance(from, to) {
+    if (to.t === 'water' || to.burned || to.fire > 0) return 0;
+    const fuel = TERRAIN[to.t].fuel;
+    if (fuel === 0) return 0;
+    const dx = Math.sign(to.x - from.x), dy = Math.sign(to.y - from.y);
+    const dot = dx * G.wind.v[0] + dy * G.wind.v[1];      // -2..2, downwind is positive
+    const windF = 1 + dot * 0.55 * G.windStr;
+    const diag = (dx !== 0 && dy !== 0) ? 0.72 : 1;
+    return clamp(0.16 * fuel * Math.max(0.08, windF) * diag * (1 - to.moist), 0, 0.92);
+  }
+
+  function runHour() {
+    if (G.over) return;
+    G.hour++;
+    const igniting = [];
+    for (const c of G.cells) {
+      if (c.fire <= 0) continue;
+      for (const [dx, dy] of DIRS8) {
+        if (!inside(c.x + dx, c.y + dy)) continue;
+        const n = at(c.x + dx, c.y + dy);
+        if (G.r() < spreadChance(c, n)) igniting.push(n);
+      }
+    }
+    // age the existing fire before lighting the new cells
+    let lost = 0;
+    for (const c of G.cells) {
+      if (c.fire > 0) {
+        c.lit++;
+        if (c.lit >= 2) {
+          c.fire = 0; c.burned = true; G.burnedCount++;
+          if (c.t === 'home') { c.t = 'bare'; lost++; }
+          else c.t = 'bare';
+        }
+      }
+      c.moist = c.t === 'water' ? 1 : Math.max(0.05 + (c.t === 'forest' ? 0.03 : 0), c.moist - 0.14);
+    }
+    for (const n of igniting) { if (!n.burned && n.fire === 0 && n.t !== 'water') { n.fire = 2; n.lit = 0; } }
+
+    if (lost) log(`<b class="bad">${lost} home${lost > 1 ? 's' : ''} lost.</b>`, 'bad');
+
+    if (G.r() < 0.28) {
+      const shift = G.r() < 0.5 ? 1 : -1;
+      G.wind = WINDS[(WINDS.indexOf(G.wind) + shift + 8) % 8];
+      G.windStr = clamp(G.windStr + (G.r() - 0.45) * 0.4, 0.3, 1.6);
+      log(`Wind swings to <b class="hi">${G.wind.name}</b>, ${(G.windStr * 30).toFixed(0)} km/h.`, 'bad');
+    }
+
+    const burning = G.cells.filter(c => c.fire > 0).length;
+    log(`Hour ${G.hour}: ${burning} cells alight, ${G.burnedCount} burned.`);
+
+    G.ap = AP;
+    if (burning === 0) return finish(true);
+    if (G.hour >= HOURS) return finish(false);
+    sync();
+  }
+
+  function finish(out) {
+    G.over = true;
+    $('tick').disabled = true; $('skip').disabled = true;
+    const standing = G.homes.filter(h => at(h.x, h.y).t === 'home').length;
+    const total = W * H;
+    const saved = Math.round((1 - G.burnedCount / total) * 100);
+    const good = standing === G.homes.length;
+    banner.className = 'banner ' + (good ? 'good' : standing >= 4 ? '' : 'bad');
+    banner.innerHTML = out
+      ? `<b>The fire is out after ${G.hour} hours.</b> ${standing} of ${G.homes.length} homes standing, ` +
+        `${saved}% of the map unburned.`
+      : `<b>Sunrise on day two — the fire is still running.</b> ${standing} of ${G.homes.length} homes standing, ` +
+        `${saved}% unburned.`;
+    log(`Final: ${standing}/${G.homes.length} homes, ${G.burnedCount} cells burned.`, good ? 'good' : 'bad');
+    sync();
+  }
+
+  function act(x, y) {
+    if (G.over || G.ap <= 0 || !inside(x, y)) return;
+    const c = at(x, y);
+    if (tool === 'cut') {
+      if (c.t === 'water' || c.t === 'bare' || c.fire > 0) return;
+      if (c.t === 'home') { log('Crews will not bulldoze a home.', 'bad'); return; }
+      c.t = 'bare'; c.burned = false;
+      log(`Line cut at ${x},${y}.`);
+    } else if (tool === 'water') {
+      let hit = 0;
+      for (const [dx, dy] of [[0,0],...DIRS8]) {
+        if (!inside(x + dx, y + dy)) continue;
+        const n = at(x + dx, y + dy);
+        if (n.t === 'water') continue;
+        n.moist = Math.min(0.95, n.moist + (dx === 0 && dy === 0 ? 0.75 : 0.45));
+        if (n.fire > 0 && (dx === 0 && dy === 0 ? true : G.r() < 0.55)) { n.fire = 0; n.lit = 0; hit++; }
+      }
+      log(`Drop on ${x},${y}${hit ? ` — knocked down ${hit} cell${hit > 1 ? 's' : ''}` : ''}.`, hit ? 'good' : '');
+    } else if (tool === 'burn') {
+      if (c.t === 'water' || c.t === 'bare' || c.t === 'home' || c.fire > 0 || c.burned) return;
+      c.fire = 2; c.lit = 0;
+      log(`Backburn lit at ${x},${y}.`, 'bad');
+    }
+    G.ap--;
+    sync();
+  }
+
+  function sync() {
+    $('hour').textContent = String(G.hour);
+    $('ap').textContent = String(G.ap);
+    $('wind').textContent = `${G.wind.name} · ${(G.windStr * 30).toFixed(0)} km/h`;
+    $('homes').textContent = `${G.homes.filter(h => at(h.x, h.y).t === 'home').length} / ${G.homes.length}`;
+    $('burning').textContent = fmt(G.cells.filter(c => c.fire > 0).length);
+    $('burned').textContent = fmt(G.burnedCount);
+    draw();
+  }
+
+  function draw() {
+    const g = ctx;
+    g.fillStyle = '#0a1122'; g.fillRect(0, 0, CW, CH);
+    for (const c of G.cells) {
+      const px = c.x * CS, py = c.y * CS;
+      g.fillStyle = TERRAIN[c.t].css;
+      g.fillRect(px, py, CS, CS);
+      if (c.moist > 0.35 && c.t !== 'water') {
+        g.fillStyle = `rgba(90,160,255,${(c.moist - 0.3) * 0.5})`;
+        g.fillRect(px, py, CS, CS);
+      }
+      if (c.t === 'home') {
+        g.fillStyle = '#26324a';
+        g.beginPath();
+        g.moveTo(px + 5, py + CS - 6); g.lineTo(px + CS / 2, py + 5); g.lineTo(px + CS - 5, py + CS - 6);
+        g.closePath(); g.fill();
+      }
+      if (c.fire > 0) {
+        const t = c.lit === 0 ? 1 : 0.7;
+        const grd = g.createRadialGradient(px + CS / 2, py + CS / 2, 1, px + CS / 2, py + CS / 2, CS);
+        grd.addColorStop(0, `rgba(255,240,150,${t})`);
+        grd.addColorStop(0.45, `rgba(255,140,40,${t})`);
+        grd.addColorStop(1, 'rgba(180,40,10,0)');
+        g.fillStyle = grd;
+        g.fillRect(px - CS / 2, py - CS / 2, CS * 2, CS * 2);
+      }
+      g.strokeStyle = '#00000022'; g.lineWidth = 1;
+      g.strokeRect(px + .5, py + .5, CS - 1, CS - 1);
+    }
+
+    if (hover && !G.over) {
+      const r = tool === 'water' ? 1 : 0;
+      g.strokeStyle = tool === 'burn' ? '#fb923c' : tool === 'water' ? '#7cc4ff' : '#e8edf9';
+      g.lineWidth = 2;
+      g.strokeRect((hover.x - r) * CS + 1, (hover.y - r) * CS + 1, CS * (2 * r + 1) - 2, CS * (2 * r + 1) - 2);
+    }
+
+    // wind arrow
+    const ax = CW - 46, ay = 40;
+    g.save();
+    g.translate(ax, ay);
+    g.fillStyle = '#0a1122cc';
+    g.beginPath(); g.arc(0, 0, 28, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#3d4a69'; g.lineWidth = 1; g.stroke();
+    g.rotate(Math.atan2(G.wind.v[1], G.wind.v[0]));
+    g.strokeStyle = '#ffd166'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(-16, 0); g.lineTo(12, 0); g.stroke();
+    g.beginPath(); g.moveTo(18, 0); g.lineTo(8, -7); g.lineTo(8, 7); g.closePath();
+    g.fillStyle = '#ffd166'; g.fill();
+    g.restore();
+    g.fillStyle = '#ffd166'; g.font = '700 11px ui-monospace, monospace';
+    g.textAlign = 'center'; g.textBaseline = 'top';
+    g.fillText(G.wind.name, ax, ay + 30);
+  }
+
+  canvas.addEventListener('mousemove', (e) => {
+    const p = pointerPos(canvas, e);
+    const x = Math.floor(p.x / CS), y = Math.floor(p.y / CS);
+    const h = inside(x, y) ? { x, y } : null;
+    if (!h !== !hover || (h && hover && (h.x !== hover.x || h.y !== hover.y))) { hover = h; draw(); }
+  });
+  canvas.addEventListener('mouseleave', () => { hover = null; draw(); });
+  canvas.addEventListener('click', (e) => {
+    const p = pointerPos(canvas, e);
+    act(Math.floor(p.x / CS), Math.floor(p.y / CS));
+  });
+  document.querySelectorAll('.tool').forEach(b => b.addEventListener('click', () => {
+    tool = b.dataset.tool;
+    document.querySelectorAll('.tool').forEach(o => o.classList.toggle('sel', o === b));
+    draw();
+  }));
+  $('tick').addEventListener('click', runHour);
+  $('skip').addEventListener('click', () => { G.ap = 0; sync(); });
+  $('new').addEventListener('click', newGame);
+
+  newGame();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hollywood — Synthesis Camp Games</title>
+<link rel="stylesheet" href="../../shared/theme.css">
+<style>
+  .lots { display:grid; gap:12px; }
+  .lot { border:1px solid var(--line); border-radius:10px; padding:12px; background:var(--panel-2); }
+  .lot h3 { margin:0 0 2px; font-size:15px; }
+  .lot .meta { font-size:12px; color:var(--ink-dim); }
+  .lot .bid { display:flex; gap:8px; align-items:center; margin-top:10px; }
+  .lot input { width:100px; background:var(--bg-2); border:1px solid var(--line); color:var(--ink);
+               border-radius:8px; padding:7px 9px; font-family:var(--mono); }
+  .heat { display:grid; grid-template-columns:auto 1fr auto; gap:5px 9px; align-items:center; font-size:12.5px; }
+  .heat i { display:block; height:9px; border-radius:99px; background:var(--accent); }
+  .heat .track { background:#1b2745; border-radius:99px; overflow:hidden; }
+  .card { border:1px solid var(--line); border-radius:9px; padding:8px 10px; background:var(--panel-2);
+          cursor:pointer; font-size:13px; }
+  .card.sel { border-color:var(--accent); background:#1d3a6e; }
+  .card.dim { opacity:.45; }
+  .card b { display:block; }
+  .card span { color:var(--ink-dim); font-size:11.5px; }
+  .slot { display:grid; gap:8px; }
+  .slot h4 { margin:12px 0 2px; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim); }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="back" href="../../index.html">← All games</a>
+  <h1>Hollywood</h1>
+  <span class="pill">5 seasons · sealed bids</span>
+  <span class="spacer"></span>
+  <button id="new">New studio</button>
+</header>
+
+<div class="wrap">
+  <div class="layout">
+    <div>
+      <div id="banner" class="banner">You run a studio. Buy the talent, read the audience, release one film a season.</div>
+      <div class="board-wrap"><canvas id="chart" aria-label="Box office by studio"></canvas></div>
+
+      <div class="panel" id="stage"></div>
+
+      <details class="rules-box">
+        <summary>How it works</summary>
+        <div class="rules panel">
+          <p>Everything about a film is bought before anyone knows what audiences will want. The talent is auctioned
+          in <b>sealed bids</b> — you never see what the other studios offered until the lot is gone.</p>
+          <ul>
+            <li>Five seasons. Each season three lots go up: scripts, stars and directors, each with a genre and a quality of 1–10.</li>
+            <li>You bid in millions. High bid takes the lot and pays what it bid. Ties go to the studio that bid first, which is never you.</li>
+            <li>Then you cut <b>one film</b> from what you own: a script is required, a star and a director are optional and are consumed with it.</li>
+            <li>Gross = the talent on screen × <b>how hot that genre is this season</b> × luck. Genre heat moves every season; the tracking report guesses next season's, badly.</li>
+            <li>You are scored on <b>profit</b> — gross minus production minus what you paid at auction. A masterpiece bought at a stupid price is still a loss.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Season <span id="year">1</span> of 5</h2>
+        <div class="stat"><span>Cash</span><b id="cash">—</b></div>
+        <div class="stat"><span>Profit to date</span><b id="profit">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>Genre heat — this season</h2>
+        <div class="heat" id="heat"></div>
+        <div class="divider"></div>
+        <h2>Tracking for next season</h2>
+        <div class="heat" id="track"></div>
+      </div>
+      <div class="panel">
+        <h2>Studios</h2>
+        <table class="grid" id="studios"></table>
+      </div>
+      <div class="panel">
+        <h2>Trades</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script src="../../shared/util.js"></script>
+<script>
+(function () {
+  const { rng, randInt, pick, clamp, logger, fitCanvas, fmt } = window.SG;
+
+  const YEARS = 5, LOTS = 3, START_CASH = 140;
+  const GENRES = ['Sci-fi', 'Comedy', 'Horror', 'Drama', 'Action'];
+  const GCSS = { 'Sci-fi': '#7cc4ff', Comedy: '#ffd166', Horror: '#c08cff', Drama: '#93a1c0', Action: '#f87171' };
+
+  const STUDIOS = [
+    { name: 'You',        css: '#6ea8ff', greed: 0 },
+    { name: 'Monolith',   css: '#f87171', greed: 1.1 },
+    { name: 'Halcyon',    css: '#4ade80', greed: 0.95 },
+    { name: 'Vireo Pics', css: '#ffd166', greed: 1.0 },
+  ];
+
+  const FIRST = ['Ada', 'Rex', 'Juno', 'Cass', 'Milo', 'Nico', 'Vera', 'Otto', 'Iris', 'Dane', 'Lux', 'Bo'];
+  const LAST = ['Marlowe', 'Okafor', 'Reyes', 'Sato', 'Volkov', 'Bright', 'Nakai', 'Cortez', 'Hale', 'Adeyemi'];
+  const TITLE_A = ['Last', 'Silent', 'Crimson', 'Eleventh', 'Hollow', 'Iron', 'Gentle', 'Broken', 'Long'];
+  const TITLE_B = ['Signal', 'Harvest', 'Orbit', 'Marriage', 'Kingdom', 'Winter', 'Machine', 'Choir', 'Mile'];
+
+  const chart = document.getElementById('chart');
+  const CW = 720, CH = 240;
+  const ctx = fitCanvas(chart, CW, CH);
+  const log = logger(document.getElementById('log'));
+  const banner = document.getElementById('banner');
+  const $ = (id) => document.getElementById(id);
+  let G;
+
+  const money = (m) => (m < 0 ? '−$' : '$') + fmt(Math.abs(m), 1) + 'M';
+
+  function newGame() {
+    const r = rng((Math.random() * 1e9) >>> 0);
+    G = {
+      r, year: 1, phase: 'bid', over: false,
+      heat: Object.fromEntries(GENRES.map(g => [g, 0.7 + r() * 0.9])),
+      cash: STUDIOS.map(() => START_CASH),
+      spent: STUDIOS.map(() => 0),
+      gross: STUDIOS.map(() => 0),
+      lib: STUDIOS.map(() => []),
+      history: [],
+      lots: null, sel: { script: null, star: null, director: null },
+    };
+    G.track = forecast();
+    $('log').innerHTML = '';
+    banner.className = 'banner';
+    banner.textContent = 'You run a studio. Buy the talent, read the audience, release one film a season.';
+    openBidding();
+  }
+
+  function forecast() {
+    // Next season's heat, plus the error the trade press never admits to.
+    return Object.fromEntries(GENRES.map(g =>
+      [g, clamp(G.heat[g] + (G.r() - 0.5) * 0.55, 0.35, 1.9)]));
+  }
+
+  function makeAsset() {
+    const kind = pick(G.r, ['script', 'script', 'star', 'director']);
+    const genre = pick(G.r, GENRES);
+    const q = randInt(G.r, 3, 10);
+    const name = kind === 'script'
+      ? `“The ${pick(G.r, TITLE_A)} ${pick(G.r, TITLE_B)}”`
+      : `${pick(G.r, FIRST)} ${pick(G.r, LAST)}`;
+    return { kind, genre, q, name, id: Math.random().toString(36).slice(2, 8) };
+  }
+
+  const WEIGHT = { script: 8, star: 5, director: 4 };
+  const GROSS = 1.6;          // gross per point of talent, at neutral heat
+  const FIXED = 6, UNIT = 0.18;    // production cost: fixed overhead plus talent
+  const BID = 0.40;                // rivals bid this share of an asset's marginal profit
+  const PACK = 1.15;               // the average package bonus and luck a released film sees
+
+  /** Marginal profit an asset is expected to add, at a given read of the market.
+   *  Revenue is half the gross, so an asset earns 0.8 x heat per point of talent and costs UNIT to shoot. */
+  function value(a, heatMap) {
+    const heat = heatMap[a.genre] || 1;
+    return Math.max(1, WEIGHT[a.kind] * a.q * (0.8 * PACK * heat - UNIT));
+  }
+
+  function openBidding() {
+    G.phase = 'bid';
+    G.lots = Array.from({ length: LOTS }, makeAsset);
+    render();
+  }
+
+  function resolveBids(myBids) {
+    G.lots.forEach((lot, li) => {
+      const bids = STUDIOS.map((s, i) => {
+        if (i === 0) return clamp(myBids[li], 0, G.cash[0]);
+        // Rivals price off a blend of this season's heat and the tracking report.
+        const blend = Object.fromEntries(GENRES.map(g => [g, (G.heat[g] + G.track[g]) / 2]));
+        // A studio only shoots one film a season, so a second unused star is worth much less than the first.
+        const held = G.lib[i].filter(a => a.kind === lot.kind).length;
+        const sat = 1 / (1 + 0.8 * held);
+        const desperate = lot.kind === 'script' && !G.lib[i].some(a => a.kind === 'script') ? 1.35 : 1;
+        const want = value(lot, blend) * BID * s.greed * sat * desperate * (0.85 + G.r() * 0.3);
+        const room = G.cash[i] * (lot.kind === 'script' ? 0.55 : 0.4);
+        return Math.max(0, Math.round(Math.min(want, room) * 10) / 10);
+      });
+      let win = 0;
+      for (let i = 1; i < STUDIOS.length; i++) if (bids[i] > bids[win]) win = i;
+      if (bids[win] <= 0) { log(`${lot.name} — no bids, withdrawn.`); return; }
+      G.cash[win] -= bids[win];
+      G.spent[win] += bids[win];
+      G.lib[win].push(lot);
+      const line = STUDIOS.map((s, i) => `${s.name.split(' ')[0]} ${money(bids[i])}`).join(' · ');
+      log(`${lot.name} → <b class="${win === 0 ? 'good' : 'hi'}">${STUDIOS[win].name}</b> at ${money(bids[win])}` +
+          `<div style="color:var(--ink-faint)">${line}</div>`);
+    });
+    G.phase = 'assemble';
+    G.sel = { script: null, star: null, director: null };
+    render();
+  }
+
+  function releaseFilm() {
+    const s = G.sel;
+    const parts = [s.script, s.star, s.director].filter(Boolean);
+    const talent = parts.reduce((a, p) => a + WEIGHT[p.kind] * p.q, 0);
+    const genre = s.script.genre;
+    const bonus = 1 + 0.12 * parts.filter(p => p.genre === genre).length;   // a matched package plays better
+    const luck = 0.85 + G.r() * 0.35;
+    const gross = talent * G.heat[genre] * bonus * luck * GROSS;
+    const prod = FIXED + talent * UNIT;
+
+    G.cash[0] += gross * 0.5 - prod;
+    G.gross[0] += gross;
+    G.lib[0] = G.lib[0].filter(a => !parts.includes(a));
+
+    const rows = [{ studio: 0, title: s.script.name, genre, gross, prod }];
+
+    // Rivals cut their own film from whatever they hold.
+    for (let i = 1; i < STUDIOS.length; i++) {
+      const scripts = G.lib[i].filter(a => a.kind === 'script');
+      if (!scripts.length) { log(`${STUDIOS[i].name} has nothing to release.`); continue; }
+      const sc = scripts.sort((a, b) => value(b, G.heat) - value(a, G.heat))[0];
+      const st = G.lib[i].filter(a => a.kind === 'star').sort((a, b) => b.q - a.q)[0];
+      const di = G.lib[i].filter(a => a.kind === 'director').sort((a, b) => b.q - a.q)[0];
+      const pk = [sc, st, di].filter(Boolean);
+      const tal = pk.reduce((a, p) => a + WEIGHT[p.kind] * p.q, 0);
+      const bn = 1 + 0.12 * pk.filter(p => p.genre === sc.genre).length;
+      const gr = tal * G.heat[sc.genre] * bn * (0.85 + G.r() * 0.35) * GROSS;
+      const pr = FIXED + tal * UNIT;
+      G.cash[i] += gr * 0.5 - pr;
+      G.gross[i] += gr;
+      G.lib[i] = G.lib[i].filter(a => !pk.includes(a));
+      rows.push({ studio: i, title: sc.name, genre: sc.genre, gross: gr, prod: pr });
+    }
+
+    rows.sort((a, b) => b.gross - a.gross);
+    G.history.push({ year: G.year, rows });
+    log(`<b class="hi">Season ${G.year} box office</b> — ` +
+        rows.map(r => `${STUDIOS[r.studio].name.split(' ')[0]} ${money(r.gross)}`).join(' · '));
+
+    G.phase = 'results';
+    render();
+  }
+
+  function nextYear() {
+    G.year++;
+    // The heat moves toward the tracking report, but never all the way.
+    for (const g of GENRES) {
+      G.heat[g] = clamp(G.heat[g] * 0.45 + G.track[g] * 0.55 + (G.r() - 0.5) * 0.3, 0.35, 1.95);
+    }
+    G.track = forecast();
+    G.cash = G.cash.map(c => c + 45);          // seasonal financing
+    if (G.year > YEARS) return finish();
+    log(`<b class="hi">Season ${G.year}.</b> Financing tops every studio up by $45.0M.`);
+    openBidding();
+  }
+
+  const profitOf = (i) => G.gross[i] * 0.5 - G.spent[i] -
+    G.history.reduce((a, h) => a + (h.rows.find(r => r.studio === i)?.prod || 0), 0);
+
+  function finish() {
+    G.over = true; G.phase = 'over';
+    const rank = STUDIOS.map((s, i) => ({ i, name: s.name, p: profitOf(i) })).sort((a, b) => b.p - a.p);
+    const mine = rank.findIndex(r => r.i === 0) + 1;
+    banner.className = 'banner ' + (mine === 1 ? 'good' : mine <= 2 ? '' : 'bad');
+    banner.innerHTML = `<b>${rank[0].name} finishes the decade on ${money(rank[0].p)} of profit.</b> ` +
+      `You came ${mine}${['st', 'nd', 'rd', 'th'][Math.min(mine - 1, 3)]} on ${money(profitOf(0))} ` +
+      `from ${money(G.gross[0])} of gross.`;
+    log(`Final profit: ${rank.map(r => `${r.name} ${money(r.p)}`).join(' · ')}`, 'hi');
+    render();
+  }
+
+  // ---- rendering -----------------------------------------------------------
+
+  function render() {
+    $('year').textContent = String(Math.min(G.year, YEARS));
+    $('cash').textContent = money(G.cash[0]);
+    $('profit').textContent = money(profitOf(0));
+
+    $('heat').innerHTML = GENRES.map(g =>
+      `<span style="color:${GCSS[g]}">${g}</span>
+       <span class="track"><i style="width:${clamp(G.heat[g] / 2 * 100, 3, 100)}%;background:${GCSS[g]}"></i></span>
+       <span style="font-family:var(--mono)">${G.heat[g].toFixed(2)}×</span>`).join('');
+    $('track').innerHTML = GENRES.map(g => {
+      const d = G.track[g] - G.heat[g];
+      return `<span style="color:var(--ink-dim)">${g}</span>
+       <span class="track"><i style="width:${clamp(G.track[g] / 2 * 100, 3, 100)}%;background:${GCSS[g]}66"></i></span>
+       <span style="font-family:var(--mono);color:${d > 0.05 ? 'var(--good)' : d < -0.05 ? 'var(--bad)' : 'var(--ink-dim)'}">
+         ${d > 0 ? '+' : ''}${d.toFixed(2)}</span>`;
+    }).join('');
+
+    $('studios').innerHTML = '<tr><th>Studio</th><th class="num">Cash</th><th class="num">Gross</th><th class="num">Profit</th></tr>' +
+      STUDIOS.map((s, i) => `<tr class="${i === 0 ? 'me' : ''}">
+        <td><span style="color:${s.css}">●</span> ${s.name}</td>
+        <td class="num">${money(G.cash[i])}</td>
+        <td class="num">${money(G.gross[i])}</td>
+        <td class="num"><b>${money(profitOf(i))}</b></td></tr>`).join('');
+
+    drawChart();
+    if (G.phase === 'bid') renderBid();
+    else if (G.phase === 'assemble') renderAssemble();
+    else if (G.phase === 'results') renderResults();
+    else renderOver();
+  }
+
+  function renderBid() {
+    $('stage').innerHTML = `<h2>Season ${G.year} — sealed bids</h2>
+      <div class="lots">` + G.lots.map((a, i) => `
+        <div class="lot">
+          <h3>${a.name}</h3>
+          <div class="meta">${a.kind.toUpperCase()} · <span style="color:${GCSS[a.genre]}">${a.genre}</span>
+            · quality <b style="color:var(--ink)">${a.q}</b>
+            · worth about <b style="color:var(--ink)">${money(value(a, G.heat))}</b> at today's heat</div>
+          <div class="bid"><label>Bid</label>
+            <input type="number" id="b${i}" min="0" step="0.5" value="0"> <span style="color:var(--ink-dim)">M</span>
+          </div>
+        </div>`).join('') + `</div>
+      <div class="divider"></div>
+      <button class="primary" id="submit" style="width:100%">Submit sealed bids</button>`;
+    $('submit').onclick = () => {
+      const bids = G.lots.map((_, i) => Number($('b' + i).value) || 0);
+      const total = bids.reduce((a, b) => a + b, 0);
+      if (total > G.cash[0]) {
+        alert(`Your bids total ${money(total)} but you only have ${money(G.cash[0])}.`);
+        return;
+      }
+      resolveBids(bids);
+    };
+  }
+
+  function renderAssemble() {
+    const lib = G.lib[0];
+    const group = (k) => lib.filter(a => a.kind === k);
+    const cardHtml = (a, k) => `<div class="card ${G.sel[k] === a ? 'sel' : ''}" data-k="${k}" data-id="${a.id}">
+        <b>${a.name}</b><span style="color:${GCSS[a.genre]}">${a.genre}</span>
+        <span>quality ${a.q} · heat ${G.heat[a.genre].toFixed(2)}×</span></div>`;
+
+    const s = G.sel;
+    const parts = [s.script, s.star, s.director].filter(Boolean);
+    const talent = parts.reduce((a, p) => a + WEIGHT[p.kind] * p.q, 0);
+    const genre = s.script ? s.script.genre : null;
+    const bonus = genre ? 1 + 0.12 * parts.filter(p => p.genre === genre).length : 1;
+    const mid = genre ? talent * G.heat[genre] * bonus * GROSS : 0;
+    const prod = FIXED + talent * UNIT;
+
+    $('stage').innerHTML = `<h2>Season ${G.year} — cut the film</h2>
+      <div class="rules" style="margin-bottom:6px">Pick a script (required); a star and a director are optional
+      and are used up with it. Everything you keep rolls into next season.</div>
+      <div class="slot"><h4>Scripts</h4>${group('script').map(a => cardHtml(a, 'script')).join('') || '<i style="color:var(--ink-faint)">none owned</i>'}
+        <h4>Stars</h4>${group('star').map(a => cardHtml(a, 'star')).join('') || '<i style="color:var(--ink-faint)">none owned</i>'}
+        <h4>Directors</h4>${group('director').map(a => cardHtml(a, 'director')).join('') || '<i style="color:var(--ink-faint)">none owned</i>'}
+      </div>
+      <div class="divider"></div>
+      <div class="stat"><span>Projected gross (before luck)</span><b>${money(mid)}</b></div>
+      <div class="stat"><span>Production cost</span><b>${money(prod)}</b></div>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="release" ${s.script ? '' : 'disabled'} style="flex:1">Release the film →</button>
+        <button id="skipfilm">Sit the season out</button>
+      </div>`;
+
+    $('stage').querySelectorAll('.card').forEach(el => el.onclick = () => {
+      const k = el.dataset.k;
+      const a = lib.find(x => x.id === el.dataset.id);
+      G.sel[k] = G.sel[k] === a ? null : a;
+      render();
+    });
+    const rel = $('release'); if (rel) rel.onclick = releaseFilm;
+    $('skipfilm').onclick = () => {
+      log('You hold everything back and release nothing.');
+      G.sel = { script: null, star: null, director: null };
+      // rivals still release
+      G.phase = 'assemble';
+      releaseNothingButRivals();
+    };
+  }
+
+  function releaseNothingButRivals() {
+    const rows = [];
+    for (let i = 1; i < STUDIOS.length; i++) {
+      const scripts = G.lib[i].filter(a => a.kind === 'script');
+      if (!scripts.length) continue;
+      const sc = scripts.sort((a, b) => value(b, G.heat) - value(a, G.heat))[0];
+      const st = G.lib[i].filter(a => a.kind === 'star').sort((a, b) => b.q - a.q)[0];
+      const di = G.lib[i].filter(a => a.kind === 'director').sort((a, b) => b.q - a.q)[0];
+      const pk = [sc, st, di].filter(Boolean);
+      const tal = pk.reduce((a, p) => a + WEIGHT[p.kind] * p.q, 0);
+      const bn = 1 + 0.12 * pk.filter(p => p.genre === sc.genre).length;
+      const gr = tal * G.heat[sc.genre] * bn * (0.85 + G.r() * 0.35) * GROSS;
+      const pr = FIXED + tal * UNIT;
+      G.cash[i] += gr * 0.5 - pr; G.gross[i] += gr;
+      G.lib[i] = G.lib[i].filter(a => !pk.includes(a));
+      rows.push({ studio: i, title: sc.name, genre: sc.genre, gross: gr, prod: pr });
+    }
+    rows.sort((a, b) => b.gross - a.gross);
+    G.history.push({ year: G.year, rows });
+    G.phase = 'results';
+    render();
+  }
+
+  function renderResults() {
+    const h = G.history[G.history.length - 1];
+    $('stage').innerHTML = `<h2>Season ${G.year} — the weekend</h2>
+      <table class="grid">
+        <tr><th>Film</th><th>Genre</th><th class="num">Gross</th><th class="num">Net</th></tr>` +
+      h.rows.map(r => `<tr class="${r.studio === 0 ? 'me' : ''}">
+          <td>${r.title}<div style="font-size:11px;color:var(--ink-faint)">${STUDIOS[r.studio].name}</div></td>
+          <td style="color:${GCSS[r.genre]}">${r.genre}</td>
+          <td class="num">${money(r.gross)}</td>
+          <td class="num" style="color:${r.gross * 0.5 - r.prod >= 0 ? 'var(--good)' : 'var(--bad)'}">
+            ${money(r.gross * 0.5 - r.prod)}</td></tr>`).join('') +
+      `</table><div class="divider"></div>
+       <button class="primary" id="next" style="width:100%">${G.year >= YEARS ? 'Close the books' : 'On to season ' + (G.year + 1)} →</button>`;
+    $('next').onclick = nextYear;
+  }
+
+  function renderOver() {
+    $('stage').innerHTML = `<h2>Final accounts</h2>
+      <table class="grid"><tr><th>Studio</th><th class="num">Gross</th><th class="num">Bought</th><th class="num">Profit</th></tr>` +
+      STUDIOS.map((s, i) => ({ i, s, p: profitOf(i) })).sort((a, b) => b.p - a.p)
+        .map(({ i, s, p }) => `<tr class="${i === 0 ? 'me' : ''}">
+          <td><span style="color:${s.css}">●</span> ${s.name}</td>
+          <td class="num">${money(G.gross[i])}</td>
+          <td class="num">${money(G.spent[i])}</td>
+          <td class="num"><b>${money(p)}</b></td></tr>`).join('') +
+      `</table><div class="divider"></div>
+       <button class="primary" id="again" style="width:100%">Run it again</button>`;
+    $('again').onclick = newGame;
+  }
+
+  function drawChart() {
+    const g = ctx;
+    g.fillStyle = '#0d1426'; g.fillRect(0, 0, CW, CH);
+    const L = 54, R = CW - 14, T = 18, B = CH - 26;
+    const max = Math.max(60, ...G.history.flatMap(h => h.rows.map(r => r.gross)));
+    const yAt = (v) => B - (B - T) * (v / max);
+
+    g.strokeStyle = '#1b2745'; g.fillStyle = '#5c6c92';
+    g.font = '10px ui-monospace, monospace'; g.textAlign = 'right'; g.textBaseline = 'middle';
+    for (let k = 0; k <= 4; k++) {
+      const v = max * k / 4;
+      g.beginPath(); g.moveTo(L, yAt(v)); g.lineTo(R, yAt(v)); g.stroke();
+      g.fillText('$' + fmt(v, 0) + 'M', L - 6, yAt(v));
+    }
+
+    const slotW = (R - L) / YEARS;
+    for (let y = 0; y < YEARS; y++) {
+      const h = G.history[y];
+      g.fillStyle = '#5c6c92'; g.textAlign = 'center'; g.textBaseline = 'top';
+      g.fillText('S' + (y + 1), L + slotW * (y + 0.5), B + 8);
+      if (!h) continue;
+      const bw = slotW / (STUDIOS.length + 1);
+      STUDIOS.forEach((s, i) => {
+        const row = h.rows.find(r => r.studio === i);
+        if (!row) return;
+        const x = L + slotW * y + bw * (i + 0.6);
+        g.fillStyle = s.css + (i === 0 ? 'ff' : '99');
+        g.fillRect(x, yAt(row.gross), bw * 0.82, B - yAt(row.gross));
+      });
+    }
+    g.fillStyle = '#93a1c0'; g.textAlign = 'left'; g.textBaseline = 'top';
+    g.font = '600 11px ui-monospace, monospace';
+    g.fillText('box office by season', L, 2);
+  }
+
+  $('new').addEventListener('click', newGame);
+  newGame();
+})();
+</script>
+</body>
+</html>
