@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>它一直都在那裡</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:#000;overflow:hidden}
+  body{cursor:crosshair}
+  #c{display:block;width:100vw;height:100vh;image-rendering:pixelated;image-rendering:crisp-edges}
+
+  #hud{
+    position:fixed;top:10px;left:12px;pointer-events:none;
+    font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    color:#d6dbd4;text-shadow:1px 1px 0 #000;white-space:pre;opacity:.55;
+  }
+  #whisper{
+    position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;
+    font:700 clamp(20px,4.2vw,46px)/1.3 ui-monospace,Menlo,Consolas,monospace;
+    color:#cdd2cb;letter-spacing:.28em;text-indent:.28em;
+    text-shadow:0 0 22px rgba(200,220,255,.35);
+    opacity:0;transition:opacity 1.4s ease;
+  }
+  #ctl{
+    position:fixed;right:12px;bottom:12px;display:flex;gap:8px;
+    font:11px/1 ui-monospace,Menlo,Consolas,monospace;
+  }
+  #ctl button{
+    background:rgba(8,10,12,.55);color:#9aa39a;border:1px solid rgba(150,170,150,.28);
+    padding:7px 11px;letter-spacing:.12em;cursor:pointer;backdrop-filter:blur(2px);
+  }
+  #ctl button:hover{color:#e6ece6;border-color:rgba(200,220,200,.5)}
+
+  #gate{
+    position:fixed;inset:0;display:grid;place-items:center;background:#000;z-index:9;
+    font:14px/2 ui-monospace,Menlo,Consolas,monospace;color:#8f978f;letter-spacing:.3em;
+    text-align:center;cursor:pointer;transition:opacity 1.1s ease;
+  }
+  #gate b{display:block;font-size:clamp(22px,5vw,40px);color:#dfe5df;letter-spacing:.22em;margin-bottom:18px;font-weight:700}
+  #gate span{opacity:.55;font-size:11px}
+  #gate.off{opacity:0;pointer-events:none}
+  .blink{animation:bl 2.6s steps(1,end) infinite}
+  @keyframes bl{0%,88%{opacity:.55}90%,100%{opacity:.08}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<div id="whisper"></div>
+<div id="ctl">
+  <button id="snd">聲音: 關</button>
+  <button id="fs">全螢幕</button>
+</div>
+<div id="gate">
+  <div>
+    <b>它一直都在那裡</b>
+    點擊任意處進入世界
+    <span class="blink">建議戴上耳機・調暗燈光</span>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+const W = 320, H = 180;                 // 內部低解析度畫布（製造像素感）
+const cv  = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const mk = (w,h) => { const c = document.createElement('canvas'); c.width=w; c.height=h; return c; };
+const world = mk(W,H),  wx = world.getContext('2d');
+const tmpA  = mk(W,H),  ax = tmpA.getContext('2d');
+const tmpB  = mk(W,H),  bx = tmpB.getContext('2d');
+const noise = mk(W>>1, H>>1), nx = noise.getContext('2d');
+for (const c of [ctx, wx, ax, bx]) c.imageSmoothingEnabled = false;
+
+function resize(){
+  const d = Math.min(devicePixelRatio || 1, 2);
+  cv.width  = Math.floor(innerWidth  * d);
+  cv.height = Math.floor(innerHeight * d);
+  ctx.imageSmoothingEnabled = false;
+}
+addEventListener('resize', resize); resize();
+
+/* ---------- 決定性雜訊 ---------- */
+const hash = n => { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.floor(s); };
+const vnoise = x => {                     // 1D value noise
+  const i = Math.floor(x), f = x - i, u = f*f*(3-2*f);
+  return hash(i)*(1-u) + hash(i+1)*u;
+};
+const ridge = (x,s) => vnoise(x*s)*.6 + vnoise(x*s*2.3+11)*.3 + vnoise(x*s*5.1+37)*.1;
+
+/* ---------- 地形（方塊化剪影） ---------- */
+const B = 4;                              // 方塊邊長（像素）
+function terrain(cam, amp, base, color, edge, freq, speck){
+  for (let px = -B; px <= W + B; px += B){
+    const wxp = px + Math.floor(cam / B) * B;
+    const h   = Math.floor((base + ridge(wxp * freq, 1) * amp) / B) * B;
+    const sx  = px - (cam % B);
+    wx.fillStyle = color; wx.fillRect(sx, H - h, B, h + B);
+    wx.fillStyle = edge;  wx.fillRect(sx, H - h, B, 1);        // 頂緣：剪影的那條線
+    if (speck && hash(wxp * 0.37) > 0.955){                    // 地表零星突起的方塊
+      wx.fillStyle = color; wx.fillRect(sx, H - h - B, B, B);
+      wx.fillStyle = edge;  wx.fillRect(sx, H - h - B, B, 1);
+    }
+  }
+}
+function groundY(worldX, amp, base, freq){
+  return H - Math.floor((base + ridge(worldX * freq, 1) * amp) / B) * B;
+}
+
+/* ---------- 樹（黑色針葉剪影） ---------- */
+function tree(sx, by, s){
+  wx.fillStyle = '#020407';
+  wx.fillRect(sx - B/2, by - 7*s, B, 7*s);            // 樹幹
+  for (let i = 0; i < 4; i++){
+    const w = (9 - i*2) * s;
+    const y = by - (7 + i*3.2)*s - 4*s;
+    wx.fillStyle = '#020407'; wx.fillRect(sx - w/2, y, w, 4*s);
+    wx.fillStyle = 'rgba(112,144,172,.17)'; wx.fillRect(sx - w/2, y, w, 1);
+  }
+}
+
+/* ---------- 那個東西 ---------- */
+function figure(cx, baseY, u, alpha, glow){
+  wx.save();
+  wx.globalAlpha = alpha;
+  // a,b = 以「腳底中心」為原點的方塊座標（標準 Steve 比例：總高 32u）
+  const px = (a, b, w, h, col) => {
+    wx.fillStyle = col;
+    wx.fillRect(Math.round(cx + a*u), Math.round(baseY + b*u), Math.max(1, Math.round(w*u)), Math.max(1, Math.round(h*u)));
+  };
+
+  px(-6, -1.5, 12, 1.5, 'rgba(0,0,0,.5)');          // 腳下化不開的影子
+  px(-8, -24, 4, 12, '#221a13');                    // 左臂
+  px( 4, -24, 4, 12, '#1d1610');                    // 右臂
+  px(-4, -12, 3.6, 12, '#232b40');                  // 左腿
+  px( 0.4, -12, 3.6, 12, '#1d2436');                // 右腿
+  px(-4, -24, 8, 12, '#122a27');                    // 身體
+  px(-4, -32, 8, 8, '#251c13');                     // 頭
+  px(-4, -32, 8, 2.2, '#141019');                   // 頭髮
+
+  // 左側輪廓光：只有一道邊，剩下的交給黑暗
+  px(-4, -32, .5, 20, 'rgba(150,190,215,.16)');
+  px(-8, -24, .5, 12, 'rgba(150,190,215,.12)');
+
+  // 兩顆發光的白眼
+  wx.save();
+  wx.shadowColor = 'rgba(200,232,255,' + (.8 * glow) + ')';
+  wx.shadowBlur  = Math.min(18, 3.2 * u * glow);
+  const eye = 'rgba(240,250,255,' + (.55 + .45 * glow) + ')';
+  px(-3, -29, 2, 2, eye);
+  px( 1, -29, 2, 2, eye);
+  wx.restore();
+  wx.restore();
+}
+
+/* ---------- 粒子 ---------- */
+const rain = Array.from({length: 190}, () => ({
+  x: Math.random()*W, y: Math.random()*H, v: 90 + Math.random()*140, l: 3 + Math.random()*5
+}));
+const dust = Array.from({length: 46}, () => ({
+  x: Math.random()*W, y: Math.random()*H, p: Math.random()*6.28, s: .2 + Math.random()*.5
+}));
+
+/* ---------- 火把 ---------- */
+const torches = [ {wx: 120, s: 1}, {wx: 470, s: 1}, {wx: 880, s: 1}, {wx: 1290, s: 1} ];
+
+/* ---------- 狀態機：出現 / 凝視 / 消失 ---------- */
+const S = { HIDDEN:0, FADE_IN:1, STARE:2, FADE_OUT:3 };
+let st = S.HIDDEN, stT = 2.2, fx = 0.5, fu = 1.6, close = false;
+let flash = 0, glitch = 0, shock = 0;
+
+const LINES = ['你看到了嗎', '他一直都在那裡', '不要回頭', '這不是遊戲', '你並不孤單',
+               '再靠近一點', '別關掉燈', 'behind you', '它記得你的名字'];
+const whisper = document.getElementById('whisper');
+let wTimer = 5 + Math.random()*4;
+function speak(){
+  whisper.textContent = LINES[(Math.random()*LINES.length)|0];
+  whisper.style.opacity = .5 + Math.random()*.35;
+  setTimeout(() => whisper.style.opacity = 0, 1500 + Math.random()*1200);
+}
+
+/* ---------- HUD（F3 風格，偶爾出錯） ---------- */
+const hud = document.getElementById('hud');
+let hudT = 0;
+function drawHud(t){
+  const g = Math.random() < 0.04;
+  const corrupt = s => s.replace(/[0-9]/g, c => Math.random() < .35 ? String.fromCharCode(9600 + (Math.random()*30|0)) : c);
+  let s =
+    'Minecraft 1.?.? (??? / vanilla)\n' +
+    (60 + (Math.sin(t)*3|0)) + ' fps\n' +
+    'xyz: ' + (t*6).toFixed(3) + ' / 63.00000 / -' + (Math.sin(t*.3)*8).toFixed(3) + '\n' +
+    'biome: minecraft:the_void\n' +
+    'light: 0 (0 sky, 0 block)\n' +
+    'seed: -666666666666\n' +
+    'players: ' + (st === S.HIDDEN ? '1/1' : '2/1');
+  hud.textContent = g ? corrupt(s) : s;
+  hud.style.opacity = g ? .9 : .55;
+}
+
+/* ---------- 主迴圈 ---------- */
+let last = performance.now() / 1000, t = 0;
+
+function frame(now){
+  now /= 1000;
+  const dt = Math.min(now - last, .05); last = now; t += dt;
+  const cam = t * 7;
+
+  /* --- 天空 --- */
+  const pulse = 0.5 + 0.5 * Math.sin(t * 0.23);
+  const sky = wx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0,   '#05070b');
+  sky.addColorStop(.55, `rgb(${11 + pulse*6}, ${13 + pulse*5}, ${19 + pulse*9})`);
+  sky.addColorStop(1,   '#161a17');
+  wx.fillStyle = sky; wx.fillRect(0, 0, W, H);
+
+  // 冷掉的星
+  for (let i = 0; i < 70; i++){
+    const sx = (hash(i * 2.1) * W * 1.4 - cam * .05) % W;
+    const sy = hash(i * 5.3) * 90;
+    const tw = .18 + Math.abs(Math.sin(t * (.4 + hash(i) * 1.6) + i)) * .35;
+    wx.fillStyle = `rgba(190,205,225,${tw})`;
+    wx.fillRect(((sx % W) + W) % W | 0, sy | 0, 1, 1);
+  }
+  // 地平線的病態微光
+  const hz = wx.createLinearGradient(0, H * .52, 0, H * .82);
+  hz.addColorStop(0, 'rgba(70,86,88,0)');
+  hz.addColorStop(1, `rgba(${70 + pulse * 20},${92 + pulse * 16},${88},.14)`);
+  wx.fillStyle = hz; wx.fillRect(0, H * .52, W, H * .30);
+
+  // 血月
+  const moonY = 34 + Math.sin(t * .08) * 6;
+  wx.save();
+  wx.shadowColor = 'rgba(180,60,50,.55)'; wx.shadowBlur = 26;
+  wx.fillStyle = `rgba(${150 + pulse*40},${52 + pulse*18},${44},.85)`;
+  wx.fillRect(238, moonY, 22, 22);
+  wx.restore();
+  wx.fillStyle = 'rgba(10,6,8,.55)';                      // 月面上的「臉」
+  wx.fillRect(244, moonY + 6, 4, 4); wx.fillRect(252, moonY + 6, 4, 4);
+  wx.fillRect(245, moonY + 15, 11, 2);
+
+  /* --- 地形三層視差 --- */
+  terrain(cam * .18, 46, 52, '#070a11', 'rgba(112,142,170,.16)', 0.022, false);
+  terrain(cam * .45, 30, 30, '#03050a', 'rgba(92,120,146,.15)',  0.014, true);
+
+  // 中景樹林（那個東西站的那一層）
+  for (let i = 0; i < 26; i++){
+    const twx = i * 46 + hash(i * 3.7) * 30;
+    const sx  = twx - (cam * .45) % (46 * 26);
+    if (sx > -30 && sx < W + 30) tree(sx, groundY(twx, 30, 30, 0.014), 1);
+  }
+
+  /* --- 霧 --- */
+  for (let i = 0; i < 6; i++){
+    const y = 92 + i * 14 + Math.sin(t * .3 + i) * 5;
+    const a = .052 - i * .006;
+    const fg = wx.createLinearGradient(0, y, 0, y + 20);
+    fg.addColorStop(0,  `rgba(${132 + i*4},${146 + i*4},${152},0)`);
+    fg.addColorStop(.5, `rgba(${132 + i*4},${146 + i*4},${152},${a})`);
+    fg.addColorStop(1,  `rgba(${132 + i*4},${146 + i*4},${152},0)`);
+    wx.fillStyle = fg;
+    wx.fillRect(0, y, W, 20);
+  }
+
+  // 近景（最暗的一層，壓在最前面）
+  terrain(cam, 12, 12, '#010203', 'rgba(60,80,96,.10)', 0.031, false);
+
+  /* --- 那個東西 --- */
+  stT -= dt;
+  if (stT <= 0){
+    if (st === S.HIDDEN){
+      close = !reduced && Math.random() < .18;
+      fx = close ? W/2 - 4 : 24 + Math.random() * (W - 60);
+      fu = close ? 3.8 + Math.random()*1.4 : 0.75 + Math.random() * .55;
+      st = S.FADE_IN;  stT = close ? .18 : .9;
+      if (close) shock = 1;
+    }
+    else if (st === S.FADE_IN){ st = S.STARE;    stT = close ? .55 : 1.4 + Math.random()*2.6; }
+    else if (st === S.STARE){   st = S.FADE_OUT; stT = close ? .12 : .7;
+                                if (close && !reduced) flash = 1; }
+    else { st = S.HIDDEN; stT = 1.8 + Math.random() * 4.0; close = false; }
+  }
+  if (st !== S.HIDDEN){
+    const p = st === S.FADE_IN  ? 1 - stT / (close ? .18 : .9)
+            : st === S.FADE_OUT ? stT / (close ? .12 : .7) : 1;
+    const baseY = close ? H - 6 : groundY(fx + cam * .45, 30, 30, 0.014) + 2;
+    const jitter = (Math.random() - .5) * (close ? 2.4 : .8);
+    figure(fx + jitter, baseY, fu, .26 + p * .66, .35 + p * .65 + Math.sin(t * 9) * .08);
+  }
+
+  /* --- 火把 --- */
+  for (const tc of torches){
+    const sx = ((tc.wx - cam * .45) % 1400 + 1400) % 1400;
+    if (sx > -8 && sx < W + 8){
+      const gy = groundY(tc.wx, 30, 30, 0.014);
+      const fl = .55 + Math.random() * .45;
+      wx.save();
+      wx.globalCompositeOperation = 'lighter';
+      const rg = wx.createRadialGradient(sx, gy - 12, 0, sx, gy - 12, 30 * fl);
+      rg.addColorStop(0, `rgba(255,170,70,${.30 * fl})`);
+      rg.addColorStop(1, 'rgba(255,140,40,0)');
+      wx.fillStyle = rg; wx.fillRect(sx - 34, gy - 46, 68, 68);
+      wx.restore();
+      wx.fillStyle = '#2b1c0e'; wx.fillRect(sx - 1, gy - 12, 2, 12);
+      wx.fillStyle = `rgba(255,${150 + fl*70|0},60,${.7 + fl*.3})`; wx.fillRect(sx - 1, gy - 15, 2, 3);
+    }
+  }
+
+  /* --- 雨 + 塵 --- */
+  wx.strokeStyle = 'rgba(160,180,200,.16)'; wx.lineWidth = 1; wx.beginPath();
+  for (const r of rain){
+    r.y += r.v * dt; r.x -= r.v * dt * .18;
+    if (r.y > H){ r.y = -4; r.x = Math.random() * W * 1.2; }
+    wx.moveTo(r.x | 0, r.y | 0); wx.lineTo((r.x - r.l * .18) | 0, (r.y + r.l) | 0);
+  }
+  wx.stroke();
+  for (const d of dust){
+    d.p += dt * d.s; d.x += Math.sin(d.p) * .22; d.y -= d.s * .12;
+    if (d.y < 0){ d.y = H; d.x = Math.random() * W; }
+    wx.fillStyle = `rgba(190,210,190,${.05 + Math.abs(Math.sin(d.p)) * .1})`;
+    wx.fillRect(d.x | 0, d.y | 0, 1, 1);
+  }
+
+  /* --- 暈影 --- */
+  const vg = wx.createRadialGradient(W/2, H/2, H*.36, W/2, H/2, H*.98);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.70)');
+  wx.fillStyle = vg; wx.fillRect(0, 0, W, H);
+
+  /* ================= 呈現：故障 / 色差 / 雜訊 ================= */
+  glitch = Math.max(0, glitch - dt * 1.5);
+  shock  = Math.max(0, shock  - dt * 2.2);
+  if (!reduced && Math.random() < .012) glitch = .4 + Math.random() * .6;
+  if (st === S.STARE && !reduced && Math.random() < .05) glitch = Math.max(glitch, .35);
+  const g = Math.min(1, glitch + shock);
+
+  const scale = Math.max(cv.width / W, cv.height / H);
+  const dw = W * scale, dh = H * scale;
+  const ox = (cv.width - dw) / 2, oy = (cv.height - dh) / 2;
+
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cv.width, cv.height);
+
+  if (g > .02){                                  // RGB 色差
+    const sh = g * 5;                            // 位移量（內部像素）
+    for (const [c, c2] of [['#ff2b2b', ax], ['#2bffff', bx]]){
+      c2.globalCompositeOperation = 'source-over';
+      c2.clearRect(0, 0, W, H); c2.drawImage(world, 0, 0);
+      c2.globalCompositeOperation = 'multiply';
+      c2.fillStyle = c; c2.fillRect(0, 0, W, H);
+      c2.globalCompositeOperation = 'source-over';
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.drawImage(tmpA, ox - sh * scale, oy, dw, dh);
+    ctx.drawImage(tmpB, ox + sh * scale, oy, dw, dh);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = .45; ctx.drawImage(world, ox, oy, dw, dh); ctx.globalAlpha = 1;
+  } else {
+    ctx.drawImage(world, ox, oy, dw, dh);
+  }
+
+  if (g > .1){                                   // 水平撕裂
+    const bands = 10;
+    for (let i = 0; i < bands; i++){
+      if (Math.random() > .45) continue;
+      const sy = (Math.random() * H) | 0, sh = 2 + (Math.random() * 9 | 0);
+      const off = (Math.random() - .5) * 34 * g;
+      ctx.drawImage(world, 0, sy, W, sh, ox + off * scale, oy + sy * scale, dw, sh * scale);
+    }
+  }
+
+  // 顆粒雜訊
+  const id = nx.createImageData(noise.width, noise.height), d8 = id.data;
+  for (let i = 0; i < d8.length; i += 4){
+    const v = Math.random() * 255;
+    d8[i] = d8[i+1] = d8[i+2] = v;
+    d8[i+3] = 12 + g * 46;
+  }
+  nx.putImageData(id, 0, 0);
+  ctx.globalCompositeOperation = 'overlay';
+  ctx.drawImage(noise, 0, 0, cv.width, cv.height);
+  ctx.globalCompositeOperation = 'source-over';
+
+  // 掃描線
+  ctx.fillStyle = 'rgba(0,0,0,.16)';
+  for (let y = 0; y < cv.height; y += 3) ctx.fillRect(0, y, cv.width, 1);
+
+  // 一瞬間的白
+  if (flash > 0){
+    ctx.fillStyle = `rgba(226,238,255,${flash * .55})`;
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    flash = Math.max(0, flash - dt * 4.5);
+  }
+
+  /* --- 低語 & HUD --- */
+  wTimer -= dt;
+  if (wTimer <= 0){ speak(); wTimer = 7 + Math.random() * 9; }
+  hudT -= dt;
+  if (hudT <= 0){ drawHud(t); hudT = .12; }
+
+  audio.tick(t, st !== S.HIDDEN, g);
+  requestAnimationFrame(frame);
+}
+
+/* ================= 聲音 ================= */
+const audio = (() => {
+  let ac = null, master = null, on = false, nextThump = 0;
+  function start(){
+    if (ac) return;
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination);
+
+    // 低頻嗡鳴（兩個失諧鋸齒波）
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 220; lp.Q.value = 6;
+    lp.connect(master);
+    for (const f of [41.2, 41.9, 61.7]){
+      const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
+      const gg = ac.createGain(); gg.gain.value = .16;
+      o.connect(gg).connect(lp); o.start();
+    }
+    // 風聲（濾波白雜訊）
+    const len = ac.sampleRate * 3, buf = ac.createBuffer(1, len, ac.sampleRate), ch = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * .4;
+    const src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
+    const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 480; bp.Q.value = .7;
+    const wg = ac.createGain(); wg.gain.value = .10;
+    src.connect(bp).connect(wg).connect(master); src.start();
+    // 緩慢起伏的風
+    const lfo = ac.createOscillator(); lfo.frequency.value = .07;
+    const lg = ac.createGain(); lg.gain.value = 260;
+    lfo.connect(lg).connect(bp.frequency); lfo.start();
+  }
+  function thump(vol){
+    if (!ac) return;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(96, ac.currentTime);
+    o.frequency.exponentialRampToValueAtTime(28, ac.currentTime + .34);
+    g.gain.setValueAtTime(vol, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + .5);
+    o.connect(g).connect(master); o.start(); o.stop(ac.currentTime + .55);
+  }
+  return {
+    toggle(){
+      start();
+      on = !on;
+      if (ac.state === 'suspended') ac.resume();
+      master.gain.setTargetAtTime(on ? .5 : 0, ac.currentTime, .35);
+      return on;
+    },
+    tick(t, present, g){
+      if (!on || !ac) return;
+      if (t > nextThump){                 // 心跳：它出現時更急促
+        thump(present ? .5 : .22);
+        nextThump = t + (present ? .62 : 1.9) + Math.random() * .4;
+      }
+      if (g > .5 && Math.random() < .04) thump(.16);
+    }
+  };
+})();
+
+/* ================= UI ================= */
+const gate = document.getElementById('gate');
+gate.addEventListener('click', () => {
+  gate.classList.add('off');
+  setTimeout(() => gate.remove(), 1200);
+  if (!audio.toggle()) audio.toggle();          // 進場即開聲
+  document.getElementById('snd').textContent = '聲音: 開';
+});
+document.getElementById('snd').addEventListener('click', e => {
+  e.stopPropagation();
+  e.currentTarget.textContent = '聲音: ' + (audio.toggle() ? '開' : '關');
+});
+document.getElementById('fs').addEventListener('click', e => {
+  e.stopPropagation();
+  document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+});
+
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
