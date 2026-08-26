@@ -104,6 +104,10 @@ def run_selftest(verbose: bool = True) -> int:
             print(f"[{mark}] {name}{'  -- ' + detail if detail else ''}")
 
     # 1. Cryptography ------------------------------------------------------
+    if verbose:
+        note = "" if crypto.backend == "cryptography" else \
+            "  (pure Python -- fine for this test, not for real traffic)"
+        print(f"backend: {crypto.backend}{note}\n")
     a_private, a_public = crypto.generate_keypair()
     b_private, b_public = crypto.generate_keypair()
     report(

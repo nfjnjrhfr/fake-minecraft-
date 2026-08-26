@@ -335,3 +335,20 @@ python3 build-ipad-file.py        # 產生 pyvpn-ipad.py，約 53 KB
 **不能跑的：隧道本身。** 建立 TUN 介面需要 `/dev/net/tun` 與 root，iOS 兩者
 都不給 App。要真的載送流量還是得有一台 Linux 機器。
 
+## 在 a-Shell 上執行(免費,不用 Pyto 完整版)
+
+[a-Shell](https://apps.apple.com/app/id1473805438) 是免費的 iOS 終端機,
+內建 Python。它一樣沒有 `cryptography` 套件,但程式現在不需要了:找不到那個
+套件時,`crypto.py` 會自動改用 `purecrypto.py` 的純 Python 實作。
+
+```sh
+python3 pyvpn-ipad.py          # 跑自我測試,會顯示 backend: pure-python
+```
+
+純 Python 的 X25519 與 ChaCha20-Poly1305 經過與 `cryptography` 套件的
+逐位元組比對,輸出完全相同。它比較慢,而且**不是常數時間**,所以適合
+自我測試與學習,不適合用來保護真實流量 —— 有 `cryptography` 時(例如
+Pyto 完整版或一般電腦)會自動用回它。
+
+隧道本身在 a-Shell 一樣跑不了,原因和 Pyto 相同:iOS 不給 TUN 介面與 root。
+

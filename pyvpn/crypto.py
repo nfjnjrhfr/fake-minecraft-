@@ -23,15 +23,30 @@ import hmac as _hmac
 import os
 import time
 
-from cryptography.hazmat.primitives.asymmetric.x25519 import (
-    X25519PrivateKey,
-    X25519PublicKey,
-)
-from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-from cryptography.exceptions import InvalidTag
+# The compiled cryptography package is used when present. When it is not --
+# on a stock Python with nothing installable, such as an iOS terminal -- the
+# pure-Python backend takes over. Both produce identical bytes; the pure one
+# is not constant-time, so it is meant for self-tests and learning, not for
+# guarding real traffic. `backend` records which one is active.
+try:
+    from cryptography.hazmat.primitives.asymmetric.x25519 import (
+        X25519PrivateKey,
+        X25519PublicKey,
+    )
+    from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+    from cryptography.exceptions import InvalidTag
+
+    backend = "cryptography"
+except ImportError:  # pragma: no cover - exercised on hosts without the library
+    from . import purecrypto as _pure
+    from .purecrypto import InvalidTag
+
+    X25519PrivateKey = X25519PublicKey = ChaCha20Poly1305 = None
+    backend = "pure-python"
 
 __all__ = [
     "InvalidTag",
+    "backend",
     "KEY_LEN",
     "TAG_LEN",
     "ZERO_KEY",
@@ -97,12 +112,17 @@ def kdf(key: bytes, data: bytes, outputs: int) -> list[bytes]:
 
 def generate_keypair() -> tuple[bytes, bytes]:
     """Return ``(private, public)`` as raw 32-byte X25519 keys."""
-    private = X25519PrivateKey.generate()
-    return _private_bytes(private), _public_bytes(private.public_key())
+    if backend == "cryptography":
+        private = X25519PrivateKey.generate()
+        return _private_bytes(private), _public_bytes(private.public_key())
+    private = os.urandom(32)
+    return private, _pure.x25519_base(private)
 
 
 def public_from_private(private: bytes) -> bytes:
-    return _public_bytes(X25519PrivateKey.from_private_bytes(private).public_key())
+    if backend == "cryptography":
+        return _public_bytes(X25519PrivateKey.from_private_bytes(private).public_key())
+    return _pure.x25519_base(private)
 
 
 def dh(private: bytes, peer_public: bytes) -> bytes:
@@ -112,9 +132,12 @@ def dh(private: bytes, peer_public: bytes) -> bytes:
     which would otherwise yield an all-zero shared secret that both an
     attacker and we can predict.
     """
-    shared = X25519PrivateKey.from_private_bytes(private).exchange(
-        X25519PublicKey.from_public_bytes(peer_public)
-    )
+    if backend == "cryptography":
+        shared = X25519PrivateKey.from_private_bytes(private).exchange(
+            X25519PublicKey.from_public_bytes(peer_public)
+        )
+    else:
+        shared = _pure.x25519(private, peer_public)
     if not any(shared):
         raise ValueError("peer supplied a low-order X25519 public key")
     return shared
@@ -152,11 +175,15 @@ def _nonce(counter: int) -> bytes:
 
 
 def aead_encrypt(key: bytes, counter: int, plaintext: bytes, aad: bytes) -> bytes:
-    return ChaCha20Poly1305(key).encrypt(_nonce(counter), plaintext, aad)
+    if backend == "cryptography":
+        return ChaCha20Poly1305(key).encrypt(_nonce(counter), plaintext, aad)
+    return _pure.chacha20poly1305_encrypt(key, _nonce(counter), plaintext, aad)
 
 
 def aead_decrypt(key: bytes, counter: int, ciphertext: bytes, aad: bytes) -> bytes:
-    return ChaCha20Poly1305(key).decrypt(_nonce(counter), ciphertext, aad)
+    if backend == "cryptography":
+        return ChaCha20Poly1305(key).decrypt(_nonce(counter), ciphertext, aad)
+    return _pure.chacha20poly1305_decrypt(key, _nonce(counter), ciphertext, aad)
 
 
 def random_bytes(count: int) -> bytes:
