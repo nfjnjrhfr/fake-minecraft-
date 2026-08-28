@@ -1,2 +1,50 @@
-# fake-minecraft-
-u8ujujujujujujujujujuujuujujujujuujujujujujjujjujujujuujjunjerivcfv dnds xdfbdehbhebhbdehbhbhrhbehebhderbhrvrdfgvfrfrevefvfegfhdevegdervgedryegehwrwehgerhwhrbhdbhdbdhbedbdiuheiuhur4ury4yeeyurheu4u44uyy56t4rueyrjdhjddbhdjebbhjejbhdwehjhejrhjedhjdjdndejndjnsdsjndsjndsjkkd.                                                                             67
+# iPad 狀態偵測器
+
+一個單一 HTML 檔案的 iPad 狀態偵測工具。用 iPad 的 Safari 開啟 `index.html`，就會即時列出瀏覽器能取得的所有裝置狀態，不需安裝任何 App、不需連線後端、不會上傳任何資料（全部運算都在本機完成）。
+
+## 使用方式
+
+三種擇一：
+
+1. **GitHub Pages**：在 repo 的 Settings → Pages 把來源設為 `main`（或本分支），再用 iPad 開啟產生的網址。
+2. **本機伺服器**：`npx http-server .` 然後用同一個 Wi-Fi 的 iPad 連到電腦 IP。
+3. **直接開檔**：把 `index.html` 傳到 iPad（AirDrop／iCloud 雲碟），在「檔案」App 中點開。
+   注意：以 `file://` 開啟時，定位、相機、動作感測器等需要安全環境的 API 會被 Safari 封鎖，建議用前兩種方式（HTTPS 或 localhost）才能測到完整功能。
+
+## 偵測項目
+
+| 分類 | 內容 |
+| --- | --- |
+| 裝置辨識 | iPad 判定（含 iPadOS 桌面版 UA 的觸控點數判定法）、機型推測、系統版本、瀏覽器與引擎、User-Agent |
+| 螢幕與顯示 | 邏輯尺寸／實際像素／DPR、方向與轉向次數、**實測更新率（可辨識 120Hz ProMotion）**、色深、Display P3 廣色域、HDR、GPU 與 WebGL |
+| 視窗與版面 | 視窗尺寸、**Split View／Slide Over／幕前調度判定**、捏合縮放倍率、安全區域邊界、虛擬鍵盤是否彈出 |
+| 電池與電源 | 電量／充電狀態（Safari 未實作 Battery API 時會明確標示）、**低耗電模式推測**、螢幕喚醒鎖定、省電資料模式 |
+| 網路 | 連線狀態、連線類型與頻寬估計、頁面載入耗時、是否為安全環境 |
+| 硬體與效能 | CPU 核心數、記憶體、JS 堆積、即時幀率、音訊取樣率、指標裝置類型 |
+| 輸入與指標 | **Apple Pencil 辨識（壓力、傾斜角、方位／高度角）**、同時觸控點數、實體鍵盤推測 |
+| 動作感測器 | 加速度、陀螺儀、裝置姿態、羅盤方位、取樣率（iOS 13+ 需按鈕授權） |
+| 定位 | 座標、精確度、海拔、速度、方向（需授權） |
+| 媒體裝置 | 攝影機／麥克風／音訊輸出列舉、畫中畫、AirPlay、螢幕錄影支援 |
+| 系統偏好 | 深色模式、減少動態效果、減少透明度、對比偏好、動態字級、語言、時區 |
+| 儲存空間 | 瀏覽器配額用量、localStorage／IndexedDB／Cache、私密瀏覽推測 |
+| App 與頁面狀態 | 前景／背景、焦點、停留時間、全螢幕、是否以 PWA 獨立執行 |
+| 權限狀態 | 定位、相機、麥克風、通知、永久儲存、剪貼簿 |
+| API 支援矩陣 | 30 項常見 Web API 在本機的可用性一覽 |
+
+畫面上方按鈕可請求需要授權的項目（動作感測器、定位、媒體裝置、螢幕喚醒、全螢幕），最右側的「匯出 JSON」會把當下所有偵測結果整理成 JSON，可複製或用系統分享表單送出。
+
+## 即時更新
+
+以下狀態會透過事件監聽自動更新，數值變動時該列會閃一下：轉向、視窗縮放、捏合縮放、虛擬鍵盤、上下線、切到背景、深色模式切換、電量變化、指標與觸控、感測器數值、時間與幀率。
+
+## 已知限制
+
+Apple 基於隱私，Safari 並未提供部分硬體資訊，這些項目會標示為「不支援」而非留白：
+
+- **電池電量**：Safari 未實作 Battery API（在 iPad 上此欄多半會是「不支援」）。
+- **裝置型號與序號**：無任何 Web API 可取得，本工具改以螢幕邏輯解析度＋像素密度比對出「推測機型」。
+- **iPad 實際儲存容量**：只能取得瀏覽器分配給網站的配額，不是裝置總容量。
+- **Wi-Fi／行動網路區分**：Safari 未實作 Network Information API。
+- **低耗電模式**：無官方 API，本工具以「靜音影片自動播放是否被封鎖」推論，標示為「推測」，僅供參考。
+
+標示「推測」的欄位都是行為特徵推論，不保證準確；標示「不支援」代表瀏覽器沒有該 API，並非 iPad 故障。

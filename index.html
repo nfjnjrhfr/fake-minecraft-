@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b1020">
+<title>iPad 狀態偵測器</title>
+<style>
+  :root{
+    --bg:#0b1020; --card:#141a2e; --card2:#1b2340; --line:#28324f;
+    --text:#e8ecf7; --dim:#8e9ab8;
+    --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --info:#60a5fa; --muted:#7c88a6;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#f2f4fa; --card:#ffffff; --card2:#f6f8ff; --line:#dde3f0;
+      --text:#131a2b; --dim:#5b6785;
+      --ok:#15803d; --warn:#b45309; --bad:#b91c1c; --info:#1d4ed8; --muted:#6b7590;
+    }
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",system-ui,sans-serif;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  header{padding:22px 18px 10px;max-width:1400px;margin:0 auto}
+  h1{margin:0 0 6px;font-size:24px;letter-spacing:.5px}
+  .sub{color:var(--dim);font-size:13px}
+  .summary{
+    margin-top:14px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;
+    background:var(--card);display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center
+  }
+  .chip{
+    font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);
+    background:var(--card2);color:var(--dim);white-space:nowrap
+  }
+  .chip b{color:var(--text);font-weight:600}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;padding:12px 18px;max-width:1400px;margin:0 auto}
+  button{
+    font:inherit;font-size:14px;padding:10px 14px;border-radius:11px;cursor:pointer;
+    border:1px solid var(--line);background:var(--card);color:var(--text);
+    min-height:44px; touch-action:manipulation
+  }
+  button:active{background:var(--card2);transform:scale(.98)}
+  main{
+    max-width:1400px;margin:0 auto;padding:6px 18px 60px;
+    display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(330px,1fr))
+  }
+  section{
+    border:1px solid var(--line);border-radius:16px;background:var(--card);
+    overflow:hidden;display:flex;flex-direction:column
+  }
+  section > h2{
+    margin:0;padding:12px 15px;font-size:14px;letter-spacing:.4px;
+    background:var(--card2);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:8px
+  }
+  section > h2 .ico{font-size:16px}
+  .rows{padding:4px 6px}
+  .row{
+    display:flex;gap:10px;align-items:baseline;justify-content:space-between;
+    padding:7px 9px;border-radius:9px
+  }
+  .row + .row{border-top:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
+  .k{color:var(--dim);font-size:13px;flex:0 0 auto;max-width:52%}
+  .v{
+    text-align:right;font-size:13px;word-break:break-word;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace
+  }
+  .v small{display:block;color:var(--muted);font-size:11px;font-family:inherit;margin-top:2px}
+  .t-ok{color:var(--ok)} .t-warn{color:var(--warn)} .t-bad{color:var(--bad)}
+  .t-info{color:var(--info)} .t-muted{color:var(--muted)}
+  @keyframes flash{from{background:color-mix(in srgb,var(--info) 30%,transparent)}to{background:transparent}}
+  .row.changed{animation:flash 1.1s ease-out}
+  .act{padding:10px 12px 13px;display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid var(--line)}
+  .act button{font-size:13px;padding:8px 12px;min-height:40px}
+  .matrix{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;padding:8px 14px 14px;font-size:12.5px}
+  .matrix div{display:flex;gap:6px;align-items:center;padding:3px 0}
+  .matrix .m-y::before{content:"●";color:var(--ok)}
+  .matrix .m-n::before{content:"○";color:var(--bad)}
+  textarea{
+    width:100%;height:230px;background:var(--card2);color:var(--text);border:1px solid var(--line);
+    border-radius:12px;padding:11px;font:12px/1.45 ui-monospace,Menlo,monospace
+  }
+  footer{max-width:1400px;margin:0 auto;padding:0 18px 40px;color:var(--muted);font-size:12px}
+  .pad{padding:0 15px 14px;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>iPad 狀態偵測器</h1>
+  <div class="sub">在 iPad 的 Safari 開啟本頁，即可即時偵測裝置、螢幕、電源、網路、感測器與系統偏好等狀態。</div>
+  <div class="summary" id="summary"></div>
+</header>
+
+<div class="bar">
+  <button id="btn-refresh">重新偵測全部</button>
+  <button id="btn-motion">啟用動作感測器</button>
+  <button id="btn-geo">取得定位</button>
+  <button id="btn-media">列出媒體裝置</button>
+  <button id="btn-wake">保持螢幕喚醒</button>
+  <button id="btn-full">全螢幕</button>
+  <button id="btn-export">匯出 JSON</button>
+</div>
+
+<main id="main"></main>
+
+<footer>
+  <p>說明：瀏覽器基於隱私與安全，只開放部分裝置資訊。標示「不支援」代表 Safari／iPadOS 未提供該 API，並非裝置故障；標示「推測」的項目是以行為特徵推論，僅供參考。</p>
+</footer>
+
+<script>
+"use strict";
+
+/* ───────────────────────── 共用工具 ───────────────────────── */
+
+const $ = (s, r = document) => r.querySelector(s);
+const el = (tag, cls, txt) => { const n = document.createElement(tag); if (cls) n.className = cls; if (txt != null) n.textContent = txt; return n; };
+const fmtBytes = n => {
+  if (n == null || !isFinite(n)) return null;
+  const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return n.toFixed(n >= 100 || i === 0 ? 0 : 1) + " " + u[i];
+};
+const mq = q => window.matchMedia(q).matches;
+const has = (obj, key) => { try { return key in obj; } catch { return false; } };
+
+// 每個欄位的取值函式回傳 {text, tone, note}
+const V = (text, tone, note) => ({ text: text == null ? "—" : String(text), tone: tone || "", note });
+const NA = (why = "此瀏覽器不支援") => V("不支援", "muted", why);
+const BOOL = (b, yes = "是", no = "否") => V(b ? yes : no, b ? "ok" : "muted");
+
+/* live：由事件／非同步 API 持續更新的狀態存放區 */
+const live = {
+  battery: null,          // BatteryManager
+  motion: null,           // 最新 devicemotion
+  orient: null,           // 最新 deviceorientation
+  motionPerm: "未請求",
+  geo: null, geoErr: null, geoPerm: "未請求",
+  devices: null, devicesErr: null,
+  storage: null,
+  fps: null, frameMs: null,
+  pointer: null, touchCount: 0, maxTouchSeen: 0,
+  wakeLock: null, wakeLockState: "關閉",
+  lowPower: "未偵測",
+  gpu: null,
+  permissions: {},
+  visibleSince: Date.now(),
+  hiddenCount: 0,
+  orientationChanges: 0,
+};
+
+/* ───────────────────────── 裝置辨識 ───────────────────────── */
+
+// iPadOS 13 起，Safari 預設以「桌面版」UA 呈現（UA 內為 Macintosh），
+// 需靠 maxTouchPoints 才能辨識出實際上是 iPad。
+function detectDevice() {
+  const ua = navigator.userAgent;
+  const touch = navigator.maxTouchPoints || 0;
+  const iPadUA = /iPad/.test(ua);
+  const iPadDesktopUA = /Macintosh/.test(ua) && touch > 1;
+  const iPhone = /iPhone|iPod/.test(ua);
+  const isIPad = iPadUA || iPadDesktopUA;
+  let kind = "非 iPad";
+  if (iPadUA) kind = "iPad（行動版 UA）";
+  else if (iPadDesktopUA) kind = "iPad（桌面版 UA，靠觸控點數判定）";
+  else if (iPhone) kind = "iPhone / iPod touch";
+  else if (/Android/.test(ua)) kind = "Android";
+  else if (/Macintosh/.test(ua)) kind = "Mac（無觸控）";
+  else if (/Windows/.test(ua)) kind = "Windows";
+
+  const ver = ua.match(/(?:iPhone )?OS (\d+)[_.](\d+)(?:[_.](\d+))?/) || ua.match(/Version\/(\d+)\.(\d+)/);
+  const safari = ua.match(/Version\/([\d.]+).*Safari/);
+  const engine = /CriOS/.test(ua) ? "Chrome for iOS（WebKit）"
+    : /FxiOS/.test(ua) ? "Firefox for iOS（WebKit）"
+    : /EdgiOS/.test(ua) ? "Edge for iOS（WebKit）"
+    : safari ? "Safari" : "其他瀏覽器";
+
+  return { ua, touch, isIPad, kind, engine, safariVer: safari ? safari[1] : null, osVer: ver ? ver.slice(1).filter(Boolean).join(".") : null };
+}
+
+// 依「直向邏輯解析度 + 像素密度」推測機型（Safari 不提供型號）
+const MODEL_TABLE = {
+  "768x1024@1": "iPad 1 / 2 / mini（第 1 代，非 Retina）",
+  "768x1024@2": "iPad 3–6 / Air 1–2 / Pro 9.7\" / mini 2–5",
+  "744x1133@2": "iPad mini（第 6–7 代）",
+  "810x1080@2": "iPad 10.2\"（第 7–9 代）",
+  "820x1180@2": "iPad 10.9\"（第 10–11 代）/ iPad Air（第 4–5 代）",
+  "834x1112@2": "iPad Pro 10.5\" / iPad Air（第 3 代）",
+  "834x1194@2": "iPad Pro 11\"（第 1–4 代）/ iPad Air 11\"（M2 以後）",
+  "1024x1366@2": "iPad Pro 12.9\"（第 1–6 代）/ iPad Air 13\"（M2 以後）",
+  "1032x1376@2": "iPad Pro 11\"（M4 以後，OLED）",
+  "1064x1376@2": "iPad Pro 13\"（M4 以後，OLED）",
+};
+function guessModel() {
+  const w = Math.min(screen.width, screen.height);
+  const h = Math.max(screen.width, screen.height);
+  const dpr = Math.round(window.devicePixelRatio || 1);
+  const key = w + "x" + h + "@" + dpr;
+  return { key, name: MODEL_TABLE[key] || null };
+}
+
+function safeArea() {
+  const p = el("div");
+  p.style.cssText = "position:fixed;top:0;left:0;visibility:hidden;" +
+    "padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)";
+  document.body.appendChild(p);
+  const cs = getComputedStyle(p);
+  const r = { top: parseFloat(cs.paddingTop), right: parseFloat(cs.paddingRight), bottom: parseFloat(cs.paddingBottom), left: parseFloat(cs.paddingLeft) };
+  p.remove();
+  return r;
+}
+
+function gpuInfo() {
+  if (live.gpu !== null) return live.gpu;
+  try {
+    const c = document.createElement("canvas");
+    const gl = c.getContext("webgl2") || c.getContext("webgl");
+    if (!gl) return (live.gpu = { renderer: null, version: null });
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    live.gpu = {
+      renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+      vendor: dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+      version: gl.getParameter(gl.VERSION),
+      maxTexture: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+      webgl2: !!c.getContext("webgl2"),
+    };
+  } catch { live.gpu = { renderer: null }; }
+  return live.gpu;
+}
+
+/* ───────────────────────── 卡片與欄位定義 ───────────────────────── */
+
+const D = detectDevice();
+
+const CARDS = [
+  {
+    id: "device", title: "裝置辨識", icon: "📱",
+    fields: [
+      ["判定結果", () => V(D.kind, D.isIPad ? "ok" : "warn")],
+      ["推測機型", () => { const m = guessModel(); return V(m.name || "無法比對（" + m.key + "）", m.name ? "ok" : "muted", "依邏輯解析度 " + m.key + " 推測"); }],
+      ["作業系統版本", () => D.osVer ? V(D.osVer, "", "取自 User-Agent，桌面版 UA 下可能為 macOS 版號") : V("無法取得", "muted")],
+      ["瀏覽器", () => V(D.engine + (D.safariVer ? " " + D.safariVer : ""))],
+      ["排版引擎", () => V("WebKit（iPadOS 上所有瀏覽器皆同）", "muted")],
+      ["最大觸控點數", () => V(D.touch, D.touch > 1 ? "ok" : "muted")],
+      ["平台字串", () => V(navigator.platform || "未提供")],
+      ["CPU 架構提示", () => V(navigator.userAgentData?.platform || (D.isIPad ? "Apple Silicon（A/M 系列）" : "未知"), "muted")],
+      ["User-Agent", () => V(D.ua)],
+    ],
+  },
+  {
+    id: "screen", title: "螢幕與顯示", icon: "🖥",
+    fields: [
+      ["螢幕邏輯尺寸", () => V(screen.width + " × " + screen.height + " pt")],
+      ["實際像素", () => V(Math.round(screen.width * devicePixelRatio) + " × " + Math.round(screen.height * devicePixelRatio) + " px")],
+      ["像素密度 DPR", () => V(devicePixelRatio + "×", devicePixelRatio >= 2 ? "ok" : "")],
+      ["可用區域", () => V(screen.availWidth + " × " + screen.availHeight + " pt")],
+      ["方向", () => {
+        const t = screen.orientation?.type || (window.innerWidth > window.innerHeight ? "landscape" : "portrait");
+        const zh = t.startsWith("portrait") ? "直向" : "橫向";
+        return V(zh + "（" + t + "）", "info", "角度 " + (screen.orientation?.angle ?? window.orientation ?? "?") + "°；本次已轉向 " + live.orientationChanges + " 次");
+      }],
+      ["更新率（實測）", () => live.fps == null ? V("量測中…", "muted")
+        : V(live.fps + " fps", live.fps >= 100 ? "ok" : "", "每幀 " + live.frameMs + " ms" + (live.fps >= 100 ? "，具備 ProMotion 120Hz" : "")) ],
+      ["色彩深度", () => V(screen.colorDepth + " bit")],
+      ["色域", () => V(mq("(color-gamut: p3)") ? "Display P3（廣色域）" : mq("(color-gamut: srgb)") ? "sRGB" : "未知", mq("(color-gamut: p3)") ? "ok" : "")],
+      ["HDR / 動態範圍", () => mq("(dynamic-range: high)") ? V("HDR", "ok") : V("SDR")],
+      ["反色 / 對比偏好", () => V((mq("(inverted-colors: inverted)") ? "反色開啟；" : "") + (mq("(prefers-contrast: more)") ? "高對比" : mq("(prefers-contrast: less)") ? "低對比" : "標準對比"))],
+      ["GPU", () => { const g = gpuInfo(); return g.renderer ? V(g.renderer, "", (g.webgl2 ? "WebGL 2" : "WebGL 1") + "，最大貼圖 " + g.maxTexture + "px") : NA("WebGL 無法初始化"); }],
+    ],
+  },
+  {
+    id: "viewport", title: "視窗與版面", icon: "🪟",
+    fields: [
+      ["視窗大小", () => V(window.innerWidth + " × " + window.innerHeight + " pt")],
+      ["外框大小", () => V(window.outerWidth + " × " + window.outerHeight + " pt")],
+      ["分割視窗狀態（推測）", () => {
+        const full = Math.abs(window.innerWidth - screen.width) < 30;
+        const ratio = (window.innerWidth / screen.width * 100).toFixed(0);
+        return full ? V("全螢幕（單一 App）", "ok")
+          : V("Split View / Slide Over / 幕前調度", "warn", "視窗僅佔螢幕寬度 " + ratio + "%");
+      }],
+      ["視覺視窗（縮放）", () => {
+        const vv = window.visualViewport;
+        if (!vv) return NA();
+        return V(Math.round(vv.width) + " × " + Math.round(vv.height) + " @ " + vv.scale.toFixed(2) + "×",
+          vv.scale > 1.01 ? "warn" : "", "偏移 " + Math.round(vv.offsetLeft) + "," + Math.round(vv.offsetTop) + "；捏合縮放會即時變動");
+      }],
+      ["安全區域邊界", () => { const s = safeArea(); return V(`上 ${s.top} / 右 ${s.right} / 下 ${s.bottom} / 左 ${s.left}`, "", "含瀏海與 Home 指示器留白"); }],
+      ["捲動位置", () => V(Math.round(window.scrollX) + ", " + Math.round(window.scrollY))],
+      ["虛擬鍵盤（推測）", () => {
+        const vv = window.visualViewport;
+        if (!vv) return NA();
+        const gap = window.innerHeight - vv.height;
+        return gap > 120 ? V("已彈出（遮蔽約 " + Math.round(gap) + " pt）", "warn") : V("未彈出", "muted");
+      }],
+    ],
+  },
+  {
+    id: "power", title: "電池與電源", icon: "🔋",
+    fields: [
+      ["電池 API", () => live.battery ? V("可用", "ok") : NA("Safari 基於隱私未實作 Battery API")],
+      ["電量", () => live.battery ? V(Math.round(live.battery.level * 100) + "%", live.battery.level > .2 ? "ok" : "bad") : V("無法取得", "muted")],
+      ["充電中", () => live.battery ? BOOL(live.battery.charging, "充電中", "使用電池") : V("無法取得", "muted")],
+      ["充飽剩餘", () => live.battery && isFinite(live.battery.chargingTime) && live.battery.chargingTime > 0 ? V(Math.round(live.battery.chargingTime / 60) + " 分鐘") : V("—", "muted")],
+      ["可用時間", () => live.battery && isFinite(live.battery.dischargingTime) && live.battery.dischargingTime > 0 ? V(Math.round(live.battery.dischargingTime / 60) + " 分鐘") : V("—", "muted")],
+      ["低耗電模式（推測）", () => V(live.lowPower, live.lowPower === "疑似開啟" ? "warn" : live.lowPower === "疑似關閉" ? "ok" : "muted", "以「靜音影片自動播放是否被封鎖」推論，僅供參考")],
+      ["螢幕喚醒鎖定", () => has(navigator, "wakeLock") ? V(live.wakeLockState, live.wakeLock ? "ok" : "muted") : NA("需 iPadOS 16.4 以上")],
+      ["省電資料模式", () => navigator.connection ? BOOL(navigator.connection.saveData, "開啟", "關閉") : NA()],
+    ],
+    actions: [["probe-power", "重新推測低耗電模式"]],
+  },
+  {
+    id: "network", title: "網路", icon: "🌐",
+    fields: [
+      ["連線狀態", () => BOOL(navigator.onLine, "已連線", "離線")],
+      ["連線類型", () => navigator.connection?.effectiveType ? V(navigator.connection.effectiveType.toUpperCase(), "ok") : NA("Safari 未實作 Network Information API")],
+      ["實體連線", () => navigator.connection?.type ? V(navigator.connection.type) : V("無法取得（Wi-Fi / 行動網路無法區分）", "muted")],
+      ["下行頻寬估計", () => navigator.connection?.downlink != null ? V(navigator.connection.downlink + " Mbps") : V("—", "muted")],
+      ["往返延遲估計", () => navigator.connection?.rtt != null ? V(navigator.connection.rtt + " ms") : V("—", "muted")],
+      ["頁面載入耗時", () => { const n = performance.getEntriesByType("navigation")[0]; return n ? V(Math.round(n.duration) + " ms", "", "類型：" + n.type) : V("—", "muted"); }],
+      ["頁面來源", () => V(location.protocol + "//" + (location.host || "本機檔案"), location.protocol === "https:" ? "ok" : "warn", location.protocol === "https:" ? "安全環境，感測器 API 可用" : "非 HTTPS：感測器／定位等 API 會被封鎖")],
+    ],
+  },
+  {
+    id: "hardware", title: "硬體與效能", icon: "⚙️",
+    fields: [
+      ["CPU 邏輯核心數", () => navigator.hardwareConcurrency ? V(navigator.hardwareConcurrency + " 核") : NA()],
+      ["記憶體容量", () => navigator.deviceMemory ? V(navigator.deviceMemory + " GB 以上", "", "瀏覽器會取整模糊化") : NA("Safari 未提供 deviceMemory")],
+      ["JS 堆積使用量", () => performance.memory ? V(fmtBytes(performance.memory.usedJSHeapSize), "", "上限 " + fmtBytes(performance.memory.jsHeapSizeLimit)) : NA("僅 Chromium 提供")],
+      ["目前幀率", () => live.fps == null ? V("量測中…", "muted") : V(live.fps + " fps", live.fps >= 55 ? "ok" : "warn")],
+      ["音訊取樣率", () => { const A = window.AudioContext || window.webkitAudioContext; if (!A) return NA(); try { const c = new A(); const r = c.sampleRate; c.close(); return V(r + " Hz"); } catch { return V("無法取得", "muted"); } }],
+      ["觸控支援", () => BOOL("ontouchstart" in window, "支援", "不支援")],
+      ["Apple Pencil 懸停", () => mq("(hover: hover)") ? V("環境支援懸停（Pencil / 觸控板）", "ok") : V("僅觸控，無懸停", "muted")],
+      ["主要指標裝置", () => V(mq("(pointer: coarse)") ? "粗略（手指）" : mq("(pointer: fine)") ? "精確（觸控板 / Pencil）" : "未知")],
+    ],
+  },
+  {
+    id: "input", title: "輸入與指標", icon: "✍️",
+    fields: [
+      ["最近輸入類型", () => {
+        const p = live.pointer;
+        if (!p) return V("請在畫面上點一下 / 用 Pencil 畫一下", "muted");
+        const zh = { touch: "手指觸控", pen: "Apple Pencil", mouse: "滑鼠 / 觸控板" }[p.type] || p.type;
+        return V(zh, p.type === "pen" ? "ok" : "info", p.time);
+      }],
+      ["壓力值", () => live.pointer ? V(live.pointer.pressure.toFixed(3), live.pointer.pressure > 0 ? "ok" : "muted", "Pencil 可感壓，手指恆為 0 或 0.5") : V("—", "muted")],
+      ["傾斜角", () => live.pointer ? V("X " + live.pointer.tiltX + "° / Y " + live.pointer.tiltY + "°") : V("—", "muted")],
+      ["方位／高度角", () => live.pointer && live.pointer.azimuth != null ? V(live.pointer.azimuth.toFixed(2) + " / " + live.pointer.altitude.toFixed(2) + " rad") : V("—", "muted")],
+      ["同時觸控點", () => V(live.touchCount, live.touchCount > 0 ? "info" : "muted", "本次最多同時偵測到 " + live.maxTouchSeen + " 點")],
+      ["實體鍵盤（推測）", () => V(mq("(hover: hover) and (pointer: fine)") ? "疑似已連接鍵盤/觸控板" : "未偵測到", mq("(hover: hover)") ? "ok" : "muted")],
+      ["震動回饋", () => has(navigator, "vibrate") ? V("支援", "ok") : NA("iPadOS 不支援 Vibration API")],
+    ],
+  },
+  {
+    id: "motion", title: "動作與方位感測器", icon: "🧭",
+    fields: [
+      ["權限狀態", () => V(live.motionPerm, live.motionPerm === "granted" ? "ok" : live.motionPerm === "denied" ? "bad" : "warn", "iOS 13+ 需使用者手動授權")],
+      ["加速度（含重力）", () => { const m = live.motion?.accelerationIncludingGravity; return m ? V(`x ${m.x?.toFixed(2)} y ${m.y?.toFixed(2)} z ${m.z?.toFixed(2)}`, "info") : V("尚未授權或無資料", "muted"); }],
+      ["加速度（去重力）", () => { const m = live.motion?.acceleration; return m && m.x != null ? V(`x ${m.x.toFixed(2)} y ${m.y.toFixed(2)} z ${m.z.toFixed(2)}`) : V("—", "muted"); }],
+      ["陀螺儀角速度", () => { const r = live.motion?.rotationRate; return r && r.alpha != null ? V(`α ${r.alpha.toFixed(1)} β ${r.beta.toFixed(1)} γ ${r.gamma.toFixed(1)}`) : V("—", "muted"); }],
+      ["裝置姿態", () => { const o = live.orient; return o ? V(`α ${o.alpha?.toFixed(1)} β ${o.beta?.toFixed(1)} γ ${o.gamma?.toFixed(1)}`, "info", "α 為指北角、β 前後傾、γ 左右傾") : V("尚未授權或無資料", "muted"); }],
+      ["羅盤方位", () => { const o = live.orient; const h = o && (o.webkitCompassHeading ?? (o.alpha != null ? 360 - o.alpha : null)); return h != null ? V(Math.round(h) + "°", "ok") : V("—", "muted"); }],
+      ["感測器取樣率", () => live.motion?.interval ? V((1000 / live.motion.interval).toFixed(0) + " Hz") : V("—", "muted")],
+    ],
+    actions: [["btn-motion2", "請求感測器權限"]],
+  },
+  {
+    id: "geo", title: "定位", icon: "📍",
+    fields: [
+      ["權限狀態", () => V(live.geoPerm, live.geoPerm === "granted" ? "ok" : live.geoPerm === "denied" ? "bad" : "warn")],
+      ["座標", () => live.geo ? V(live.geo.coords.latitude.toFixed(5) + ", " + live.geo.coords.longitude.toFixed(5), "ok") : V(live.geoErr || "尚未取得", live.geoErr ? "bad" : "muted")],
+      ["精確度", () => live.geo ? V("±" + Math.round(live.geo.coords.accuracy) + " m", live.geo.coords.accuracy < 50 ? "ok" : "warn", live.geo.coords.accuracy < 50 ? "疑似 GPS / Wi-Fi 精準定位" : "疑似基地台或粗略定位") : V("—", "muted")],
+      ["海拔", () => live.geo?.coords.altitude != null ? V(Math.round(live.geo.coords.altitude) + " m ±" + Math.round(live.geo.coords.altitudeAccuracy || 0)) : V("無（僅 GPS 機型提供）", "muted")],
+      ["移動速度", () => live.geo?.coords.speed != null ? V((live.geo.coords.speed * 3.6).toFixed(1) + " km/h") : V("—", "muted")],
+      ["行進方向", () => live.geo?.coords.heading != null ? V(Math.round(live.geo.coords.heading) + "°") : V("—", "muted")],
+      ["更新時間", () => live.geo ? V(new Date(live.geo.timestamp).toLocaleTimeString("zh-TW")) : V("—", "muted")],
+    ],
+    actions: [["btn-geo2", "取得目前位置"]],
+  },
+  {
+    id: "media", title: "媒體裝置", icon: "🎥",
+    fields: [
+      ["裝置列舉", () => live.devices ? V("已取得 " + live.devices.length + " 個裝置", "ok") : V(live.devicesErr || "尚未列舉（需授權才會顯示名稱）", live.devicesErr ? "bad" : "muted")],
+      ["攝影機", () => { const d = live.devices?.filter(x => x.kind === "videoinput"); return d ? V(d.length + " 個" + (d[0]?.label ? "：" + d.map(x => x.label).join("、") : "（未授權，無名稱）")) : V("—", "muted"); }],
+      ["麥克風", () => { const d = live.devices?.filter(x => x.kind === "audioinput"); return d ? V(d.length + " 個" + (d[0]?.label ? "：" + d.map(x => x.label).join("、") : "")) : V("—", "muted"); }],
+      ["音訊輸出", () => { const d = live.devices?.filter(x => x.kind === "audiooutput"); return d ? V(d.length + " 個" + (d[0]?.label ? "：" + d.map(x => x.label).join("、") : "")) : V("iPadOS 通常不列舉輸出裝置", "muted"); }],
+      ["螢幕錄影 API", () => has(navigator.mediaDevices || {}, "getDisplayMedia") ? V("支援", "ok") : NA("iPadOS Safari 不支援螢幕擷取")],
+      ["畫中畫", () => document.pictureInPictureEnabled || has(HTMLVideoElement.prototype, "webkitSetPresentationMode") ? V("支援", "ok") : NA()],
+      ["AirPlay", () => has(window, "WebKitPlaybackTargetAvailabilityEvent") ? V("支援", "ok") : NA()],
+    ],
+    actions: [["btn-media2", "列出媒體裝置（需授權）"]],
+  },
+  {
+    id: "system", title: "系統偏好與外觀", icon: "🎨",
+    fields: [
+      ["外觀模式", () => V(mq("(prefers-color-scheme: dark)") ? "深色模式" : "淺色模式", "info")],
+      ["減少動態效果", () => BOOL(mq("(prefers-reduced-motion: reduce)"), "已開啟", "關閉")],
+      ["減少透明度", () => BOOL(mq("(prefers-reduced-transparency: reduce)"), "已開啟", "關閉")],
+      ["強制色彩", () => BOOL(mq("(forced-colors: active)"), "啟用", "關閉")],
+      ["文字大小（動態字級）", () => { const px = parseFloat(getComputedStyle(document.documentElement).fontSize); return V(px + " px", px !== 16 ? "warn" : "", px !== 16 ? "使用者已調整字級或頁面縮放" : "系統預設"); }],
+      ["語言", () => V(navigator.language + "（全部：" + (navigator.languages || []).join(", ") + "）")],
+      ["時區", () => V(Intl.DateTimeFormat().resolvedOptions().timeZone + "（UTC" + (new Date().getTimezoneOffset() > 0 ? "-" : "+") + Math.abs(new Date().getTimezoneOffset() / 60) + "）")],
+      ["目前時間", () => V(new Date().toLocaleString("zh-TW", { hour12: false }))],
+      ["24 小時制", () => {
+        try {
+          const h12 = Intl.DateTimeFormat(undefined, { hour: "numeric" }).resolvedOptions().hour12;
+          return BOOL(!h12, "是", "否（12 小時制）");
+        } catch { return V("無法判斷", "muted"); }
+      }],
+      ["Cookie 允許", () => BOOL(navigator.cookieEnabled, "允許", "封鎖")],
+      ["Do Not Track", () => V(navigator.doNotTrack === "1" ? "已開啟" : "未開啟", navigator.doNotTrack === "1" ? "warn" : "muted")],
+    ],
+  },
+  {
+    id: "storage", title: "儲存空間", icon: "💾",
+    fields: [
+      ["已用配額", () => live.storage
+        ? V(fmtBytes(live.storage.usage), "", live.storage.quota ? "佔可用配額 " + (live.storage.usage / live.storage.quota * 100).toFixed(2) + "%" : undefined)
+        : NA("Safari 需 16+ 才提供 estimate")],
+      ["可用配額", () => live.storage ? V(fmtBytes(live.storage.quota), "ok", "此為瀏覽器分配上限，非 iPad 總容量") : V("—", "muted")],
+      ["永久儲存", () => has(navigator.storage || {}, "persisted") ? V(live.storage?.persisted ? "已授予" : "未授予", live.storage?.persisted ? "ok" : "muted") : NA()],
+      ["localStorage", () => { try { localStorage.setItem("__t", "1"); localStorage.removeItem("__t"); return V("可用", "ok"); } catch { return V("被封鎖（可能為私密瀏覽）", "bad"); } }],
+      ["IndexedDB", () => has(window, "indexedDB") ? V("可用", "ok") : NA()],
+      ["Cache Storage", () => has(window, "caches") ? V("可用", "ok") : NA()],
+      ["私密瀏覽（推測）", () => { try { localStorage.setItem("__t", "1"); localStorage.removeItem("__t"); return V("否", "muted"); } catch { return V("疑似私密瀏覽模式", "warn"); } }],
+      ["裝置總容量", () => V("無法取得", "muted", "瀏覽器不開放讀取 iPad 實際儲存容量")],
+    ],
+  },
+  {
+    id: "app", title: "App 與頁面狀態", icon: "🪄",
+    fields: [
+      ["頁面可見性", () => V(document.visibilityState === "visible" ? "前景（使用中）" : "背景 / 已鎖定", document.visibilityState === "visible" ? "ok" : "warn", "本次切到背景 " + live.hiddenCount + " 次")],
+      ["視窗焦點", () => BOOL(document.hasFocus(), "有焦點", "失去焦點")],
+      ["停留時間", () => V(Math.round((Date.now() - live.visibleSince) / 1000) + " 秒")],
+      ["全螢幕", () => BOOL(!!document.fullscreenElement || !!document.webkitFullscreenElement, "全螢幕中", "一般視窗")],
+      ["加入主畫面（PWA）", () => V(navigator.standalone || mq("(display-mode: standalone)") ? "以獨立 App 執行" : "在 Safari 分頁中", navigator.standalone ? "ok" : "muted")],
+      ["Service Worker", () => has(navigator, "serviceWorker") ? V("支援", "ok") : NA()],
+      ["自動播放政策", () => V(live.lowPower === "疑似開啟" ? "靜音自動播放被封鎖" : live.lowPower === "疑似關閉" ? "允許靜音自動播放" : "未偵測", "muted")],
+      ["網址", () => V(location.href)],
+    ],
+  },
+  {
+    id: "perm", title: "權限狀態", icon: "🔐",
+    fields: [
+      ["定位", () => permRow("geolocation")],
+      ["相機", () => permRow("camera")],
+      ["麥克風", () => permRow("microphone")],
+      ["通知", () => V(window.Notification ? Notification.permission : "不支援", window.Notification ? (Notification.permission === "granted" ? "ok" : "muted") : "muted")],
+      ["永久儲存", () => permRow("persistent-storage")],
+      ["剪貼簿讀取", () => permRow("clipboard-read")],
+    ],
+    actions: [["btn-perm", "重新查詢權限"]],
+  },
+];
+
+function permRow(name) {
+  const s = live.permissions[name];
+  if (s === undefined) return V("未查詢", "muted");
+  if (s === null) return NA("Safari 未支援查詢此權限");
+  const zh = { granted: "已允許", denied: "已拒絕", prompt: "尚未詢問" }[s] || s;
+  return V(zh, s === "granted" ? "ok" : s === "denied" ? "bad" : "warn");
+}
+
+/* 功能支援矩陣：一次列出常見 Web API 在本機的可用性 */
+const FEATURES = [
+  ["Battery API", () => "getBattery" in navigator],
+  ["Network Info", () => "connection" in navigator],
+  ["Geolocation", () => "geolocation" in navigator],
+  ["DeviceMotion", () => "DeviceMotionEvent" in window],
+  ["Wake Lock", () => "wakeLock" in navigator],
+  ["Web Share", () => "share" in navigator],
+  ["Clipboard", () => !!navigator.clipboard],
+  ["Notification", () => "Notification" in window],
+  ["Push", () => "PushManager" in window],
+  ["Service Worker", () => "serviceWorker" in navigator],
+  ["WebGL 2", () => { try { return !!document.createElement("canvas").getContext("webgl2"); } catch { return false; } }],
+  ["WebGPU", () => "gpu" in navigator],
+  ["WebRTC", () => !!window.RTCPeerConnection],
+  ["WebAssembly", () => "WebAssembly" in window],
+  ["Web Bluetooth", () => "bluetooth" in navigator],
+  ["WebUSB", () => "usb" in navigator],
+  ["WebNFC", () => "NDEFReader" in window],
+  ["WebXR", () => "xr" in navigator],
+  ["Gamepad", () => "getGamepads" in navigator],
+  ["Speech Recognition", () => "webkitSpeechRecognition" in window || "SpeechRecognition" in window],
+  ["Speech Synthesis", () => "speechSynthesis" in window],
+  ["File System Access", () => "showOpenFilePicker" in window],
+  ["Payment Request", () => "PaymentRequest" in window],
+  ["Credential (Passkey)", () => !!window.PublicKeyCredential],
+  ["Screen Capture", () => !!navigator.mediaDevices?.getDisplayMedia],
+  ["Virtual Keyboard", () => "virtualKeyboard" in navigator],
+  ["Idle Detection", () => "IdleDetector" in window],
+  ["Ambient Light", () => "AmbientLightSensor" in window],
+  ["Vibration", () => "vibrate" in navigator],
+  ["Screen Orientation Lock", () => !!screen.orientation?.lock],
+];
+
+/* ───────────────────────── 畫面繪製 ───────────────────────── */
+
+const rowNodes = new Map();   // key -> {row, valEl, last}
+
+function build() {
+  const main = $("#main");
+  main.innerHTML = "";
+  for (const card of CARDS) {
+    const sec = el("section");
+    const h = el("h2");
+    h.appendChild(el("span", "ico", card.icon));
+    h.appendChild(el("span", null, card.title));
+    sec.appendChild(h);
+    const rows = el("div", "rows");
+    card.fields.forEach(([label, get], i) => {
+      const row = el("div", "row");
+      row.appendChild(el("div", "k", label));
+      const v = el("div", "v");
+      row.appendChild(v);
+      rows.appendChild(row);
+      rowNodes.set(card.id + ":" + i, { row, v, get, label, card: card.title, last: null });
+    });
+    sec.appendChild(rows);
+    if (card.actions) {
+      const act = el("div", "act");
+      card.actions.forEach(([id, text]) => {
+        const b = el("button", null, text); b.id = id; act.appendChild(b);
+      });
+      sec.appendChild(act);
+    }
+    main.appendChild(sec);
+  }
+
+  // 功能支援矩陣
+  const sec = el("section");
+  const h = el("h2");
+  h.appendChild(el("span", "ico", "🧩"));
+  h.appendChild(el("span", null, "Web API 支援矩陣"));
+  sec.appendChild(h);
+  const grid = el("div", "matrix");
+  FEATURES.forEach(([name, test]) => {
+    let ok = false; try { ok = !!test(); } catch { ok = false; }
+    grid.appendChild(el("div", ok ? "m-y" : "m-n", name));
+  });
+  sec.appendChild(grid);
+  sec.appendChild(el("div", "pad", "● 支援　○ 不支援（iPadOS 上多數硬體類 API 由 Apple 基於隱私未實作）"));
+  $("#main").appendChild(sec);
+}
+
+function refresh() {
+  for (const [, n] of rowNodes) {
+    let r;
+    try { r = n.get(); } catch (e) { r = V("讀取失敗：" + e.message, "bad"); }
+    const text = r.text + (r.note ? "\n" + r.note : "");
+    if (text !== n.last) {
+      n.v.innerHTML = "";
+      n.v.className = "v " + (r.tone ? "t-" + r.tone : "");
+      n.v.appendChild(document.createTextNode(r.text));
+      if (r.note) n.v.appendChild(el("small", null, r.note));
+      if (n.last !== null) {
+        n.row.classList.remove("changed");
+        void n.row.offsetWidth;
+        n.row.classList.add("changed");
+      }
+      n.last = text;
+    }
+  }
+  renderSummary();
+}
+
+function renderSummary() {
+  const m = guessModel();
+  const chips = [
+    ["裝置", D.isIPad ? "iPad" : D.kind],
+    ["機型推測", m.name ? m.name.split(" /")[0] : m.key],
+    ["解析度", screen.width + "×" + screen.height + " @" + devicePixelRatio + "x"],
+    ["方向", (screen.orientation?.type || "").startsWith("portrait") ? "直向" : "橫向"],
+    ["更新率", live.fps ? live.fps + "Hz" : "…"],
+    ["電量", live.battery ? Math.round(live.battery.level * 100) + "%" : "不可讀"],
+    ["網路", navigator.onLine ? "已連線" : "離線"],
+    ["外觀", mq("(prefers-color-scheme: dark)") ? "深色" : "淺色"],
+  ];
+  const box = $("#summary");
+  box.innerHTML = "";
+  chips.forEach(([k, v]) => {
+    const c = el("span", "chip");
+    c.appendChild(document.createTextNode(k + " "));
+    c.appendChild(el("b", null, String(v)));
+    box.appendChild(c);
+  });
+}
+
+/* ───────────────────────── 非同步偵測 ───────────────────────── */
+
+async function initBattery() {
+  if (!navigator.getBattery) return;
+  try {
+    const b = await navigator.getBattery();
+    live.battery = b;
+    ["chargingchange", "levelchange", "chargingtimechange", "dischargingtimechange"]
+      .forEach(e => b.addEventListener(e, refresh));
+    refresh();
+  } catch {}
+}
+
+async function initStorage() {
+  if (!navigator.storage?.estimate) return;
+  try {
+    const est = await navigator.storage.estimate();
+    live.storage = est;
+    if (navigator.storage.persisted) live.storage.persisted = await navigator.storage.persisted();
+    refresh();
+  } catch {}
+}
+
+async function queryPermissions() {
+  const names = ["geolocation", "camera", "microphone", "persistent-storage", "clipboard-read"];
+  for (const n of names) {
+    try {
+      const st = await navigator.permissions.query({ name: n });
+      live.permissions[n] = st.state;
+      st.onchange = () => { live.permissions[n] = st.state; refresh(); };
+    } catch { live.permissions[n] = null; }
+  }
+  refresh();
+}
+
+// 低耗電模式推測：iPadOS 開啟低耗電模式時會封鎖靜音影片自動播放
+async function probeLowPower() {
+  live.lowPower = "偵測中…"; refresh();
+  try {
+    const c = document.createElement("canvas");
+    c.width = c.height = 2;
+    c.getContext("2d").fillRect(0, 0, 2, 2);
+    if (!c.captureStream) { live.lowPower = "無法偵測"; return refresh(); }
+    const v = document.createElement("video");
+    v.muted = true; v.playsInline = true; v.srcObject = c.captureStream(1);
+    await v.play();
+    live.lowPower = "疑似關閉";
+    v.pause(); v.srcObject = null;
+  } catch {
+    live.lowPower = "疑似開啟";
+  }
+  refresh();
+}
+
+async function requestMotion() {
+  const DM = window.DeviceMotionEvent, DO = window.DeviceOrientationEvent;
+  try {
+    if (DM && typeof DM.requestPermission === "function") {
+      live.motionPerm = await DM.requestPermission();
+      if (DO && typeof DO.requestPermission === "function") await DO.requestPermission();
+    } else if (DM) {
+      live.motionPerm = "granted（免授權）";
+    } else {
+      live.motionPerm = "此裝置無動作感測器";
+    }
+  } catch (e) {
+    live.motionPerm = "denied（" + e.message + "）";
+  }
+  if (String(live.motionPerm).startsWith("granted")) {
+    window.addEventListener("devicemotion", e => { live.motion = e; }, { passive: true });
+    window.addEventListener("deviceorientation", e => { live.orient = e; }, { passive: true });
+  }
+  refresh();
+}
+
+function requestGeo() {
+  if (!navigator.geolocation) { live.geoErr = "不支援定位"; return refresh(); }
+  live.geoPerm = "請求中…"; refresh();
+  navigator.geolocation.watchPosition(
+    p => { live.geo = p; live.geoErr = null; live.geoPerm = "granted"; refresh(); },
+    e => { live.geoErr = "失敗：" + e.message; live.geoPerm = e.code === 1 ? "denied" : "error"; refresh(); },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+async function listDevices() {
+  if (!navigator.mediaDevices?.enumerateDevices) { live.devicesErr = "不支援"; return refresh(); }
+  try {
+    // 先取得授權，否則 label 會是空字串
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      s.getTracks().forEach(t => t.stop());
+    } catch {}
+    live.devices = await navigator.mediaDevices.enumerateDevices();
+    live.devicesErr = null;
+  } catch (e) {
+    live.devicesErr = "失敗：" + e.message;
+  }
+  refresh();
+}
+
+async function toggleWakeLock() {
+  if (!navigator.wakeLock) return;
+  if (live.wakeLock) {
+    await live.wakeLock.release();
+    live.wakeLock = null; live.wakeLockState = "關閉";
+  } else {
+    try {
+      live.wakeLock = await navigator.wakeLock.request("screen");
+      live.wakeLockState = "啟用中（螢幕不會自動關閉）";
+      live.wakeLock.addEventListener("release", () => { live.wakeLock = null; live.wakeLockState = "已被系統釋放"; refresh(); });
+    } catch (e) { live.wakeLockState = "無法啟用：" + e.message; }
+  }
+  refresh();
+}
+
+function toggleFullscreen() {
+  const d = document.documentElement;
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  } else {
+    const fn = d.requestFullscreen || d.webkitRequestFullscreen;
+    if (fn) fn.call(d); else alert("此瀏覽器不支援全螢幕 API（iPad Safari 限制）");
+  }
+}
+
+/* 幀率量測：連續取樣 rAF 間隔，用來判斷 60Hz / 120Hz ProMotion */
+(function measureFPS() {
+  let frames = 0, t0 = performance.now();
+  function tick(t) {
+    frames++;
+    if (t - t0 >= 1000) {
+      live.fps = Math.round(frames * 1000 / (t - t0));
+      live.frameMs = ((t - t0) / frames).toFixed(2);
+      frames = 0; t0 = t;
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+
+/* ───────────────────────── 匯出 ───────────────────────── */
+
+function snapshot() {
+  const out = { 產生時間: new Date().toISOString(), 卡片: {} };
+  for (const [, n] of rowNodes) {
+    let r; try { r = n.get(); } catch (e) { r = V("錯誤", "bad"); }
+    (out.卡片[n.card] ||= {})[n.label] = r.note ? r.text + "（" + r.note + "）" : r.text;
+  }
+  out.功能支援 = {};
+  FEATURES.forEach(([name, test]) => { try { out.功能支援[name] = !!test(); } catch { out.功能支援[name] = false; } });
+  return out;
+}
+
+function exportJSON() {
+  const json = JSON.stringify(snapshot(), null, 2);
+  let box = $("#export-box");
+  if (!box) {
+    box = el("section"); box.id = "export-box";
+    const h = el("h2"); h.appendChild(el("span", "ico", "📄")); h.appendChild(el("span", null, "偵測結果 JSON"));
+    box.appendChild(h);
+    const wrap = el("div", "rows");
+    const ta = el("textarea"); ta.id = "export-ta"; ta.readOnly = true;
+    wrap.appendChild(ta); box.appendChild(wrap);
+    const act = el("div", "act");
+    const copy = el("button", null, "複製到剪貼簿");
+    copy.onclick = async () => {
+      try { await navigator.clipboard.writeText($("#export-ta").value); copy.textContent = "已複製 ✓"; }
+      catch { $("#export-ta").select(); copy.textContent = "請手動複製"; }
+      setTimeout(() => copy.textContent = "複製到剪貼簿", 2000);
+    };
+    const share = el("button", null, "分享");
+    share.onclick = () => navigator.share?.({ title: "iPad 狀態", text: $("#export-ta").value }).catch(() => {});
+    act.appendChild(copy); if (navigator.share) act.appendChild(share);
+    box.appendChild(act);
+    $("#main").prepend(box);
+  }
+  $("#export-ta").value = json;
+  box.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/* ───────────────────────── 事件綁定 ───────────────────────── */
+
+function bind() {
+  const on = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
+  on("btn-refresh", () => { live.gpu = null; initStorage(); queryPermissions(); refresh(); });
+  on("btn-motion", requestMotion); on("btn-motion2", requestMotion);
+  on("btn-geo", requestGeo); on("btn-geo2", requestGeo);
+  on("btn-media", listDevices); on("btn-media2", listDevices);
+  on("btn-wake", toggleWakeLock);
+  on("btn-full", toggleFullscreen);
+  on("btn-export", exportJSON);
+  on("btn-perm", queryPermissions);
+  on("probe-power", probeLowPower);
+
+  ["resize", "scroll", "online", "offline", "focus", "blur", "fullscreenchange", "webkitfullscreenchange"]
+    .forEach(e => window.addEventListener(e, refresh, { passive: true }));
+
+  window.addEventListener("orientationchange", () => { live.orientationChanges++; setTimeout(refresh, 250); });
+  screen.orientation?.addEventListener?.("change", () => { live.orientationChanges++; refresh(); });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") live.hiddenCount++;
+    refresh();
+  });
+
+  window.visualViewport?.addEventListener("resize", refresh);
+  window.visualViewport?.addEventListener("scroll", refresh);
+  navigator.connection?.addEventListener?.("change", refresh);
+
+  ["pointerdown", "pointermove"].forEach(e => window.addEventListener(e, ev => {
+    live.pointer = {
+      type: ev.pointerType,
+      pressure: ev.pressure || 0,
+      tiltX: ev.tiltX | 0, tiltY: ev.tiltY | 0,
+      azimuth: ev.azimuthAngle, altitude: ev.altitudeAngle,
+      time: new Date().toLocaleTimeString("zh-TW"),
+    };
+  }, { passive: true }));
+
+  ["touchstart", "touchmove", "touchend", "touchcancel"].forEach(e =>
+    window.addEventListener(e, ev => {
+      live.touchCount = ev.touches.length;
+      live.maxTouchSeen = Math.max(live.maxTouchSeen, ev.touches.length);
+    }, { passive: true }));
+
+  // 監聽系統偏好變化（深色模式、減少動態等）
+  ["(prefers-color-scheme: dark)", "(prefers-reduced-motion: reduce)", "(prefers-contrast: more)", "(display-mode: standalone)", "(hover: hover)"]
+    .forEach(q => window.matchMedia(q).addEventListener?.("change", refresh));
+}
+
+/* ───────────────────────── 啟動 ───────────────────────── */
+
+build();
+bind();
+refresh();
+initBattery();
+initStorage();
+queryPermissions();
+probeLowPower();
+setInterval(refresh, 1000);   // 時間、幀率、停留時間等持續更新
+</script>
+</body>
+</html>
