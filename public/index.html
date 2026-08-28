@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>SGPT</title>
+    <meta name="description" content="SGPT — 你的 AI 助理" />
+    <link rel="stylesheet" href="/styles.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%2310a37f'/><text y='72' x='50' text-anchor='middle' font-size='58' font-family='system-ui' font-weight='700' fill='white'>S</text></svg>"
+    />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-head">
+          <button class="new-chat" id="new-chat" type="button">
+            <span class="plus">+</span> 新對話
+          </button>
+          <button class="icon-btn sidebar-close" id="sidebar-close" type="button" aria-label="關閉側欄">
+            ✕
+          </button>
+        </div>
+        <nav class="conv-list" id="conv-list" aria-label="對話紀錄"></nav>
+        <div class="sidebar-foot">
+          <button class="ghost-btn" id="open-settings" type="button">⚙ 設定</button>
+          <span class="brand-mark">SGPT</span>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <button class="icon-btn" id="sidebar-open" type="button" aria-label="開啟側欄">☰</button>
+          <div class="title-block">
+            <h1 id="chat-title">SGPT</h1>
+            <span class="model-chip" id="model-chip"></span>
+          </div>
+          <button class="icon-btn" id="top-settings" type="button" aria-label="設定">⚙</button>
+        </header>
+
+        <div class="transcript" id="transcript">
+          <section class="welcome" id="welcome">
+            <div class="logo">S</div>
+            <h2>我是 SGPT</h2>
+            <p>問我任何事 —— 寫程式、查資料、分析、翻譯、腦力激盪。</p>
+            <div class="suggestions" id="suggestions">
+              <button type="button" data-prompt="用 Python 寫一個能處理大檔案的 CSV 去重腳本，並解釋記憶體用量。">
+                <strong>寫程式</strong><span>大檔案 CSV 去重腳本</span>
+              </button>
+              <button type="button" data-prompt="幫我把這段話改寫得更專業、更精簡，並說明你改了什麼：「這個功能大概可能會有點問題，我們之後再看看要不要修。」">
+                <strong>改寫文字</strong><span>讓句子更專業精簡</span>
+              </button>
+              <button type="button" data-prompt="解釋 JavaScript 的事件迴圈，包含 microtask 與 macrotask 的差別，並給一個會讓人答錯的例子。">
+                <strong>學習概念</strong><span>JS 事件迴圈與 microtask</span>
+              </button>
+              <button type="button" data-prompt="我要在兩週內做出一個側專案的 MVP。幫我把想法拆成每天的可執行任務，並指出最可能拖垮進度的風險。">
+                <strong>規劃</strong><span>兩週 MVP 計畫</span>
+              </button>
+            </div>
+          </section>
+          <div class="messages" id="messages"></div>
+        </div>
+
+        <div class="composer-wrap">
+          <div class="attachments" id="attachments" hidden></div>
+          <form class="composer" id="composer">
+            <button class="icon-btn attach" id="attach-btn" type="button" aria-label="附加檔案">📎</button>
+            <input type="file" id="file-input" multiple accept="image/png,image/jpeg,image/gif,image/webp,application/pdf" hidden />
+            <textarea
+              id="input"
+              rows="1"
+              placeholder="傳訊息給 SGPT…（Enter 送出，Shift+Enter 換行）"
+              autocomplete="off"
+            ></textarea>
+            <button class="send" id="send" type="submit" aria-label="送出">↑</button>
+            <button class="send stop" id="stop" type="button" hidden aria-label="停止生成">■</button>
+          </form>
+          <p class="disclaimer">SGPT 可能會出錯，重要資訊請自行查證。</p>
+        </div>
+      </main>
+    </div>
+
+    <div class="modal-backdrop" id="settings-modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <header>
+          <h2 id="settings-title">設定</h2>
+          <button class="icon-btn" id="settings-close" type="button" aria-label="關閉">✕</button>
+        </header>
+        <div class="modal-body">
+          <label class="field">
+            <span>模型</span>
+            <select id="model-select"></select>
+            <small id="model-blurb"></small>
+          </label>
+          <label class="field">
+            <span>思考深度</span>
+            <select id="effort-select"></select>
+            <small>越高越仔細，也越慢、越貴。</small>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="web-search" />
+            <span>啟用網路搜尋</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="show-thinking" />
+            <span>顯示思考過程</span>
+          </label>
+          <label class="field">
+            <span>自訂指令</span>
+            <textarea id="custom-instructions" rows="4" placeholder="例如：回答一律使用繁體中文，程式碼用 TypeScript。"></textarea>
+            <small>只套用在這個對話。</small>
+          </label>
+        </div>
+        <footer>
+          <button class="ghost-btn danger" id="delete-chat" type="button">刪除這個對話</button>
+          <button class="primary-btn" id="settings-save" type="button">儲存</button>
+        </footer>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" hidden></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
