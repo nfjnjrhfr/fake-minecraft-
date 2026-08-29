@@ -1,0 +1,17 @@
+{
+  "name": "minicraft-ai",
+  "version": "1.0.0",
+  "description": "從零手寫的神經網路 + Double DQN 強化學習：AI 在方塊世界裡自我學習挖礦",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/run.mjs",
+    "train": "node src/train.js --episodes 2000",
+    "play": "node src/play.js",
+    "web": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "private": true
+}

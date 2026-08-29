@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%2314161d'/%3E%3Crect x='3' y='3' width='10' height='10' fill='%2355d6a0'/%3E%3C/svg%3E" />
+<title>MiniCraft AI — 自我學習的神經網路</title>
+<style>
+  :root {
+    --bg: #14161d;
+    --panel: #1c1f2a;
+    --line: #2c3142;
+    --text: #e6e9f2;
+    --muted: #9aa3bd;
+    --accent: #55d6a0;
+    --accent2: #6aa9ff;
+    --warn: #e0703c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Noto Sans TC", monospace;
+  }
+  header {
+    padding: 18px 24px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  h1 { margin: 0 0 4px; font-size: 20px; letter-spacing: .5px; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  main {
+    display: grid;
+    grid-template-columns: minmax(320px, 1fr) 340px;
+    gap: 18px;
+    padding: 18px 24px 40px;
+    max-width: 1180px;
+  }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .card h2 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+  canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; border-radius: 6px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  button {
+    background: #262b3a;
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #10241c; border-color: var(--accent); font-weight: 700; }
+  label.row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin: 8px 0; }
+  input[type=range] { flex: 1; accent-color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td { padding: 3px 0; }
+  td:last-child { text-align: right; font-variant-numeric: tabular-nums; color: var(--accent); }
+  .qbar { display: grid; grid-template-columns: 34px 1fr 56px; align-items: center; gap: 8px; font-size: 12px; margin: 5px 0; }
+  .qtrack { background: #11131a; border-radius: 3px; height: 12px; position: relative; overflow: hidden; }
+  .qfill { position: absolute; top: 0; bottom: 0; background: var(--accent2); }
+  .qbar.best .qfill { background: var(--accent); }
+  .qval { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .legend i { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .status { font-size: 12px; color: var(--muted); margin-top: 8px; min-height: 16px; }
+  footer { padding: 0 24px 30px; color: var(--muted); font-size: 12px; max-width: 1180px; }
+  code { background: #11131a; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MiniCraft AI — 自我學習的神經網路</h1>
+  <p>手寫的多層感知器 + Double DQN 強化學習。沒有任何人類示範資料，全靠自己試錯。</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>世界</h2>
+    <canvas id="world" width="480" height="480"></canvas>
+    <div class="legend">
+      <span><i style="background:#8a5a2b"></i>木頭 +1</span>
+      <span><i style="background:#8b8b95"></i>石頭 +2</span>
+      <span><i style="background:#3fe0cf"></i>鑽石 +5</span>
+      <span><i style="background:#e0561e"></i>岩漿 −5（死亡）</span>
+      <span><i style="background:#f2d16b"></i>AI</span>
+    </div>
+    <div class="status" id="status">尚未開始</div>
+
+    <h2 style="margin-top:16px">學習曲線（每回合總獎勵，100 回合移動平均）</h2>
+    <canvas id="chart" width="480" height="150"></canvas>
+  </section>
+
+  <section>
+    <div class="card">
+      <h2>控制</h2>
+      <div class="controls">
+        <button id="toggle" class="primary">開始訓練</button>
+        <button id="reset">重新開始學習</button>
+      </div>
+      <div class="controls">
+        <button id="pretrained">載入預訓練模型</button>
+        <button id="save">下載模型</button>
+        <button id="load">載入模型</button>
+        <input id="file" type="file" accept="application/json" hidden />
+      </div>
+      <label class="row">
+        速度 <input id="speed" type="range" min="1" max="400" value="30" />
+        <span id="speedVal">30</span>
+      </label>
+      <label class="row">
+        <input id="greedy" type="checkbox" /> 展示模式（關閉隨機探索，只用學到的策略）
+      </label>
+      <label class="row">
+        <input id="turbo" type="checkbox" /> 極速模式（不逐格畫，只更新統計）
+      </label>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2>訓練狀態</h2>
+      <table>
+        <tr><td>回合</td><td id="s-ep">0</td></tr>
+        <tr><td>環境互動步數</td><td id="s-steps">0</td></tr>
+        <tr><td>探索率 ε</td><td id="s-eps">1.000</td></tr>
+        <tr><td>本回合獎勵</td><td id="s-r">0.00</td></tr>
+        <tr><td>近 100 回合平均</td><td id="s-avg">—</td></tr>
+        <tr><td>最佳 100 回合平均</td><td id="s-best">—</td></tr>
+        <tr><td>TD 損失</td><td id="s-loss">—</td></tr>
+        <tr><td>回放池</td><td id="s-buf">0</td></tr>
+        <tr><td>速度</td><td id="s-sps">0 步/秒</td></tr>
+      </table>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2>神經網路的輸出 Q(s, a)</h2>
+      <div id="qbars"></div>
+      <div class="status">數值越高＝AI 認為這個動作長期回報越好</div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  訓練會即時反映在畫面上：一開始 AI 完全亂走、常掉進岩漿；隨著 ε 下降，它會開始朝礦物移動並在面對礦物時按下「挖」。
+  終端機訓練請跑 <code>npm run train</code>，測試請跑 <code>npm test</code>。
+</footer>
+
+<script type="module" src="./web/app.js"></script>
+</body>
+</html>
