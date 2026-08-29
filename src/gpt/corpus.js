@@ -2,6 +2,7 @@
 // 為什麼不抓網路上的大語料？因為字元級模型的詞彙表會爆炸，CPU 上根本訓練不完。
 // 這裡刻意把用字控制在幾百個以內，讓一個 17 萬參數的小模型真的學得起來。
 import { makeRng } from '../nn.js';
+import { KNOWLEDGE_PAIRS } from './knowledge.js';
 
 export const Q_MARK = '問：';
 export const A_MARK = '答：';
@@ -12,7 +13,8 @@ const CN = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'
 export function num2cn(n) {
   if (n <= 10) return CN[n];
   if (n < 20) return '十' + CN[n - 10];
-  return '二十';
+  if (n % 10 === 0) return CN[n / 10] + '十';
+  return CN[Math.floor(n / 10)] + '十' + CN[n % 10];
 }
 
 const pairs = [];
@@ -98,13 +100,24 @@ for (let a = 0; a <= 9; a++) {
   }
 }
 
+// 乘法（九九乘法表；它會全部背起來，但不會真的算乘法）
+for (let a = 1; a <= 9; a++) {
+  for (let b = 1; b <= 9; b++) {
+    add(`${num2cn(a)}乘${num2cn(b)}等於多少`, `${num2cn(a)}乘${num2cn(b)}等於${num2cn(a * b)}。`);
+  }
+}
+
 // 數數
 for (let a = 0; a <= 9; a++) add(`${num2cn(a)}後面是什麼`, `${num2cn(a)}後面是${num2cn(a + 1)}。`);
+for (let a = 1; a <= 10; a++) add(`${num2cn(a)}前面是什麼`, `${num2cn(a)}前面是${num2cn(a - 1)}。`);
 
 // 覆誦
 for (const w of ['你好', '謝謝', '晚安', '加油', '鑽石', '木頭', '石頭', '岩漿']) {
   add(`跟我說${w}`, `${w}。`);
 }
+
+// 加上 Claude 寫給小模型的知識問答（知識蒸餾）
+for (const [q, a] of KNOWLEDGE_PAIRS) add(q, a);
 
 export const QA_PAIRS = pairs;
 

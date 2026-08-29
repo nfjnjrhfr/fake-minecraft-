@@ -5,6 +5,7 @@ import http from 'node:http';
 import Anthropic from '@anthropic-ai/sdk';
 import { runTurn, buildParams, describeError, DEFAULT_MODEL } from '../src/claude/session.js';
 import { ALL_TOOLS, askMiniGpt, playMinicraft, readProjectFile } from '../src/claude/tools.js';
+import { cleanPairs, pairsToText, buildPrompt, generateBatch } from '../src/gpt/distill.js';
 
 let pass = 0;
 let fail = 0;
@@ -146,6 +147,48 @@ console.log('\n[4] 工具本身');
   const ok = await readProjectFile.run({ path: 'package.json', maxChars: 300 });
   check('read_project_file 讀得到 repo 內的檔案', ok.includes('minicraft-ai'));
   check('工具都有描述，Claude 才知道何時該用', ALL_TOOLS.every((t) => t.description && t.description.length > 20));
+}
+
+console.log('\n[5] 知識蒸餾管線');
+{
+  // 清洗規則：太長、含英數字、重複的都要濾掉
+  const cleaned = cleanPairs([
+    { question: '天空是什麼顏色', answer: '天空是藍色的。' },
+    { question: '天空是什麼顏色', answer: '重複的問題' },
+    { question: '什麼是 API', answer: '含英文字母應該被濾掉。' },
+    { question: '講一個很長很長超過限制的答案好嗎', answer: '這一組的問題太長了，應該被濾掉。' },
+    { question: '水幾度結冰', answer: '這個答案故意寫得非常非常長，長到超過二十四個字的上限所以要被濾掉。' },
+    { question: '', answer: '空問題' },
+  ]);
+  check('清洗後只留下合格的那一組', cleaned.length === 1 && cleaned[0][0] === '天空是什麼顏色',
+    JSON.stringify(cleaned));
+
+  const text = pairsToText([['你好', '你好呀。']], { samples: 3 });
+  check('轉成訓練語料的格式正確', text === '問：你好\n答：你好呀。\n'.repeat(3), JSON.stringify(text));
+
+  check('提示詞有把長度限制講清楚', /不超過 20 個字/.test(buildPrompt('測試', 10, 20, [])));
+
+  // 對著假 API 驗證結構化輸出的解析
+  const payload = { pairs: [{ question: '貓怎麼叫', answer: '貓會喵喵叫。' }] };
+  const server = http.createServer((req, res) => {
+    let raw = '';
+    req.on('data', (c) => (raw += c));
+    req.on('end', () => {
+      const body = JSON.parse(raw);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        id: 'msg_x', type: 'message', role: 'assistant', model: body.model,
+        content: [{ type: 'text', text: JSON.stringify(payload) }],
+        stop_reason: 'end_turn', stop_sequence: null,
+        usage: { input_tokens: 5, output_tokens: 5 },
+      }));
+    });
+  });
+  await new Promise((r) => server.listen(0, r));
+  const client = new Anthropic({ apiKey: 'test', baseURL: `http://127.0.0.1:${server.address().port}` });
+  const got = await generateBatch(client, { topic: '動物', count: 1 });
+  check('結構化輸出有被解析出來', got.length === 1 && got[0].answer === '貓會喵喵叫。', JSON.stringify(got));
+  server.close();
 }
 
 console.log(`\n總結：${pass} 通過，${fail} 失敗\n`);

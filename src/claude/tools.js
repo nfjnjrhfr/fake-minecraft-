@@ -79,8 +79,9 @@ export const playMinicraft = betaTool({
 export const askMiniGpt = betaTool({
   name: 'ask_mini_gpt',
   description:
-    '把問題丟給這個 repo 裡從零手寫、只有 17 萬參數的 mini-GPT，回傳它的答案。' +
-    '它只學過 325 組中文問答，問到範圍外會胡言亂語——想展示小模型的能耐或極限時使用。',
+    '把問題丟給這個 repo 裡從零手寫、只有 50 萬參數的 mini-GPT，回傳它的答案。' +
+    '它只學過 584 組中文問答（由 Claude 蒸餾出來的），問到範圍外會胡言亂語——' +
+    '想展示小模型的能耐或極限時使用。',
   inputSchema: {
     type: 'object',
     properties: {
@@ -129,8 +130,9 @@ export const SYSTEM_PROMPT = `你是這個開源專案的助手，專案裡有�
 
 1. MiniCraft AI：手寫的多層感知器 + Double DQN 強化學習，在 12x12 方塊世界裡自己學會挖礦、
    躲岩漿。零外部相依，程式碼在 src/nn.js、src/env.js、src/agent.js。
-2. 小方塊 mini-GPT：從零手寫的 Transformer 語言模型（17 萬參數、3 層、字元級分詞），
-   程式碼在 src/gpt/。它很笨，只學過 325 組問答。
+2. 小方塊 mini-GPT：從零手寫的 Transformer 語言模型（50 萬參數、4 層、字元級分詞），
+   程式碼在 src/gpt/。它的訓練語料是由 Claude 寫出來的 584 組問答（知識蒸餾），
+   所以它會的東西就是那些，問到範圍外一定胡言亂語。
 3. 你自己（Claude）：透過 Anthropic API 提供這個聊天介面，程式碼在 src/claude/。
 
 你可以用工具實際去跑前兩個 AI，也可以讀 repo 裡的原始碼來回答問題。
