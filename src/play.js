@@ -22,25 +22,29 @@ const agent = DQNAgent.fromJSON(JSON.parse(fs.readFileSync(modelPath, 'utf8')));
 const env = new MiniCraftEnv({ seed: args.seed || Date.now() % 1e6 });
 const episodes = args.episodes || 3;
 const delay = args.delay === undefined ? 80 : args.delay;
+// 純貪婪策略偶爾會卡在原地繞圈，留一點點隨機性（原始 DQN 論文評估時也是這麼做）
+const eps = args.eps === undefined ? 0.02 : args.eps;
+const pick = (obs) =>
+  Math.random() < eps ? Math.floor(Math.random() * env.numActions) : agent.act(obs, true);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 for (let ep = 1; ep <= episodes; ep++) {
   let obs = Float64Array.from(env.reset());
   let total = 0;
   while (!env.done) {
-    const out = env.step(agent.act(obs, true));
+    const out = env.step(pick(obs));
     obs = Float64Array.from(out.obs);
     total += out.reward;
     if (delay > 0) {
       process.stdout.write('\x1b[2J\x1b[H');
-      console.log(`第 ${ep}/${episodes} 回合（貪婪策略，無隨機探索）\n`);
+      console.log(`第 ${ep}/${episodes} 回合（ε=${eps} 的貪婪策略）\n`);
       console.log(env.render());
       console.log(`\n累積獎勵 ${total.toFixed(2)}`);
       await sleep(delay);
     }
   }
   console.log(
-    `\n回合 ${ep}：採集分數 ${env.score}／${env.totalOres === 0 ? 0 : '最高 30'}，` +
+    `\n回合 ${ep}：採集分數 ${env.score}／${env.maxScore}，` +
       `累積獎勵 ${total.toFixed(2)}，結局：${env.lastEvent}\n`
   );
 }

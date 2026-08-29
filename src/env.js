@@ -62,6 +62,15 @@ export class MiniCraftEnv {
     this.reset();
   }
 
+  /** 這張地圖全部挖完可以拿到的分數 */
+  get maxScore() {
+    return (
+      this.cfg.wood * ORE_VALUE[TILE.WOOD] +
+      this.cfg.stone * ORE_VALUE[TILE.STONE] +
+      this.cfg.diamond * ORE_VALUE[TILE.DIAMOND]
+    );
+  }
+
   get(x, y) {
     if (x < 0 || y < 0 || x >= this.cfg.width || y >= this.cfg.height) return TILE.BEDROCK;
     return this.grid[y * this.cfg.width + x];

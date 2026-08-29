@@ -246,9 +246,9 @@ $('pretrained').onclick = async () => {
     if (!res.ok) throw new Error('找不到 models/agent.json，請先跑 npm run train');
     agent.loadWeights(await res.json());
     $('greedy').checked = true;
+    updateStats();
     $('status').textContent =
       `已載入預訓練模型（訓練過 ${agent.steps.toLocaleString()} 步）—— 按「開始訓練」即可觀賞它挖礦`;
-    updateStats();
   } catch (err) {
     $('status').textContent = `載入失敗：${err.message}`;
   }
@@ -260,6 +260,7 @@ $('file').onchange = async (e) => {
   try {
     const obj = JSON.parse(await f.text());
     agent.loadWeights(obj);
+    updateStats();
     $('status').textContent = `已載入模型（訓練過 ${agent.steps.toLocaleString()} 步）—— 打開展示模式看看它學到什麼`;
   } catch (err) {
     $('status').textContent = `載入失敗：${err.message}`;
