@@ -1,13 +1,15 @@
 {
   "name": "minicraft-ai",
   "version": "1.0.0",
-  "description": "從零手寫的神經網路 + Double DQN 強化學習：AI 在方塊世界裡自我學習挖礦",
+  "description": "兩個從零手寫、零相依的 AI：Double DQN 自我學習挖礦，以及 mini-GPT 語言模型",
   "type": "module",
   "scripts": {
-    "test": "node tests/run.mjs",
+    "test": "node tests/run.mjs && node tests/gpt.mjs",
     "train": "node src/train.js --episodes 2000",
     "play": "node src/play.js",
-    "web": "node server.mjs"
+    "web": "node server.mjs",
+    "gpt:train": "node src/gpt/train.js --steps 3000",
+    "gpt:chat": "node src/gpt/chat.js"
   },
   "engines": {
     "node": ">=18"
