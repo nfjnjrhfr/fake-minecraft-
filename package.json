@@ -1,19 +1,24 @@
 {
   "name": "minicraft-ai",
   "version": "1.0.0",
-  "description": "兩個從零手寫、零相依的 AI：Double DQN 自我學習挖礦，以及 mini-GPT 語言模型",
+  "description": "三個 AI 住在同一個 repo：自我學習的挖礦 AI、從零手寫的 mini-GPT、以及會用工具的 Claude",
   "type": "module",
   "scripts": {
-    "test": "node tests/run.mjs && node tests/gpt.mjs",
+    "test": "node tests/run.mjs && node tests/gpt.mjs && node tests/claude.mjs",
     "train": "node src/train.js --episodes 2000",
     "play": "node src/play.js",
     "web": "node server.mjs",
     "gpt:train": "node src/gpt/train.js --steps 3000",
-    "gpt:chat": "node src/gpt/chat.js"
+    "gpt:chat": "node src/gpt/chat.js",
+    "claude:chat": "node src/claude/chat.js",
+    "claude:web": "node src/claude/server.js"
   },
   "engines": {
     "node": ">=18"
   },
   "license": "MIT",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.122.0"
+  }
 }

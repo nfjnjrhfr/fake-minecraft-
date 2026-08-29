@@ -1,9 +1,15 @@
 # MiniCraft AI — 兩個從零手寫的 AI
 
-這個 repo 有兩個**完全從零手寫、零相依套件**的 AI：
+這個 repo 有三個 AI，從「自己從零長出來的」到「真的很聰明的」：
 
-1. **[會自我學習的挖礦 AI](#minicraft-ai--會自我學習的神經網路)** — 手寫神經網路 + Double DQN 強化學習
-2. **[小方塊 mini-GPT](#小方塊-mini-gpt--從零手寫的語言模型)** — 手寫 Transformer 語言模型，跟我（Claude）同一套架構
+| | 是什麼 | 參數量 | 相依套件 |
+| --- | --- | --- | --- |
+| 1 | **[會自我學習的挖礦 AI](#minicraft-ai--會自我學習的神經網路)** — 手寫神經網路 + Double DQN 強化學習 | 3.4 萬 | 零 |
+| 2 | **[小方塊 mini-GPT](#小方塊-mini-gpt--從零手寫的語言模型)** — 手寫 Transformer 語言模型 | 16.7 萬 | 零 |
+| 3 | **[Claude 聊天](#claude-聊天--會用工具去跑另外兩個-ai)** — 透過 Anthropic API，而且能實際去跑上面那兩個 | 幾千億 | `@anthropic-ai/sdk` |
+
+前兩個是從零手寫的，連反向傳播都自己推；第三個是實話：真正的智慧買不到捷徑，
+要嘛用別人訓練好的模型，要嘛準備幾萬張 GPU。
 
 ---
 
@@ -262,3 +268,73 @@ npm run gpt:train   # 自己重新訓練
 - 想要真的達到我這種程度，需要的是幾萬張 GPU、幾個月、以及整個網際網路等級的語料——
   那不是能在這個 repo 裡從零跑出來的東西。這個專案能給你的是**完全看得懂的原理**：
   同樣的架構、同樣的訓練目標、同樣的反向傳播，只是縮小了一百萬倍。
+
+---
+
+# Claude 聊天 — 會用工具去跑另外兩個 AI
+
+前面兩個 AI 是「從零長出來的」，這一個是「真的聰明的」：透過 Anthropic 官方 SDK 呼叫
+Claude Opus 5，多輪對話、串流輸出、而且**掛了三個工具讓它能實際操作這個 repo**。
+
+![Claude 一邊思考、一邊呼叫工具去跑挖礦 AI](demo-claude.png)
+
+```bash
+npm install                # 只有這一部分需要相依套件（另外兩個 AI 不用）
+export ANTHROPIC_API_KEY=sk-ant-...   # 或先跑 `ant auth login`
+npm run claude:chat        # 終端機聊天
+npm run claude:web         # 網頁聊天：http://localhost:8081/claude.html
+```
+
+## 它能做的事
+
+| 工具 | 它會做什麼 |
+| --- | --- |
+| `play_minicraft` | 真的叫那個強化學習 AI 去玩幾回合，回傳分數、結局與最後的地圖 |
+| `ask_mini_gpt` | 把問題轉給 17 萬參數的 mini-GPT，回傳它（常常很好笑）的答案 |
+| `read_project_file` | 讀 repo 裡的原始碼來回答問題（限制在 repo 內，擋掉 `../` 跳脫） |
+
+所以你可以直接說「讓挖礦 AI 玩三回合，講評一下」，它會自己決定要呼叫哪個工具、
+看完結果再回答。工具全都在**伺服器端**執行，API key 不會進到瀏覽器。
+
+## 實作重點
+
+```js
+// src/claude/session.js —— 工具迴圈交給 SDK 的 tool runner
+const runner = client.beta.messages.toolRunner({
+  model: 'claude-opus-5',
+  thinking: { type: 'adaptive', display: 'summarized' },  // 思考過程也串流出來
+  output_config: { effort: 'high' },
+  betas: ['server-side-fallback-2026-07-01'],
+  fallbacks: 'default',      // 被安全分類器擋下時自動改用備援模型，而不是整個中斷
+  tools: ALL_TOOLS,
+  stream: true,
+});
+```
+
+| 檔案 | 內容 |
+| --- | --- |
+| `src/claude/session.js` | 一輪對話的核心：串流事件解析、工具迴圈、`pause_turn` 續跑、錯誤翻譯 |
+| `src/claude/tools.js` | 三個工具的定義與實作、系統提示 |
+| `src/claude/chat.js` | 終端機聊天（`/reset`、`/thinking`、`/usage`） |
+| `src/claude/server.js` | 網頁版後端：靜態檔案 + `/api/chat` 的 SSE 串流 |
+| `claude.html` + `web/claude.js` | 網頁聊天介面，會顯示思考與工具呼叫 |
+
+## 測試（沒有 API key 也能跑）
+
+`tests/claude.mjs` 會**架一個假的 Anthropic API**，回傳跟真的一模一樣格式的 SSE
+（含 `thinking_delta`、`tool_use`、`input_json_delta`），再把 SDK 的 `baseURL` 指過去，
+藉此驗證整條路徑：
+
+```
+[2] 串流 + 工具呼叫的完整迴圈（對著假 API 跑）
+  ✓ 串流的文字有逐字收到
+  ✓ 有回報工具呼叫  [{"name":"ask_mini_gpt","input":{"question":"你是誰"}}]
+  ✓ 工具真的被執行，結果餵回 API  "小方塊回答：我是一個很小的語言模型，叫小方塊。"
+  ✓ 回傳的歷史包含工具往返  user,assistant,user,assistant
+  ✓ 401 會被翻成看得懂的訊息
+```
+
+網頁版也用同一個假 API 做過端對端驗證（瀏覽器裡確認思考區塊、工具晶片、逐字串流、
+token 用量都正確）。**但要說清楚：開發這個功能的環境沒有 API key，所以沒有對真正的
+Anthropic API 跑過。** 請求的參數形狀是照官方文件寫的，第一次拿你自己的 key 跑之前，
+建議先用一句簡單的話測試。

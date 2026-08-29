@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%2314161d'/%3E%3Ccircle cx='8' cy='8' r='5' fill='%23d97757'/%3E%3C/svg%3E" />
+<title>Claude 聊天 — 會用工具的那個 AI</title>
+<style>
+  :root {
+    --bg: #14161d; --panel: #1c1f2a; --line: #2c3142; --text: #e6e9f2;
+    --muted: #9aa3bd; --accent: #d97757; --accent2: #6aa9ff; --green: #55d6a0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Noto Sans TC", monospace;
+  }
+  header { padding: 18px 24px 10px; border-bottom: 1px solid var(--line); }
+  h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  header a { color: var(--green); }
+  main {
+    display: grid; grid-template-columns: minmax(320px, 1fr) 300px;
+    gap: 18px; padding: 18px 24px 40px; max-width: 1150px;
+  }
+  @media (max-width: 840px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .card h2 { margin: 0 0 10px; font-size: 13px; color: var(--muted); letter-spacing: 1px; }
+  #log { height: 460px; overflow-y: auto; padding-right: 4px; }
+  .msg { margin: 10px 0; font-size: 14px; line-height: 1.7; }
+  .msg .who { color: var(--muted); font-size: 12px; display: block; margin-bottom: 2px; }
+  .msg.me .who { color: var(--green); }
+  .msg.ai .who { color: var(--accent); }
+  .bubble { display: block; white-space: pre-wrap; word-break: break-word; }
+  .bubble code { background: #11131a; padding: 1px 5px; border-radius: 4px; }
+  .bubble pre { background: #11131a; padding: 10px; border-radius: 6px; overflow-x: auto; margin: 8px 0; }
+  .bubble pre code { padding: 0; background: none; }
+  .think {
+    color: var(--muted); background: #171a22; border-left: 2px solid var(--line);
+    padding: 6px 10px; margin: 6px 0; font-size: 12px; white-space: pre-wrap; border-radius: 0 6px 6px 0;
+  }
+  .tool {
+    display: block; width: fit-content; max-width: 100%; background: #2a2016; border: 1px solid #4a3a26; color: #e0a76a;
+    border-radius: 6px; padding: 4px 10px; font-size: 12px; margin: 6px 0;
+  }
+  form { display: flex; gap: 8px; margin-top: 12px; }
+  input[type=text] {
+    flex: 1; background: #11131a; border: 1px solid var(--line); color: var(--text);
+    border-radius: 6px; padding: 10px; font: inherit; font-size: 14px;
+  }
+  button {
+    background: var(--accent); color: #1b0e07; border: 0; border-radius: 6px;
+    padding: 10px 16px; font: inherit; font-weight: 700; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  button.ghost { background: #262b3a; color: var(--text); border: 1px solid var(--line); font-weight: 400; }
+  label.row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin: 8px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td { padding: 3px 0; }
+  td:last-child { text-align: right; color: var(--accent2); font-variant-numeric: tabular-nums; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.6; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip {
+    background: #262b3a; border: 1px solid var(--line); border-radius: 999px;
+    padding: 4px 10px; font-size: 12px; cursor: pointer; color: var(--muted);
+  }
+  .chip:hover { border-color: var(--accent); color: var(--text); }
+  .toolinfo { font-size: 12px; color: var(--muted); margin: 8px 0; line-height: 1.5; }
+  .toolinfo b { color: #e0a76a; font-weight: 400; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Claude 聊天</h1>
+  <p>透過 Anthropic API，而且能實際去跑這個 repo 裡的另外兩個 AI。
+     <a href="./index.html">挖礦 AI</a> ·
+     <a href="./chat.html">mini-GPT</a></p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>對話</h2>
+    <div id="log"></div>
+    <form id="form">
+      <input id="input" type="text" placeholder="連線中…" autocomplete="off" disabled />
+      <button id="send" type="submit" disabled>送出</button>
+      <button id="clear" class="ghost" type="button">清空</button>
+    </form>
+    <div class="chips" id="chips"></div>
+    <div class="hint" id="hint">正在連線…</div>
+  </section>
+
+  <section>
+    <div class="card">
+      <h2>它可以用的工具</h2>
+      <div id="tools" class="toolinfo">—</div>
+      <div class="hint">工具在伺服器端執行，Claude 只拿得到結果。
+        試著叫它「讓挖礦 AI 玩三回合」或「問問 mini-GPT 它是誰」。</div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2>設定</h2>
+      <label class="row"><input id="thinking" type="checkbox" /> 顯示思考過程</label>
+      <table>
+        <tr><td>模型</td><td id="s-model">—</td></tr>
+        <tr><td>本次 input tokens</td><td id="s-in">0</td></tr>
+        <tr><td>本次 output tokens</td><td id="s-out">0</td></tr>
+      </table>
+      <div class="hint">API key 只留在伺服器端，瀏覽器拿到的只有串流出來的文字。</div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2>三個 AI 的差別</h2>
+      <div class="hint">
+        <b style="color:#55d6a0">挖礦 AI</b>：3 萬參數，從獎勵裡自己學會挖礦，不會講話。<br />
+        <b style="color:#6aa9ff">mini-GPT</b>：17 萬參數，會講話但只背過 325 組問答。<br />
+        <b style="color:#d97757">Claude</b>：這一個。同樣是 Transformer，但大了一百萬倍，
+        而且會自己決定什麼時候該去用工具。
+      </div>
+    </div>
+  </section>
+</main>
+
+<script type="module" src="./web/claude.js"></script>
+</body>
+</html>
