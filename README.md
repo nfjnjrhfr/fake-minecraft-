@@ -1,56 +1,170 @@
-# fake-minecraft-
+# 從零手寫的神經網路
 
-A small voxel sandbox that runs in the browser. No build step, no dependencies —
-two files and raw WebGL.
+不用 PyTorch、不用 TensorFlow，只用 numpy 做矩陣乘法，
+其他每一行 —— 自動微分、反向傳播、最佳化器 —— 全部自己寫。
 
-![screenshot](docs/screenshot.png)
-
-## Play
-
-Open `index.html` in a browser. If your browser blocks `file://` scripts, serve
-the folder instead:
+重點在最後一個範例：**一個沒有任何標準答案、完全靠自己摸索的網路**。
 
 ```sh
-npx serve .        # or: python3 -m http.server
+pip install numpy
+python3 train.py
 ```
 
-Then open the printed URL and click **Play** to lock the pointer.
+大約六秒跑完，包含梯度驗證和四個範例。
 
-## Controls
+---
 
-| | |
-|---|---|
-| `W` `A` `S` `D` | move |
-| Mouse | look |
-| `Space` | jump / swim up / fly up |
-| `Shift` | sneak / fly down |
-| `Ctrl` | sprint |
-| `F` | toggle flying |
-| Left click | break block |
-| Right click | place block |
-| `1`–`9`, scroll | choose block |
-| `Esc` | pause |
+## 它會什麼
 
-## What's in there
+| 指令 | 內容 | 結果 |
+|---|---|---|
+| `python3 train.py check` | 數值梯度驗證 | 14 項全過，最大誤差 ~1e-8 |
+| `python3 train.py xor` | XOR，證明「深度」有意義 | 線性模型卡在 0.5，加隱藏層後 4/4 全對 |
+| `python3 train.py spiral` | 三條纏繞螺旋分類 | 測試準確率 100%，並印出決策邊界 |
+| `python3 train.py digits` | 手寫數字辨識（8×8，有雜訊有平移） | 測試準確率 ~98.5% |
+| `python3 train.py self` | **自我學習**：倒立擺 | 約 130～400 場從亂推學會撐滿 200 步 |
 
-- **World** — 192 × 192 × 64 blocks, generated from value-noise fbm: hills,
-  mountains, oceans, beaches, carved caves and oak trees. Each world is
-  re-centred on sea level so no seed comes out as pure ocean or pure plateau.
-- **Rendering** — the world is split into 16 × 16 chunks, each meshed into a
-  single vertex buffer with hidden faces removed and per-vertex ambient
-  occlusion. Transparent blocks (water, glass) mesh into a second buffer drawn
-  after the solid pass. Distance fog matches the sky, and turns short and murky
-  underwater.
-- **Textures** — the 4 × 4 atlas is painted pixel by pixel at startup, so there
-  are no image assets to load.
-- **Physics** — swept AABB collision resolved one axis at a time, gravity,
-  jumping, swimming and a flight mode.
-- **Editing** — a DDA voxel raycast picks the block under the crosshair; broken
-  or placed blocks remesh only the chunks they touch.
+---
 
-## Layout
+## 自我學習長什麼樣子
 
-| file | what it holds |
-|---|---|
-| `index.html` | canvas, HUD, pause menu, styles |
-| `game.js` | math, blocks, atlas, terrain, meshing, renderer, player, input |
+前三個範例是監督式學習 —— 每筆資料都附了正確答案，網路只要把答案學對。
+
+第四個不一樣。環境只會告訴它「你還活著（+1 分）」或「你倒了」，
+沒有人示範過任何一步該怎麼走。網路必須自己試、自己錯、
+自己從分數裡推論出哪些動作值得多做。
+
+**訓練前**（隨機亂推，19 步就倒）：
+
+```
+                         \
+                         \
+                         \
+                        \
+                        \
+                       \
+                     =###=
+  ---------------------------------------------
+  桿子已經歪了 +11.5°，出局。
+```
+
+**訓練後**（撐滿 200 步）：
+
+```
+                       |
+                       |
+                       |
+                       |
+                       |
+                       |
+                     =###=
+  ---------------------------------------------
+```
+
+學習曲線：
+
+```
+  200                                            █  ████████
+                                            █   ████████████
+  156                                █      ██  ████████████
+                           █         ███  ████ █████████████
+  111                   █  █    █ █ ████████████████████████
+                        █ ██ █  █ ██████████████████████████
+   67         ██ █  █  █████████████████████████████████████
+         █ █████████████████████████████████████████████████
+   22   ████████████████████████████████████████████████████
+      ----------------------------------------------------
+      第 1 場                                    第 130 場
+```
+
+用的是 REINFORCE（策略梯度）：跑完幾場之後，
+把「表現比平均好的動作」的機率往上推、比平均差的往下壓。
+網路唯一收到的訊號就是分數，其餘全靠自己。
+
+---
+
+## 螺旋分類學到的邊界
+
+網路自己長出來的分界線是彎的 —— 沒有人告訴它螺旋長什麼樣子。
+`·` `*` `+` 是網路對背景每一點的判斷，`O` `X` `A` 是真實資料點。
+
+```
+  |***********+++++++AA+··············OOO·O··++++++++++++++++++·|
+  |*************++++A++··O·O····*·***·····OO····++++++++++++····|
+  |************++AAA++··O····***X*X**X***X····O··O·++A++++······|
+  |********X**+++A++·OO····**XX**********X**X*·········A········|
+  |*******X**+++++···O··**XX**++AA+A+AAA*****X**················|
+  |***********+A++·····**XX**++AA++++++AAA++***X*···············|
+  |***********++++··O··***X**+A+·OOOO··++++A++****··············|
+```
+
+---
+
+## 檔案結構
+
+```
+neuralnet/
+  tensor.py    自動微分引擎 —— 整個專案的核心
+  nn.py        Linear / ReLU / Tanh / Sigmoid / Sequential / 損失函數
+  optim.py     SGD（含動量）、Adam
+  data.py      自己生資料集，不需要下載任何東西
+examples/
+  01_xor.py            為什麼需要隱藏層
+  02_spiral.py         非線性決策邊界
+  03_digits.py         影像分類
+  04_self_learning.py  強化學習：沒有答案，自己學
+tests/
+  test_autograd.py     用數值微分驗證每一個運算的梯度
+train.py               一鍵跑完全部
+```
+
+---
+
+## 核心是什麼
+
+整個「學習」其實只有一件事：**連鎖律**。
+
+前向傳播時，每做一次運算就把它記進一張圖裡；
+算出損失之後，從損失往回走這張圖，
+每個節點把收到的梯度乘上自己的局部導數，再傳給上游。
+走完一遍，每個權重都知道了「我往哪個方向動，損失會變小」。
+
+`neuralnet/tensor.py` 就是在做這件事，全部大約 250 行：
+
+```python
+def __mul__(self, other):
+    out = self._make(self.data * other.data, (self, other), "*")
+
+    def _backward():
+        self._accumulate(out.grad * other.data)    # 連鎖律
+        other._accumulate(out.grad * self.data)
+    out._backward = _backward
+    return out
+```
+
+每個運算都只需要回答一個問題：「我的輸出變一點點，我的輸入該變多少？」
+把這些答案串起來，網路就會自己學習了。
+
+正確性不是用講的 —— `tests/test_autograd.py` 會把每個運算的解析梯度
+跟數值微分（把參數推 ±1e-6 看損失實際變多少）逐項比對，
+14 項全數通過，最大相對誤差在 1e-8 等級。
+
+---
+
+## 自己拿來用
+
+```python
+import numpy as np
+from neuralnet import Tensor, Linear, ReLU, Sequential, cross_entropy, Adam
+
+model = Sequential(Linear(64, 32), ReLU(), Linear(32, 10))
+optimizer = Adam(model.parameters(), lr=0.01)
+
+for xb, yb in my_batches:
+    loss = cross_entropy(model(Tensor(xb)), yb)
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+```
+
+介面刻意做得跟 PyTorch 很像，之後要換過去不會有隔閡。
