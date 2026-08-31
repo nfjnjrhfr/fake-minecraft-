@@ -1,0 +1,19 @@
+[project]
+name = "binary-ai"
+version = "0.1.0"
+description = "Chat with Claude, where every message you type is transmitted as binary"
+requires-python = ">=3.10"
+dependencies = ["anthropic>=1.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+binary-ai = "binary_ai.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["binary_ai"]
