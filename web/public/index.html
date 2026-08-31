@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>binary-ai</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>🔢</text></svg>"
+    />
+  </head>
+  <body>
+    <header class="header">
+      <h1>binary-ai</h1>
+      <p>你打的每一句話，都會先變成 0 和 1 才送給 AI。</p>
+    </header>
+
+    <main id="log" class="log" aria-live="polite" aria-label="對話紀錄">
+      <p class="empty">說點什麼吧。</p>
+    </main>
+
+    <form id="composer" class="composer">
+      <textarea
+        id="input"
+        rows="1"
+        placeholder="輸入訊息，Enter 送出、Shift+Enter 換行"
+        autocomplete="off"
+        autofocus
+      ></textarea>
+      <button id="send" type="submit">送出</button>
+    </form>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

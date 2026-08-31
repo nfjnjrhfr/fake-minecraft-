@@ -1,0 +1,17 @@
+{
+  "name": "binary-ai-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser chat that transmits every message to Claude as binary",
+  "type": "module",
+  "scripts": {
+    "start": "node web/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

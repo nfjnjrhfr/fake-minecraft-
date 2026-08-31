@@ -28,7 +28,11 @@ ai> 我沒辦法查即時天氣，不過你可以告訴我你在哪個城市…�
 
 模型回覆是一般文字（不是二進位），並且會用你原本使用的語言回答。
 
-## 安裝
+同一套邏輯有兩個版本：終端機版（Python）與網頁版（JavaScript），兩邊的編碼結果完全一致。
+
+## 終端機版（Python）
+
+### 安裝
 
 ```bash
 pip install -e ".[dev]"
@@ -41,7 +45,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 # 或使用 Anthropic CLI 登入：ant auth login
 ```
 
-## 使用
+### 使用
 
 ```bash
 binary-ai              # 或 python -m binary_ai.cli
@@ -70,7 +74,7 @@ binary-ai              # 或 python -m binary_ai.cli
 binary-ai --debug
 ```
 
-## 當程式庫使用
+### 當程式庫使用
 
 ```python
 from binary_ai import BinaryChat, encode, decode
@@ -83,10 +87,36 @@ for chunk in chat.send("用一句話解釋二進位"):
     print(chunk, end="", flush=True)
 ```
 
+## 網頁版（JavaScript）
+
+除了終端機版，還有一個瀏覽器聊天介面。這裡的轉換發生在**瀏覽器端**：
+你按下送出時，`web/public/codec.js` 先把文字轉成 0/1，接著才發出網路請求——
+也就是說連線上傳輸的內容本身就是二進位。伺服器 (`web/server.js`) 會驗證這一點，
+使用者訊息若不是二進位一律以 400 拒絕，然後把那串位元原封不動送給 Claude，
+再用 SSE 把回覆逐字串流回畫面。
+
+```bash
+npm install
+export ANTHROPIC_API_KEY=sk-ant-...
+npm start           # http://localhost:3000
+```
+
+畫面上只有一般的對話氣泡，看不到位元。想確認轉換是真的，就開
+`http://localhost:3000/?debug=1`，每則訊息下方會多一行實際送出的 0101。
+
+| 檔案 | 用途 |
+| --- | --- |
+| `web/public/codec.js` | 瀏覽器與伺服器共用的編碼／解碼（與 Python 版輸出完全一致） |
+| `web/public/app.js` | 前端：編碼、送出、解析 SSE、逐字顯示 |
+| `web/protocol.js` | 檢查送進來的對話：使用者訊息必須是二進位 |
+| `web/chat.js` | 呼叫 Claude 並串流回覆 |
+| `web/server.js` | 靜態檔案 + `POST /api/chat`（SSE） |
+
 ## 測試
 
 ```bash
-pytest
+pytest        # Python 版
+npm test      # 網頁版
 ```
 
 ## 備註
