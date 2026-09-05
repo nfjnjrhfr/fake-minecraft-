@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>隨時鬧鐘</title>
+<style>
+  :root{
+    --bg:#0f1220; --panel:#181c2f; --panel-2:#20263f; --line:#2c3352;
+    --text:#eef1ff; --muted:#98a0c4; --accent:#5b8cff; --accent-2:#7ce0c0;
+    --danger:#ff6b7a; --warn:#ffcc66; --radius:16px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; background:radial-gradient(1200px 800px at 50% -10%,#1b2140,#0f1220 60%);
+    color:var(--text); font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    padding:24px 16px 48px;
+  }
+  .wrap{max-width:720px;margin:0 auto}
+  header{text-align:center;margin-bottom:20px}
+  h1{font-size:20px;margin:0 0 14px;letter-spacing:2px;color:var(--muted);font-weight:600}
+  .clock{font-size:clamp(44px,13vw,76px);font-weight:700;font-variant-numeric:tabular-nums;line-height:1.05;letter-spacing:2px}
+  .date{color:var(--muted);margin-top:6px;font-size:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-top:16px}
+  .tabs{display:flex;gap:8px;margin-top:20px}
+  .tab{flex:1;padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--panel);
+       color:var(--muted);cursor:pointer;font-size:15px;font-weight:600}
+  .tab.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  h2{font-size:15px;margin:0 0 12px;color:var(--muted);font-weight:600}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  input,select{
+    width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);
+    background:var(--panel-2);color:var(--text);font-size:16px;font-family:inherit;
+  }
+  input[type=time]{font-variant-numeric:tabular-nums}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row>*{flex:1;min-width:120px}
+  button{
+    padding:12px 16px;border-radius:12px;border:none;background:var(--accent);color:#fff;
+    font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;
+  }
+  button:active{transform:translateY(1px)}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
+  button.danger{background:var(--danger)}
+  .quick{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .quick button{flex:1;min-width:62px;white-space:nowrap;background:var(--panel-2);border:1px solid var(--line);color:var(--text);font-size:13px;padding:10px 6px}
+  .days{display:flex;gap:6px;margin-top:4px}
+  .day{flex:1;text-align:center;padding:8px 0;border-radius:10px;border:1px solid var(--line);
+       background:var(--panel-2);color:var(--muted);cursor:pointer;font-size:13px;user-select:none}
+  .day.on{background:var(--accent-2);border-color:var(--accent-2);color:#0f1220;font-weight:700}
+  ul{list-style:none;margin:0;padding:0}
+  li{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);
+     border-radius:12px;background:var(--panel-2);margin-bottom:8px}
+  li.off{opacity:.45}
+  .li-main{flex:1;min-width:0}
+  .li-time{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
+  .li-sub{font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .switch{width:46px;height:26px;border-radius:99px;background:var(--line);position:relative;cursor:pointer;flex:none}
+  .switch.on{background:var(--accent-2)}
+  .switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+    background:#fff;transition:left .15s}
+  .switch.on::after{left:23px}
+  .x{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px 6px;flex:none}
+  .empty{color:var(--muted);font-size:14px;text-align:center;padding:18px 0}
+  .countdown{font-size:clamp(38px,11vw,60px);font-weight:700;font-variant-numeric:tabular-nums;text-align:center;margin:8px 0}
+  .hint{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6}
+  .hidden{display:none !important}
+  /* 響鈴畫面 */
+  #ring{position:fixed;inset:0;background:linear-gradient(160deg,#ff6b7a,#b3324a);z-index:9;
+        display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center}
+  #ring .bell{font-size:78px;animation:shake .8s infinite}
+  @keyframes shake{0%,100%{transform:rotate(-12deg)}50%{transform:rotate(12deg)}}
+  #ringTime{font-size:52px;font-weight:700;font-variant-numeric:tabular-nums}
+  #ringLabel{font-size:20px;opacity:.9;max-width:90%;word-break:break-word}
+  #ring .row{width:100%;max-width:360px}
+  #ring button{padding:16px}
+  #snoozeBtn{background:rgba(255,255,255,.2)}
+  #stopBtn{background:#fff;color:#b3324a}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>隨時鬧鐘</h1>
+    <div class="clock" id="now">--:--:--</div>
+    <div class="date" id="today"></div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="alarm">鬧鐘</button>
+    <button class="tab" data-tab="timer">倒數計時</button>
+  </div>
+
+  <!-- 鬧鐘 -->
+  <section id="tab-alarm">
+    <div class="card">
+      <h2>新增鬧鐘</h2>
+      <div class="row">
+        <div style="flex:1.2">
+          <label for="aTime">時間</label>
+          <input type="time" id="aTime">
+        </div>
+        <div style="flex:2">
+          <label for="aLabel">標籤(選填)</label>
+          <input type="text" id="aLabel" placeholder="例如:起床、開會">
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <label>重複</label>
+        <div class="days" id="days"></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div>
+          <label for="aSound">鈴聲</label>
+          <select id="aSound">
+            <option value="beep">嗶嗶</option>
+            <option value="chime">叮咚</option>
+            <option value="siren">警報</option>
+          </select>
+        </div>
+        <div style="flex:none;min-width:auto;align-self:flex-end">
+          <button class="ghost" id="previewBtn" type="button">試聽</button>
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button id="addBtn">加入鬧鐘</button>
+      </div>
+      <div class="quick">
+        <button data-in="1">1 分後</button>
+        <button data-in="5">5 分後</button>
+        <button data-in="10">10 分後</button>
+        <button data-in="30">30 分後</button>
+        <button data-in="60">1 小時後</button>
+      </div>
+      <div class="hint">「幾分後」會直接以現在時間往後推,建立一次性鬧鐘。</div>
+    </div>
+
+    <div class="card">
+      <h2>我的鬧鐘</h2>
+      <ul id="list"></ul>
+      <div class="empty hidden" id="empty">目前沒有鬧鐘</div>
+    </div>
+  </section>
+
+  <!-- 倒數計時 -->
+  <section id="tab-timer" class="hidden">
+    <div class="card">
+      <h2>倒數計時</h2>
+      <div class="countdown" id="cd">00:00:00</div>
+      <div class="row">
+        <div><label for="tH">時</label><input type="number" id="tH" min="0" max="99" value="0"></div>
+        <div><label for="tM">分</label><input type="number" id="tM" min="0" max="59" value="5"></div>
+        <div><label for="tS">秒</label><input type="number" id="tS" min="0" max="59" value="0"></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="tStart">開始</button>
+        <button class="ghost" id="tPause">暫停</button>
+        <button class="ghost" id="tReset">重設</button>
+      </div>
+      <div class="quick">
+        <button data-sec="60">1 分</button>
+        <button data-sec="180">3 分</button>
+        <button data-sec="300">5 分</button>
+        <button data-sec="600">10 分</button>
+        <button data-sec="1500">25 分</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="hint" style="text-align:center;margin-top:18px">
+    鬧鐘存在這台裝置的瀏覽器裡,頁面需保持開啟才會響。<br>
+    首次使用請點一下畫面任意處以啟用聲音。
+  </div>
+</div>
+
+<!-- 響鈴畫面 -->
+<div id="ring" class="hidden">
+  <div class="bell">🔔</div>
+  <div id="ringTime">--:--</div>
+  <div id="ringLabel">時間到!</div>
+  <div class="row">
+    <button id="snoozeBtn">貪睡 5 分鐘</button>
+    <button id="stopBtn">停止</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var DAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
+  var STORE_KEY = "anytime-alarm.alarms.v1";
+  var pad = function (n) { return String(n).padStart(2, "0"); };
+
+  /* ---------- 聲音 ---------- */
+  var ctx = null, ringNodes = [], ringTimer = null;
+
+  function audio() {
+    if (!ctx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
+    }
+    if (ctx.state === "suspended") ctx.resume();
+    return ctx;
+  }
+
+  // 單顆音:回傳結束時間
+  function tone(freq, start, dur, type, gainPeak) {
+    var ac = audio();
+    if (!ac) return 0;
+    var osc = ac.createOscillator();
+    var gain = ac.createGain();
+    osc.type = type || "sine";
+    osc.frequency.setValueAtTime(freq, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(gainPeak || 0.35, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(start);
+    osc.stop(start + dur + 0.05);
+    ringNodes.push(osc);
+    return start + dur;
+  }
+
+  // 播一輪鈴聲,回傳這一輪的長度(秒)
+  function playPattern(kind) {
+    var ac = audio();
+    if (!ac) return 2;
+    var t = ac.currentTime + 0.05;
+    if (kind === "chime") {
+      tone(880, t, 0.5, "sine", 0.3);
+      tone(659.25, t + 0.45, 0.5, "sine", 0.3);
+      tone(523.25, t + 0.9, 0.9, "sine", 0.3);
+      return 2.2;
+    }
+    if (kind === "siren") {
+      var ac2 = audio();
+      var osc = ac2.createOscillator();
+      var gain = ac2.createGain();
+      osc.type = "sawtooth";
+      gain.gain.setValueAtTime(0.18, t);
+      for (var i = 0; i < 3; i++) {
+        osc.frequency.setValueAtTime(600, t + i * 0.7);
+        osc.frequency.linearRampToValueAtTime(1100, t + i * 0.7 + 0.35);
+        osc.frequency.linearRampToValueAtTime(600, t + i * 0.7 + 0.7);
+      }
+      gain.gain.setValueAtTime(0.0001, t + 2.05);
+      osc.connect(gain).connect(ac2.destination);
+      osc.start(t);
+      osc.stop(t + 2.15);
+      ringNodes.push(osc);
+      return 2.3;
+    }
+    // beep
+    for (var j = 0; j < 4; j++) tone(1046.5, t + j * 0.28, 0.14, "square", 0.28);
+    return 1.6;
+  }
+
+  function startRinging(kind) {
+    stopSound();
+    var loop = function () {
+      var len = playPattern(kind);
+      ringTimer = setTimeout(loop, Math.round(len * 1000) + 250);
+    };
+    loop();
+  }
+
+  function stopSound() {
+    if (ringTimer) { clearTimeout(ringTimer); ringTimer = null; }
+    ringNodes.forEach(function (n) { try { n.stop(); } catch (e) {} });
+    ringNodes = [];
+  }
+
+  /* ---------- 資料 ---------- */
+  var alarms = [];
+  try { alarms = JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch (e) { alarms = []; }
+
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(alarms)); } catch (e) {}
+  }
+
+  function describe(a) {
+    var parts = [];
+    if (a.days.length === 7) parts.push("每天");
+    else if (a.days.length === 0) parts.push("只響一次");
+    else if (a.days.length === 5 && [1,2,3,4,5].every(function (d) { return a.days.indexOf(d) >= 0; })) parts.push("週一至週五");
+    else parts.push("每週 " + a.days.slice().sort().map(function (d) { return DAY_NAMES[d]; }).join("、"));
+    if (a.label) parts.push(a.label);
+    return parts.join(" · ");
+  }
+
+  function render() {
+    var list = document.getElementById("list");
+    var empty = document.getElementById("empty");
+    list.innerHTML = "";
+    var sorted = alarms.slice().sort(function (x, y) { return x.time < y.time ? -1 : x.time > y.time ? 1 : 0; });
+    empty.classList.toggle("hidden", sorted.length > 0);
+
+    sorted.forEach(function (a) {
+      var li = document.createElement("li");
+      if (!a.on) li.className = "off";
+
+      var main = document.createElement("div");
+      main.className = "li-main";
+      var t = document.createElement("div");
+      t.className = "li-time";
+      t.textContent = a.time;
+      var s = document.createElement("div");
+      s.className = "li-sub";
+      s.textContent = describe(a);
+      main.appendChild(t);
+      main.appendChild(s);
+
+      var sw = document.createElement("div");
+      sw.className = "switch" + (a.on ? " on" : "");
+      sw.title = "開啟／關閉";
+      sw.onclick = function () { a.on = !a.on; a.lastFired = null; save(); render(); };
+
+      var del = document.createElement("button");
+      del.className = "x";
+      del.textContent = "✕";
+      del.title = "刪除";
+      del.onclick = function () {
+        alarms = alarms.filter(function (o) { return o.id !== a.id; });
+        save(); render();
+      };
+
+      li.appendChild(main);
+      li.appendChild(sw);
+      li.appendChild(del);
+      list.appendChild(li);
+    });
+  }
+
+  function addAlarm(time, label, days, sound) {
+    alarms.push({
+      id: String(Date.now()) + Math.random().toString(16).slice(2, 6),
+      time: time, label: label || "", days: days || [],
+      sound: sound || "beep", on: true, lastFired: null
+    });
+    save(); render();
+  }
+
+  /* ---------- 星期選擇 ---------- */
+  var selectedDays = [];
+  var daysBox = document.getElementById("days");
+  DAY_NAMES.forEach(function (name, idx) {
+    var d = document.createElement("div");
+    d.className = "day";
+    d.textContent = name;
+    d.onclick = function () {
+      var i = selectedDays.indexOf(idx);
+      if (i >= 0) selectedDays.splice(i, 1); else selectedDays.push(idx);
+      d.classList.toggle("on");
+    };
+    daysBox.appendChild(d);
+  });
+
+  /* ---------- 響鈴 ---------- */
+  var ringEl = document.getElementById("ring");
+  var current = null;
+
+  function fire(alarm) {
+    current = alarm;
+    var rt = document.getElementById("ringTime");
+    rt.textContent = alarm.time || "";
+    rt.classList.toggle("hidden", !alarm.time);
+    document.getElementById("ringLabel").textContent = alarm.label || "時間到!";
+    ringEl.classList.remove("hidden");
+    document.title = "⏰ " + (alarm.label || "鬧鐘響了!");
+    startRinging(alarm.sound);
+    if ("vibrate" in navigator) navigator.vibrate([400, 200, 400, 200, 400]);
+    if (window.Notification && Notification.permission === "granted") {
+      try { new Notification("⏰ " + alarm.time, { body: alarm.label || "時間到!" }); } catch (e) {}
+    }
+  }
+
+  function dismiss() {
+    stopSound();
+    ringEl.classList.add("hidden");
+    document.title = "隨時鬧鐘";
+    // 一次性鬧鐘響完就關掉
+    if (current && current.days.length === 0 && !current.isTimer) {
+      current.on = false;
+      save(); render();
+    }
+    current = null;
+  }
+
+  document.getElementById("stopBtn").onclick = dismiss;
+  document.getElementById("snoozeBtn").onclick = function () {
+    var d = new Date(Date.now() + 5 * 60 * 1000);
+    var label = current ? (current.label || "貪睡") : "貪睡";
+    var sound = current ? current.sound : "beep";
+    dismiss();
+    addAlarm(pad(d.getHours()) + ":" + pad(d.getMinutes()), label, [], sound);
+  };
+
+  /* ---------- 主迴圈 ---------- */
+  function tick() {
+    var d = new Date();
+    var hhmm = pad(d.getHours()) + ":" + pad(d.getMinutes());
+    document.getElementById("now").textContent = hhmm + ":" + pad(d.getSeconds());
+    document.getElementById("today").textContent =
+      d.getFullYear() + " 年 " + (d.getMonth() + 1) + " 月 " + d.getDate() + " 日 · 星期" + DAY_NAMES[d.getDay()];
+
+    if (!current) {
+      var stamp = d.toDateString() + " " + hhmm;
+      for (var i = 0; i < alarms.length; i++) {
+        var a = alarms[i];
+        if (!a.on || a.time !== hhmm || a.lastFired === stamp) continue;
+        if (a.days.length > 0 && a.days.indexOf(d.getDay()) < 0) continue;
+        a.lastFired = stamp;
+        save();
+        fire(a);
+        break;
+      }
+    }
+    tickTimer();
+  }
+
+  /* ---------- 倒數計時 ---------- */
+  var timerEnd = null, timerLeft = 0, timerRunning = false;
+
+  function fmt(sec) {
+    sec = Math.max(0, Math.round(sec));
+    return pad(Math.floor(sec / 3600)) + ":" + pad(Math.floor(sec / 60) % 60) + ":" + pad(sec % 60);
+  }
+
+  function showTimer() { document.getElementById("cd").textContent = fmt(timerLeft); }
+
+  function tickTimer() {
+    if (!timerRunning) return;
+    timerLeft = (timerEnd - Date.now()) / 1000;
+    if (timerLeft <= 0) {
+      timerLeft = 0;
+      timerRunning = false;
+      showTimer();
+      if (!current) fire({ time: "", label: "倒數結束!", sound: "chime", days: [], isTimer: true });
+      return;
+    }
+    showTimer();
+  }
+
+  document.getElementById("tStart").onclick = function () {
+    audio();
+    if (!timerRunning && timerLeft > 0.5) {
+      timerEnd = Date.now() + timerLeft * 1000;   // 從暫停處續跑
+    } else {
+      var h = +document.getElementById("tH").value || 0;
+      var m = +document.getElementById("tM").value || 0;
+      var s = +document.getElementById("tS").value || 0;
+      var total = h * 3600 + m * 60 + s;
+      if (total <= 0) return;
+      timerLeft = total;
+      timerEnd = Date.now() + total * 1000;
+    }
+    timerRunning = true;
+    showTimer();
+  };
+  document.getElementById("tPause").onclick = function () {
+    if (!timerRunning) return;
+    timerLeft = Math.max(0, (timerEnd - Date.now()) / 1000);
+    timerRunning = false;
+    showTimer();
+  };
+  document.getElementById("tReset").onclick = function () {
+    timerRunning = false; timerLeft = 0; showTimer();
+  };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-sec]"), function (b) {
+    b.onclick = function () {
+      var sec = +b.dataset.sec;
+      document.getElementById("tH").value = Math.floor(sec / 3600);
+      document.getElementById("tM").value = Math.floor(sec / 60) % 60;
+      document.getElementById("tS").value = sec % 60;
+      timerRunning = false; timerLeft = sec; showTimer();
+      document.getElementById("tStart").click();
+    };
+  });
+
+  /* ---------- 表單 / 分頁 ---------- */
+  document.getElementById("addBtn").onclick = function () {
+    audio();
+    var time = document.getElementById("aTime").value;
+    if (!time) { alert("請先選擇時間"); return; }
+    addAlarm(time, document.getElementById("aLabel").value.trim(),
+             selectedDays.slice(), document.getElementById("aSound").value);
+    document.getElementById("aLabel").value = "";
+    if (window.Notification && Notification.permission === "default") Notification.requestPermission();
+  };
+
+  document.getElementById("previewBtn").onclick = function () {
+    audio();
+    playPattern(document.getElementById("aSound").value);
+  };
+
+  Array.prototype.forEach.call(document.querySelectorAll("[data-in]"), function (b) {
+    b.onclick = function () {
+      audio();
+      var d = new Date(Date.now() + (+b.dataset.in) * 60 * 1000);
+      addAlarm(pad(d.getHours()) + ":" + pad(d.getMinutes()),
+               b.textContent, [], document.getElementById("aSound").value);
+    };
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (t) {
+    t.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (o) { o.classList.remove("on"); });
+      t.classList.add("on");
+      document.getElementById("tab-alarm").classList.toggle("hidden", t.dataset.tab !== "alarm");
+      document.getElementById("tab-timer").classList.toggle("hidden", t.dataset.tab !== "timer");
+    };
+  });
+
+  // 任何互動都嘗試解鎖音訊(瀏覽器自動播放限制)
+  document.addEventListener("click", function () { audio(); }, { once: true });
+
+  // 預設帶入現在時間
+  (function () {
+    var d = new Date();
+    document.getElementById("aTime").value = pad(d.getHours()) + ":" + pad(d.getMinutes());
+  })();
+
+  render();
+  showTimer();
+  tick();
+  setInterval(tick, 250);
+})();
+</script>
+</body>
+</html>

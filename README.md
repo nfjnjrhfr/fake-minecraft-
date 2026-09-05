@@ -1,2 +1,33 @@
-# fake-minecraft-
-u8ujujujujujujujujujuujuujujujujuujujujujujjujjujujujuujjunjerivcfv dnds xdfbdehbhebhbdehbhbhrhbehebhderbhrvrdfgvfrfrevefvfegfhdevegdervgedryegehwrwehgerhwhrbhdbhdbdhbedbdiuheiuhur4ury4yeeyurheu4u44uyy56t4rueyrjdhjddbhdjebbhjejbhdwehjhejrhjedhjdjdndejndjnsdsjndsjndsjkkd.                                                                             67
+# 隨時鬧鐘 (Anytime Alarm)
+
+純前端的網頁鬧鐘,單一 `index.html`,不用安裝、不用後端,直接用瀏覽器打開就能用。
+
+## 使用方式
+
+用瀏覽器打開 `index.html` 即可(或部署到任何靜態空間 / GitHub Pages)。
+
+## 功能
+
+**鬧鐘**
+- 指定時間 + 自訂標籤(例如「起床」、「開會」)
+- 快速鍵:1 / 5 / 10 / 30 分後、1 小時後,一鍵建立一次性鬧鐘
+- 重複設定:選星期幾;不選就是只響一次(響完自動關閉)
+- 三種鈴聲(嗶嗶 / 叮咚 / 警報),可先試聽
+- 每個鬧鐘可獨立開關或刪除
+- 鬧鐘存在瀏覽器 `localStorage`,重新整理不會消失
+
+**倒數計時**
+- 時 / 分 / 秒自由設定,支援開始、暫停續跑、重設
+- 快速鍵:1 / 3 / 5 / 10 / 25 分鐘
+
+**響鈴時**
+- 全螢幕提示 + 循環鈴聲 + 手機震動(支援的裝置)
+- 分頁標題會變成 ⏰,背景分頁也看得到
+- 「貪睡」自動建立 5 分鐘後的鬧鐘
+- 有授權時會一併發送瀏覽器通知
+
+## 注意事項
+
+- 鬧鐘由頁面的計時器驅動,**頁面需保持開啟**才會響。
+- 瀏覽器的自動播放限制:首次進入請點一下畫面任意處以啟用聲音。
+- 資料只存在這台裝置的這個瀏覽器,不會上傳。
